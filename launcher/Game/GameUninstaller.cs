@@ -29,7 +29,7 @@ namespace launcher.Game
                 ReleaseChannelService.SetDownloadHDTextures(false);
                 ReleaseChannelService.SetVersion("");
 
-                SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) has been uninstalled!", BalloonIcon.Info);
+                SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) has been uninstalled!", BalloonIcon.Info);
             }
             catch (Exception ex)
             {
@@ -134,7 +134,7 @@ namespace launcher.Game
 
             if (IsR5ApexOpen())
             {
-                var result = MessageBox.Show("R5Reloaded must be closed to uninstall.\n\nClose the game now?", "R5Reloaded", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var result = MessageBox.Show("Valkyrie must be closed to uninstall.\n\nClose the game now?", "Valkyrie", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
                 {
                     CloseR5Apex();

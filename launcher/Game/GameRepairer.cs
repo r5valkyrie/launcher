@@ -75,7 +75,7 @@ namespace launcher.Game
 
             if (IsR5ApexOpen())
             {
-                var result = MessageBox.Show("R5Reloaded must be closed to repair.\n\nClose the game now?", "R5Reloaded", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var result = MessageBox.Show("Valkyrie must be closed to repair.\n\nClose the game now?", "Valkyrie", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
                 {
                     CloseR5Apex();
@@ -129,7 +129,7 @@ namespace launcher.Game
 
             // Update UI and send notification.
             SetupAdvancedMenu();
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) has been repaired!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) has been repaired!", BalloonIcon.Info);
 
             // Check for existing HD Textures.
             if (CheckForHDTextures(ReleaseChannelService.GetDirectory()))
@@ -150,7 +150,7 @@ namespace launcher.Game
                 "Comparing optional files...",
                 "Downloading optional files..."
             );
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) optional files have been repaired!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) optional files have been repaired!", BalloonIcon.Info);
         }
 
         private static async Task RepairLanguageFilesAsync()

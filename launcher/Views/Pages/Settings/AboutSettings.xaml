@@ -16,7 +16,7 @@
                 <RowDefinition Height="1*" />
             </Grid.RowDefinitions>
             <TextBlock Text="About" Foreground="{DynamicResource ThemePrimaryText}" FontSize="40" FontFamily="{StaticResource SansationBold}" FontWeight="Bold"  VerticalAlignment="Center" Margin="43,0,0,0" Height="49" />
-            <Image Grid.Row="1" Source="{DynamicResource logo}" HorizontalAlignment="Left" VerticalAlignment="Center" Height="150" Width="150" Margin="10,0,0,0">
+            <Image Grid.Row="1" Source="/Assets/logo_small.png" HorizontalAlignment="Left" VerticalAlignment="Center" Height="150" Width="150" Margin="10,0,0,0">
                 <Image.RenderTransform>
                     <TranslateTransform X="30" Y="0" />
                 </Image.RenderTransform>
@@ -24,29 +24,29 @@
             <Rectangle Grid.Row="2" Fill="{DynamicResource ThemeSeperator}" Height="1" VerticalAlignment="Top" Margin="40,0,40,0" />
             <TextBlock Grid.Row="2" Text="Launcher version:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,27,778,367" Width="114" Height="17" HorizontalAlignment="Left" />
             <TextBlock x:Name="launcherVersionTxt" Grid.Row="2" Text="1.0.0" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="162,27,380,367" Width="393" Height="17" HorizontalAlignment="Left" />
-            <TextBlock Grid.Row="1" Text="R5RELOADED" Foreground="{DynamicResource ThemePrimaryText}" FontSize="60" FontFamily="{StaticResource SansationBold}" TextWrapping="Wrap" Margin="165,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left" Width="446" />
+            <TextBlock Grid.Row="1" Text="Valkyrie" Foreground="{DynamicResource ThemePrimaryText}" FontSize="60" FontFamily="{StaticResource SansationBold}" TextWrapping="Wrap" Margin="197,0,0,0" VerticalAlignment="Center" HorizontalAlignment="Left" Width="446" />
             <TextBlock Grid.Row="2" Text="Launcher source:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,53,778,341" Width="114" Height="17" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,53,377,341" Width="393" Height="17" HorizontalAlignment="Left">
-                <Hyperlink NavigateUri="https://github.com/AyeZeeBB/r5reloaded_launcher" RequestNavigate="Hyperlink_RequestNavigate">
-                    <Run Text="https://github.com/AyeZeeBB/r5reloaded_launcher" />
+                <Hyperlink NavigateUri="https://github.com/r5valkyrie/launcher" RequestNavigate="Hyperlink_RequestNavigate">
+                    <Run Text="https://github.com/r5valkyrie/launcher" />
                 </Hyperlink>
             </TextBlock>
             <TextBlock Grid.Row="2" Text="Website:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,130,0,263" Width="114" Height="17" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,130,0,263" Width="393" Height="17" HorizontalAlignment="Left">
-                <Hyperlink NavigateUri="https://r5reloaded.com" RequestNavigate="Hyperlink_RequestNavigate">
-                    <Run Text="https://r5reloaded.com" />
+                <Hyperlink NavigateUri="https://cdn.playvalkyrie.org" RequestNavigate="Hyperlink_RequestNavigate">
+                    <Run Text="https://cdn.playvalkyrie.org" />
                 </Hyperlink>
             </TextBlock>
             <TextBlock Grid.Row="2" Text="Discord:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,156,0,237" Width="114" Height="17" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,156,0,237" Width="393" Height="17" HorizontalAlignment="Left">
-                <Hyperlink NavigateUri="https://discord.com/invite/jqMkUdXrBr" RequestNavigate="Hyperlink_RequestNavigate">
-                    <Run Text="https://discord.com/invite/jqMkUdXrBr" />
+                <Hyperlink NavigateUri="https://discord.gg/GcJSMUGJyD" RequestNavigate="Hyperlink_RequestNavigate">
+                    <Run Text="https://discord.gg/GcJSMUGJyD" />
                 </Hyperlink>
             </TextBlock>
             <TextBlock Grid.Row="2" Text="SDK source:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,79,0,314" Width="114" Height="17" HorizontalAlignment="Left" />
-            <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,79,0,314" Width="393" Height="17" HorizontalAlignment="Left"><Hyperlink NavigateUri="https://github.com/Mauler125/r5sdk" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="https://github.com/Mauler125/r5sdk" /></Hyperlink></TextBlock>
+            <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,79,0,314" Width="393" Height="17" HorizontalAlignment="Left"><Hyperlink NavigateUri="https://github.com/r5valkyrie/r5sdk" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="https://github.com/r5valkyrie/r5sdk" /></Hyperlink></TextBlock>
             <TextBlock Grid.Row="2" Text="Scripts source:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,105,0,288" Width="114" Height="17" HorizontalAlignment="Left" />
-            <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,105,0,288" Width="393" Height="17" HorizontalAlignment="Left"><Hyperlink NavigateUri="https://github.com/Mauler125/r5_flowstate" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="https://github.com/Mauler125/r5_flowstate" /></Hyperlink></TextBlock>
+            <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,105,0,288" Width="393" Height="17" HorizontalAlignment="Left"><Hyperlink NavigateUri="https://github.com/r5valkyrie/r5_scripts" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="https://github.com/r5valkyrie/r5_scripts" /></Hyperlink></TextBlock>
             <TextBlock Grid.Row="2" Text="Want to support the launchers development?" Foreground="{DynamicResource ThemePrimaryText}" FontSize="24" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,296,0,84" Width="615" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Text="Feel free to support me on ko-fi, any donation is much appreciated." Foreground="{DynamicResource ThemePrimaryText}" FontSize="16" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,326,0,60" Width="536" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="18" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="43,350,0,39" Width="393" HorizontalAlignment="Left"><Hyperlink NavigateUri="https://ko-fi.com/zee_x64" RequestNavigate="Hyperlink_RequestNavigate"><Run Text="https://ko-fi.com/zee_x64" /></Hyperlink></TextBlock>

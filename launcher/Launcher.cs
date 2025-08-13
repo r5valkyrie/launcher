@@ -27,9 +27,8 @@ namespace launcher
 
         #region Public URLs
 
-        public const string CONFIG_URL = "https://cdn.r5r.org/launcher/config.json";
-        public const string GITHUB_API_URL = "https://api.github.com/repos/AyeZeeBB/r5reloaded_launcher/releases";
-        public const string BACKGROUND_VIDEO_URL = "https://cdn.r5r.org/launcher/video_backgrounds/";
+        public const string CONFIG_URL = "https://cdn.playvalkyrie.org/launcher/config.json";
+        public const string BACKGROUND_VIDEO_URL = "https://cdn.playvalkyrie.org/launcher/video_backgrounds/";
         public const string NEWSURL = "https://admin.r5reloaded.com/ghost/api/content";
 
         #endregion Public URLs

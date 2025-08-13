@@ -26,12 +26,12 @@ namespace launcher
 
         private void Discord_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("cmd", $"/c start https://discord.com/invite/jqMkUdXrBr") { CreateNoWindow = true });
+            Process.Start(new ProcessStartInfo("cmd", $"/c start https://discord.gg/GcJSMUGJyD") { CreateNoWindow = true });
         }
 
         private void Website_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("cmd", $"/c start https://r5reloaded.com") { CreateNoWindow = true });
+            Process.Start(new ProcessStartInfo("cmd", $"/c start https://playvalkyrie.org") { CreateNoWindow = true });
         }
 
         private void Settings_Click(object sender, RoutedEventArgs e)

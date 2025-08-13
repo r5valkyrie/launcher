@@ -48,7 +48,7 @@ namespace launcher.Game
 
                 ReleaseChannelService.SetDownloadHDTextures(true);
                 appDispatcher.Invoke(() => Settings_Control.gameInstalls.UpdateGameItems());
-                SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) optional files have been installed!", BalloonIcon.Info);
+                SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) optional files have been installed!", BalloonIcon.Info);
             }
             finally
             {
@@ -125,7 +125,7 @@ namespace launcher.Game
 
             GameManifest GameManifest = await ApiService.GetGameManifestAsync(optional: false);
             const long extraSpaceBuffer = 30L * 1024 * 1024 * 1024; // 30 GB
-            return await CheckForSufficientSpaceAsync(GameManifest, "R5Reloaded", extraSpaceBuffer);
+            return await CheckForSufficientSpaceAsync(GameManifest, "Valkyrie", extraSpaceBuffer);
         }
 
         private static async Task<bool> CheckForSufficientSpaceAsync(GameManifest GameManifest, string installName, long extraBuffer = 0)
@@ -173,7 +173,7 @@ namespace launcher.Game
             ReleaseChannelService.SetInstalled(true);
             ReleaseChannelService.SetVersion(ReleaseChannelService.GetServerVersion());
             appDispatcher.Invoke(() => SetupAdvancedMenu());
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) has been installed!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) has been installed!", BalloonIcon.Info);
 
             GameManifest optFiles = await ApiService.GetGameManifestAsync(optional: true);
             appDispatcher.Invoke(() =>

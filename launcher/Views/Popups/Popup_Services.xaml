@@ -22,7 +22,7 @@
                 <ColumnDefinition Width="5*" />
                 <ColumnDefinition Width="5*" />
             </Grid.ColumnDefinitions>
-            <TextBlock Grid.Row="0" Grid.Column="0" Text="R5RELOADED STATUS" FontSize="20" Foreground="{DynamicResource ThemePrimaryText}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" FontFamily="{StaticResource SansationBold}" FontWeight="Bold"  />
+            <TextBlock Grid.Row="0" Grid.Column="0" Text="VALKYRIE STATUS" FontSize="20" Foreground="{DynamicResource ThemePrimaryText}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" FontFamily="{StaticResource SansationBold}" FontWeight="Bold"  />
 
             <TextBlock Grid.Row="1" Grid.Column="0" Text="Website" FontSize="14" Foreground="{DynamicResource ThemeSecondaryText}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" FontFamily="{StaticResource SansationLight}" />
             <TextBlock Grid.Row="2" Grid.Column="0" Text="Master Server" FontSize="14" Foreground="{DynamicResource ThemeSecondaryText}" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="10,0,0,0" FontFamily="{StaticResource SansationLight}" />

@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <PackageId>updater</PackageId>
     <Authors>updater</Authors>
-    <Company>r5reloaded</Company>
+    <Company>valkyrie</Company>
     <Product>updater</Product>
     <AssemblyName>updater</AssemblyName>
     <RootNamespace>updater</RootNamespace>

@@ -18,7 +18,7 @@ namespace launcher
             new TourStep("Downloads And Tasks", "Follow the progress of your game downloads / updates.", new Rect(246,1,31,14), new Vector2(760,64)),
             new TourStep("channels And Installing", "Here you can select the release channel you want to install, update, or play", new Rect(20,75,71,63), new Vector2(86,538)),
             new TourStep("Game Settings", "Clicking this allows you to access advanced settings for the selected release channel, as well as verify game files or uninstall.", new Rect(75,101,16,16), new Vector2(334,455)),
-            new TourStep("News And Updates", "View latest updates, patch notes, guides, and anything else related to R5Reloaded straight from the R5R Team.", new Rect(102,77,190,116), new Vector2(455,128)),
+            new TourStep("News And Updates", "View latest updates, patch notes, guides, and anything else related to Valkyrie straight from the Team.", new Rect(102,77,190,116), new Vector2(455,128)),
             new TourStep("You're All Set", "You've successfully completed the Launcher Tour. If you have any questions or need further assistance, feel free to join our discord!", new Rect(135,95,0,0), new Vector2(430,305)),
             ];
 

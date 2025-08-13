@@ -19,10 +19,10 @@ namespace launcher
     public partial class Popup_Services : UserControl
     {
         private const int refresh_interval = 30;
-        private const string website_url = "https://r5reloaded.com/";
-        private const string status_url = "https://status.r5reloaded.com/";
-        private const string ms_url = "https://r5r.org/";
-        private const string cdn_url = "https://cdn.r5r.org/launcher/config.json";
+        private const string website_url = "https://playvalkyrie.org/";
+        private const string status_url = "https://status.playvalkyrie.org/";
+        private const string ms_url = "https://ms.playvalkyrie.org/";
+        private const string cdn_url = "https://cdn.playvalkyrie.org/launcher/config.json";
 
         public Popup_Services()
         {

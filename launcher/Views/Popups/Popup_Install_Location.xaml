@@ -18,7 +18,7 @@
 
             <TextBlock Text="Would you like to install the game in the default directory?" Foreground="{DynamicResource ThemePrimaryText}" FontSize="18" FontFamily="{StaticResource SansationRegular}" VerticalAlignment="Top" TextWrapping="Wrap" Margin="15,69,55,0" />
             <TextBlock Text="Selected Directory:" Foreground="{DynamicResource ThemeSecondaryText}" FontSize="18" FontFamily="{StaticResource SansationLight}" VerticalAlignment="Top" TextWrapping="Wrap" Margin="15,100,15,0" />
-            <TextBlock x:Name="FolderLocation" Text="C:/Program Files/R5Reloaded/" Foreground="{DynamicResource ThemeSecondaryText}" FontSize="16" FontFamily="{StaticResource SansationLight}" VerticalAlignment="Top" TextWrapping="Wrap" Margin="15,127,15,0" />
+            <TextBlock x:Name="FolderLocation" Text="C:/Program Files/Valkyrie/" Foreground="{DynamicResource ThemeSecondaryText}" FontSize="16" FontFamily="{StaticResource SansationLight}" VerticalAlignment="Top" TextWrapping="Wrap" Margin="15,127,15,0" />
             <Border Height="55" VerticalAlignment="Bottom">
                 <Grid>
                     <Button x:Name="Continue" Style="{DynamicResource checkBtnStyle}" Margin="422,0,10,0" Content="CONTINUE" Background="{DynamicResource ThemeSecondaryAltText}" BorderBrush="{DynamicResource ThemeSecondaryAltText}" FontSize="18" FontFamily="{StaticResource SansationBold}" VerticalAlignment="Center" Cursor="Hand" Foreground="{DynamicResource ThemePrimaryAltText}" Height="42" Click="Continue_Click" />

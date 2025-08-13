@@ -314,7 +314,7 @@
             FormBorderStyle = FormBorderStyle.Fixed3D;
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainWIndow";
-            Text = "R5Reloaded Patch Creator";
+            Text = "Valkyrie Patch Creator";
             Load += Form1_Load;
             groupBox1.ResumeLayout(false);
             groupBox2.ResumeLayout(false);

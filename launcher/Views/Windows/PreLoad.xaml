@@ -6,13 +6,13 @@
         xmlns:local="clr-namespace:launcher"
         xmlns:gif="https://github.com/XamlAnimatedGif/XamlAnimatedGif"
         mc:Ignorable="d"
-        Title="R5Reloaded Launcher" Height="350" AllowsTransparency="True" Width="600" ResizeMode="NoResize" WindowStyle="None" WindowStartupLocation="CenterScreen" Icon="../../Assets/launcher_x64.ico" Background="Transparent" Loaded="Window_Loaded" Topmost="True" ShowInTaskbar="False">
+        Title="Valkyrie Launcher" Height="350" AllowsTransparency="True" Width="600" ResizeMode="NoResize" WindowStyle="None" WindowStartupLocation="CenterScreen" Icon="../../Assets/launcher_x64.ico" Background="Transparent" Loaded="Window_Loaded" Topmost="True" ShowInTaskbar="False">
     <Border Background="{DynamicResource ThemeSecondary}" BorderBrush="{DynamicResource ThemeSecondary}" BorderThickness="4" CornerRadius="10">
         <Grid>
             <Grid.Clip>
                 <RectangleGeometry x:Name="WindowClip" Rect="0,0,592,342" RadiusX="8" RadiusY="8" />
             </Grid.Clip>
-            <Image x:Name="PreloadBG" Source="/Assets/Loba_splash.png" VerticalAlignment="Center" HorizontalAlignment="Center" Stretch="UniformToFill" />
+            <Image x:Name="PreloadBG" Source="/Assets/preload.jpg" VerticalAlignment="Center" HorizontalAlignment="Center" Stretch="UniformToFill" />
             <Rectangle Fill="#33000000" Margin="0,0,0,0" />
             <Image Source="{DynamicResource logo_main_whiteDrawingImage}" Margin="-11,-5,398,285" Opacity="0">
                 <Image.RenderTransform>

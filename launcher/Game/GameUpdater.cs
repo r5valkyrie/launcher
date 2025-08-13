@@ -117,7 +117,7 @@ namespace launcher.Game
 
             if (IsR5ApexOpen())
             {
-                var result = MessageBox.Show("R5Reloaded must be closed to update.\n\nClose the game now?", "R5Reloaded", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+                var result = MessageBox.Show("Valkyrie must be closed to update.\n\nClose the game now?", "Valkyrie", MessageBoxButton.YesNo, MessageBoxImage.Warning);
                 if (result == MessageBoxResult.Yes)
                 {
                     CloseR5Apex();
@@ -151,7 +151,7 @@ namespace launcher.Game
             string sigCacheFile = Path.Combine(ReleaseChannelService.GetDirectory(), "cfg", "startup.bin");
             if (File.Exists(sigCacheFile)) File.Delete(sigCacheFile);
 
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) has been updated!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) has been updated!", BalloonIcon.Info);
             SetupAdvancedMenu();
 
             if (ReleaseChannelService.ShouldDownloadHDTextures())
@@ -165,13 +165,13 @@ namespace launcher.Game
         private static async Task UpdateOptionalFilesAsync()
         {
             await RunUpdateProcessAsync(UpdateFileType.Optional);
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) optional files have been updated!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) optional files have been updated!", BalloonIcon.Info);
         }
 
         private static async Task UpdateLanguageFilesAsync()
         {
             await RunUpdateProcessAsync(UpdateFileType.Language);
-            SendNotification($"R5Reloaded ({ReleaseChannelService.GetName()}) language files have been updated!", BalloonIcon.Info);
+            SendNotification($"Valkyrie ({ReleaseChannelService.GetName()}) language files have been updated!", BalloonIcon.Info);
         }
 
         private static async Task CheckForDeletedFilesAsync(UpdateFileType fileType)

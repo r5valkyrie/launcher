@@ -5,7 +5,7 @@ internal partial class Program
 {
     private static async Task Main(string[] args)
     {
-        Console.WriteLine("------ R5Reloaded Launcher Self Updater ------");
+        Console.WriteLine("------ Valkyrie Launcher Self Updater ------");
 
         var appPath = AppDomain.CurrentDomain.BaseDirectory;
         DirectoryInfo parentDir = Directory.GetParent(appPath.TrimEnd(Path.DirectorySeparatorChar));
@@ -58,14 +58,7 @@ internal partial class Program
             Console.WriteLine("Failed to delete the file after several attempts.");
         }
 
-        if (args.Length > 0 && args[0] == "-nightly")
-        {
-            await DownloadNightlyLauncherAsync(destinationPath);
-        }
-        else
-        {
-            await DownloadLauncherAsync(destinationPath);
-        }
+        await DownloadLauncherAsync(destinationPath);
 
         Console.WriteLine("Launching new launcher at " + destinationPath);
         var startInfo = new ProcessStartInfo
@@ -84,46 +77,10 @@ internal partial class Program
 
     private static async Task DownloadLauncherAsync(string destinationPath)
     {
-        var launcherURL = "https://cdn.r5r.org/launcher/launcher.exe";
+        var launcherURL = "https://cdn.playvalkyrie.org/launcher/launcher.exe";
 
         Console.WriteLine("Downloading new launcher from " + launcherURL);
         HttpClient client = new();
-        var response = await client.GetAsync(launcherURL, HttpCompletionOption.ResponseHeadersRead);
-        response.EnsureSuccessStatusCode();
-
-        using var stream = await response.Content.ReadAsStreamAsync();
-        using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-        Console.WriteLine("Writing new launcher to " + destinationPath);
-        stream.CopyTo(fileStream);
-        stream.Close();
-        fileStream.Close();
-    }
-
-    private static async Task DownloadNightlyLauncherAsync(string destinationPath)
-    {
-        var githubURL = "https://api.github.com/repos/AyeZeeBB/r5reloaded_launcher/releases";
-
-        Console.WriteLine("Downloading new launcher from " + githubURL);
-        HttpClient client = new();
-        client.DefaultRequestHeaders.Add("User-Agent", "request");
-        var git_response = await client.GetAsync(githubURL);
-        git_response.EnsureSuccessStatusCode();
-        string response_data = await git_response.Content.ReadAsStringAsync();
-
-        List<Root> github_data = JsonConvert.DeserializeObject<List<Root>>(response_data);
-
-        string launcherURL = github_data[0].assets[0].browser_download_url;
-        foreach (var root in github_data)
-        {
-            if (root.prerelease && root.tag_name.Contains("nightly"))
-            {
-                launcherURL = root.assets[0].browser_download_url;
-                break;
-            }
-        }
-
-        //Download
         var response = await client.GetAsync(launcherURL, HttpCompletionOption.ResponseHeadersRead);
         response.EnsureSuccessStatusCode();
 

@@ -269,7 +269,7 @@ namespace launcher.Game
         private static async Task DownloadMultiStreamAsync(string fileUrl, string destinationPath, ManifestEntry file)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, fileUrl);
-            request.Headers.UserAgent.ParseAdd($"R5Reloaded-Launcher/{Launcher.VERSION} (+https://r5reloaded.com)");
+            request.Headers.UserAgent.ParseAdd($"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)");
 
             string key = ReleaseChannelService.GetKey();
             if (key.Length > 0)
@@ -285,7 +285,7 @@ namespace launcher.Game
         private static async Task DownloadSingleStreamAsync(ManifestEntry file)
         {
             var request = new HttpRequestMessage(HttpMethod.Get, file.downloadContext.fileUrl);
-            request.Headers.UserAgent.ParseAdd($"R5Reloaded-Launcher/{Launcher.VERSION} (+https://r5reloaded.com)");
+            request.Headers.UserAgent.ParseAdd($"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)");
 
             string key = ReleaseChannelService.GetKey();
             if (key.Length > 0)

@@ -108,7 +108,7 @@ namespace launcher
             {
                 if (await NetworkHealthService.IsCdnAvailableAsync())
                 {
-                    app.ChangeTheme(new Uri("https://cdn.r5r.org/launcher/theme.xaml"));
+                    app.ChangeTheme(new Uri("https://cdn.playvalkyrie.org/launcher/theme.xaml"));
                 }
             }
 
@@ -437,12 +437,12 @@ namespace launcher
 
         private void VisitWebsite_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("cmd", $"/c start https://r5reloaded.com") { CreateNoWindow = true });
+            Process.Start(new ProcessStartInfo("cmd", $"/c start https://playvalkyrie.org") { CreateNoWindow = true });
         }
 
         private void JoinDiscord_Click(object sender, RoutedEventArgs e)
         {
-            Process.Start(new ProcessStartInfo("cmd", $"/c start https://discord.com/invite/jqMkUdXrBr") { CreateNoWindow = true });
+            Process.Start(new ProcessStartInfo("cmd", $"/c start https://discord.gg/GcJSMUGJyD") { CreateNoWindow = true });
         }
 
         private void SettingsButton_Click(object sender, RoutedEventArgs e)
@@ -725,11 +725,11 @@ namespace launcher
             ContextMenu contextMenu = (ContextMenu)FindResource("tbiContextMenu");
             MenuItem versionMenuItem = contextMenu.Items.OfType<MenuItem>().FirstOrDefault(item => item.Name == "VersionContext");
             if (versionMenuItem != null)
-                versionMenuItem.Header = "R5RLauncher " + Launcher.VERSION;
+                versionMenuItem.Header = "Valkyrie Launcher " + Launcher.VERSION;
 
             System_Tray = new TaskbarIcon
             {
-                ToolTipText = "R5Reloaded Launcher",
+                ToolTipText = "Valkyrie Launcher",
                 Icon = this.Icon.ToIcon(),
                 DoubleClickCommand = ShowWindowCommand,
                 ContextMenu = (ContextMenu)FindResource("tbiContextMenu")

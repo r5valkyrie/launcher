@@ -83,9 +83,9 @@ namespace launcher.Services
             richPresence.Assets = new Assets()
             {
                 LargeImageKey = largeImageKey,
-                LargeImageText = "R5Reloaded Launcher",
+                LargeImageText = "Valkyrie Launcher",
                 SmallImageKey = smallImageKey,
-                SmallImageText = "R5Reloaded Launcher"
+                SmallImageText = "Valkyrie Launcher"
             };
 
             RPC_client.SetPresence(richPresence);

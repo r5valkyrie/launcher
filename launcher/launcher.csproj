@@ -18,9 +18,9 @@
     <None Remove="Assets\launcher_bg_kc.mp4" />
     <None Remove="Assets\launcher_bg_shadow.mp4" />
     <None Remove="Assets\launcher_bg_we.mp4" />
-    <None Remove="Assets\Loba_splash.png" />
+    <None Remove="Assets\logo.png" />
+    <None Remove="Assets\logo_small.png" />
     <None Remove="Assets\news_default_bg.jpg" />
-    <None Remove="Assets\new_preload.png" />
     <None Remove="Assets\NunitoSans-VariableFont.ttf" />
     <None Remove="Assets\preload.gif" />
     <None Remove="Assets\preload.jpg" />
@@ -93,13 +93,13 @@
     <Resource Include="Assets\launcher_bg.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
-    <Resource Include="Assets\Loba_splash.png">
+    <Resource Include="Assets\logo.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Resource>
+    <Resource Include="Assets\logo_small.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
     <Resource Include="Assets\news_default_bg.jpg">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
-    <Resource Include="Assets\new_preload.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
     <Resource Include="Assets\preload.jpg">
