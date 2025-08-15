@@ -20,7 +20,7 @@ namespace launcher
 
         #region Public Keys
 
-        public const string NEWSKEY = "68767b4df970e8348b79ad74b1";
+        public const string NEWSKEY = "087606e4317f602d5854ba0e5a";
         public const string DISCORDRPC_CLIENT_ID = "1364049087434850444";
 
         #endregion Public Keys
@@ -29,7 +29,7 @@ namespace launcher
 
         public const string CONFIG_URL = "https://cdn.playvalkyrie.org/launcher/config.json";
         public const string BACKGROUND_VIDEO_URL = "https://cdn.playvalkyrie.org/launcher/video_backgrounds/";
-        public const string NEWSURL = "https://admin.r5reloaded.com/ghost/api/content";
+        public const string NEWSURL = "https://blog.playvalkyrie.org/ghost/api/content";
 
         #endregion Public URLs
 

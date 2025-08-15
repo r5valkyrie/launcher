@@ -1,39 +1,30 @@
 ﻿<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <SolidColorBrush x:Key="ThemePrimary" Color="#FF671E97" />
-    <SolidColorBrush x:Key="ThemeSecondary" Color="#FF400D5E" />
-    <SolidColorBrush x:Key="ThemeSecondaryAlt" Color="#FF290A3D" />
-
-    <SolidColorBrush x:Key="ThemePrimaryText" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="ThemePrimaryAltText" Color="#FF14051D" />
-    <SolidColorBrush x:Key="ThemeSecondaryText" Color="#FF9E7DBF" />
-    <SolidColorBrush x:Key="ThemeSecondaryAltText" Color="#FFA958EB" />
-    <SolidColorBrush x:Key="ThemeDisabledText" Color="#FF4D2C6B" />
-
-    <SolidColorBrush x:Key="ThemeSeperator" Color="#33D6B4F7" />
-
-    <SolidColorBrush x:Key="ThemeOtherButtonText" Color="#FFD6B4F7" />
-    <SolidColorBrush x:Key="ThemeOtherButtonHover" Color="#FFFFFFFF" />
-    <SolidColorBrush x:Key="ThemeOtherButtonAltText" Color="#FFA958EB" />
-    <SolidColorBrush x:Key="ThemeOtherButtonAltHover" Color="#FFD6B4F7" />
-
-    <SolidColorBrush x:Key="ThemeMainButtonsBackground" Color="#FF290A3D" />
-    <SolidColorBrush x:Key="ThemeMainButtonsBorder" Color="#FFA958EB" />
-    <SolidColorBrush x:Key="ThemeMainButtonsBorderHover" Color="#FFFFFFFF" />
-
-    <SolidColorBrush x:Key="ThemeUpdateButtonBackground" Color="#FF8A2BE2" />
-    <SolidColorBrush x:Key="ThemeUpdateButtonBackgroundHover" Color="#FFA958EB" />
+    <SolidColorBrush x:Key="ThemeComboBoxSelected" Color="#FF930FFF" />
+    <SolidColorBrush x:Key="ThemeStatusPlayerServerCount" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ThemeDisabledText" Color="#FF888888" />
     <SolidColorBrush x:Key="ThemeUninstallButtonText" Color="#FFD42A9B" />
     <SolidColorBrush x:Key="ThemeUninstallButtonHover" Color="#FFFF44C8" />
-
-    <SolidColorBrush x:Key="ThemeMenuButtonColorHover" Color="#4CFFFFFF" />
-    <SolidColorBrush x:Key="ThemeMenuButtonColorDisabled" Color="#8C14051D" />
-
-    <SolidColorBrush x:Key="ThemeComboBoxBorder" Color="#FF14051D" />
-    <SolidColorBrush x:Key="ThemeComboBoxMouseOver" Color="#FF400D5E" />
-    <SolidColorBrush x:Key="ThemeComboBoxSelected" Color="#FF671E97" />
-    <SolidColorBrush x:Key="ThemeComboBoxSelectedMouseOver" Color="#FF8A2BE2" />
-
-    <SolidColorBrush x:Key="ThemeStatusPlayerServerCount" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ThemeUpdateButtonBackgroundHover" Color="#FF8837CA" />
+    <SolidColorBrush x:Key="ThemeUpdateButtonBackground" Color="#FF080808" />
+    <SolidColorBrush x:Key="ThemeSecondaryAltText" Color="#FFF5F5F5" />
+    <SolidColorBrush x:Key="ThemeMainButtonsBorder" Color="#FF8400F0" />
+    <SolidColorBrush x:Key="ThemeComboBoxBorder" Color="#FF8618DF" />
+    <SolidColorBrush x:Key="ThemeComboBoxSelectedMouseOver" Color="#FF921DFF" />
+    <SolidColorBrush x:Key="ThemeMenuButtonColorDisabled" Color="#8CCCCCCC" />
+    <SolidColorBrush x:Key="ThemeSecondaryAlt" Color="#FF525252" />
     <SolidColorBrush x:Key="ThemeStatusOperational" Color="#FFB39DDB" />
+    <SolidColorBrush x:Key="ThemeMainButtonsBackground" Color="#FF0E0C0F" />
+    <SolidColorBrush x:Key="ThemeComboBoxMouseOver" Color="#FF050505" />
     <SolidColorBrush x:Key="ThemeStatusNonOperational" Color="#FFD42A9B" />
+    <SolidColorBrush x:Key="ThemePrimaryText" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ThemeMenuButtonColorHover" Color="#CBA958EB" />
+    <SolidColorBrush x:Key="ThemeSecondaryText" Color="#FFF0E7F7" />
+    <SolidColorBrush x:Key="ThemePrimaryAltText" Color="#FFCCCCCC" />
+    <SolidColorBrush x:Key="ThemeMainButtonsBorderHover" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ThemeOtherButtonText" Color="#FFD6B4F7" />
+    <SolidColorBrush x:Key="ThemeOtherButtonAltText" Color="#FFA958EB" />
+    <SolidColorBrush x:Key="ThemeOtherButtonHover" Color="#FFFFFFFF" />
+    <SolidColorBrush x:Key="ThemeSeperator" Color="#33A958EB" />
+    <SolidColorBrush x:Key="ThemePrimary" Color="#FF1B1B1B" />
+    <SolidColorBrush x:Key="ThemeSecondary" Color="#FF000000" />
 </ResourceDictionary>

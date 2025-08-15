@@ -6,7 +6,6 @@ using Polly;
 using Polly.Retry;
 using System.IO;
 using System.Net;
-using System.Net.Http;
 using System.Windows;
 using static launcher.Core.AppContext;
 using static launcher.Networking.DownloadService;
@@ -16,7 +15,6 @@ namespace launcher.Game
 {
     public static class GameFileManager
     {
-        private static readonly HttpClient httpClient = Networking.HttpClientFactory.CreateClient();
 
         public static List<Task<string>> InitializeDownloadTasks(GameManifest GameManifest, string releaseChannelDirectory)
         {
@@ -151,8 +149,7 @@ namespace launcher.Game
 
         private static bool ShouldRetry(Exception ex, ManifestEntry file)
         {
-            if (ex is HttpRequestException { StatusCode: HttpStatusCode.NotFound } ||
-                ex is WebException { Response: HttpWebResponse { StatusCode: HttpStatusCode.NotFound } })
+            if (ex is WebException { Response: HttpWebResponse { StatusCode: HttpStatusCode.NotFound } })
             {
                 LogWarning(LogSource.Download, $"(404) Not Found, will not retry: {file.downloadContext.fileUrl}");
                 return false; // Do NOT retry for 404 errors.
@@ -268,34 +265,31 @@ namespace launcher.Game
 
         private static async Task DownloadMultiStreamAsync(string fileUrl, string destinationPath, ManifestEntry file)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, fileUrl);
-            request.Headers.UserAgent.ParseAdd($"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)");
+            var request = WebRequest.Create(fileUrl) as HttpWebRequest;
+            request.UserAgent = $"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)";
 
             string key = ReleaseChannelService.GetKey();
             if (key.Length > 0)
                 request.Headers.Add("channel-key", key);
 
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
-
-            using var responseStream = await response.Content.ReadAsStreamAsync();
+            using var response = (HttpWebResponse)await request.GetResponseAsync();
+            using var responseStream = response.GetResponseStream();
             await ProcessDownloadStreamAsync(file, responseStream, destinationPath, file.downloadContext.downloadProgress.totalBytes);
         }
 
         private static async Task DownloadSingleStreamAsync(ManifestEntry file)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, file.downloadContext.fileUrl);
-            request.Headers.UserAgent.ParseAdd($"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)");
+            var request = WebRequest.Create(file.downloadContext.fileUrl) as HttpWebRequest;
+            request.UserAgent = $"Valkyrie-Launcher/{Launcher.VERSION} (+https://playvalkyrie.org)";
 
             string key = ReleaseChannelService.GetKey();
             if (key.Length > 0)
                 request.Headers.Add("channel-key", key);
 
-            using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-            response.EnsureSuccessStatusCode();
+            using var response = (HttpWebResponse)await request.GetResponseAsync();
 
-            long totalBytes = response.Content.Headers.ContentLength ?? 0;
-            using var responseStream = await response.Content.ReadAsStreamAsync();
+            long totalBytes = response.ContentLength;
+            using var responseStream = response.GetResponseStream();
             await ProcessDownloadStreamAsync(file, responseStream, file.downloadContext.finalPath, totalBytes);
         }
 
