@@ -86,7 +86,7 @@
             </Border>
 
             <TextBlock Text="Game location complete path:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="18" Margin="48,81,437,0" VerticalAlignment="Top" FontFamily="{StaticResource SansationBold}" />
-            <TextBlock x:Name="InstallPath" Text="C:\Program Files\Valkyrie\Valk Library\LIVE" Foreground="{DynamicResource ThemePrimaryText}" FontSize="16" Margin="48,113,37,0" VerticalAlignment="Top" FontFamily="{StaticResource SansationLight}" />
+            <TextBlock x:Name="InstallPath" Text="C:\Program Files\Valkyrie\R5Valk Library\LIVE" Foreground="{DynamicResource ThemePrimaryText}" FontSize="16" Margin="48,113,37,0" VerticalAlignment="Top" FontFamily="{StaticResource SansationLight}" />
 
             <Rectangle Height="2" Fill="{DynamicResource ThemeSeperator}"  VerticalAlignment="Top" Margin="48,148,52,0" />
 

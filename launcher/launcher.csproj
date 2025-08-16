@@ -6,12 +6,13 @@
 	<Nullable>disable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
-	<ApplicationIcon>assets\launcher_x64.ico</ApplicationIcon>
+	<ApplicationIcon>Assets\favicon.ico</ApplicationIcon>
 	<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 	<NoWarn>$(NoWarn);SYSLIB0014;IDE1006;IDE0130;CA1835;SYSLIB1054;SYSLIB1045;CA1416;CS4014;CA1510;IDE0044</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Assets\favicon.ico" />
     <None Remove="Assets\launcher_bg.jpg" />
     <None Remove="Assets\launcher_bg_autum.mp4" />
     <None Remove="Assets\launcher_bg_beach.mp4" />
@@ -65,9 +66,6 @@
     <Content Include="Assets\launcher_bg_we.mp4">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </Content>
-    <Content Include="Assets\launcher_x64.ico">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
     <Content Include="Assets\NunitoSans-VariableFont.ttf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -91,6 +89,9 @@
     </Content>
     <None Include="..\.editorconfig" Link=".editorconfig" />
     <Page Include="App.xaml" />
+    <Content Include="Assets\favicon.ico">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
     <Resource Include="Assets\launcher_bg.jpg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
@@ -104,9 +105,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
     <Resource Include="Assets\preload.jpg">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Resource>
-    <Resource Include="Assets\launcher_x64.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Resource>
   </ItemGroup>

@@ -9,8 +9,7 @@ namespace launcher
 {
     public static class Launcher
     {
-        public const string VERSION = "1.3.9";
-
+        public const string VERSION = "1.0.0";
         #region Settings
 
         public const int MAX_REPAIR_ATTEMPTS = 5;

@@ -980,7 +980,7 @@
                         <Border x:Name="border" CornerRadius="5" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="2" SnapsToDevicePixels="True">
                             <ScrollViewer x:Name="PART_ContentHost" Focusable="false" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Hidden" VerticalAlignment="Bottom" Margin="5,-4.3,0,5" />
                         </Border>
-                        <TextBlock IsHitTestVisible="False" Text="R5R Library Location" Foreground="{DynamicResource ThemeSecondaryText}" FontSize="10" FontFamily="{StaticResource SansationLight}" Height="15" Margin="8,4,-8,30" />
+                        <TextBlock IsHitTestVisible="False" Text="R5Valk Library Location" Foreground="{DynamicResource ThemeSecondaryText}" FontSize="10" FontFamily="{StaticResource SansationLight}" Height="15" Margin="8,4,-8,30" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsEnabled" Value="false">

@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:launcher" xmlns:colorpicker="clr-namespace:ColorPicker;assembly=ColorPicker"
         mc:Ignorable="d"
-        Title="ThemeEditor" Height="565" Width="798" Closed="Window_Closed" Icon="../../Assets/launcher_x64.ico">
+        Title="ThemeEditor" Height="565" Width="798" Closed="Window_Closed" Icon="/Assets/favicon.ico">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*" />

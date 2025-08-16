@@ -21,7 +21,7 @@ namespace launcher.Core.Services
         public string GetBaseLibraryPath()
         {
             string libraryPath = (string)SettingsService.Get(SettingsService.Vars.Library_Location);
-            string finalDirectory = Path.Combine(libraryPath, "R5R Library");
+            string finalDirectory = Path.Combine(libraryPath, "R5Valk Library");
             return finalDirectory;
         }
     }

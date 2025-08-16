@@ -34,6 +34,9 @@ namespace launcher.Core
             PreLoad_Window.SetLoadingText("Setting up app");
             await Task.Run(() => Launcher.Init());
 
+            PreLoad_Window.SetLoadingText("Starting update checker");
+            await Task.Run(() => GetSelfUpdater());
+
             if (UpdateService.ShouldUpdateLauncher())
             {
                 PreLoad_Window.SetLoadingText("Updating Launcher...");
@@ -61,9 +64,6 @@ namespace launcher.Core
 
             PreLoad_Window.SetLoadingText("Checking game installs");
             await Task.Run(() => CheckGameInstalls());
-
-            PreLoad_Window.SetLoadingText("Starting update checker");
-            await Task.Run(() => GetSelfUpdater());
 
             PreLoad_Window.SetLoadingText("Getting EULA contents");
             await Task.Run(() => EULA_Control.SetupEULA());

@@ -83,7 +83,7 @@ namespace launcher
             var directoryDialog = new CommonOpenFileDialog
             {
                 IsFolderPicker = true,
-                Title = "Select R5R Library Folder"
+                Title = "Select R5Valk Library Folder"
             };
 
             if (directoryDialog.ShowDialog() == CommonFileDialogResult.Ok)

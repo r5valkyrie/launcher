@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:launcher" xmlns:local1="clr-namespace:launcher.Core"
         mc:Ignorable="d"
-        Title="Valkyrie Launcher" MinHeight="768" Height="768" MinWidth="1340" Width="1340" WindowStyle="None" WindowStartupLocation="CenterScreen" Loaded="Window_Loaded" Icon="../../Assets/launcher_x64.ico" Background="Transparent" Closing="Window_Closing" ResizeMode="CanResize" SizeChanged="Window_SizeChanged" AllowsTransparency="True" StateChanged="Window_StateChanged" LocationChanged="Window_LocationChanged">
+        Title="Valkyrie Launcher" MinHeight="768" Height="768" MinWidth="1340" Width="1340" WindowStyle="None" WindowStartupLocation="CenterScreen" Loaded="Window_Loaded" Icon="/Assets/favicon.ico" Background="Transparent" Closing="Window_Closing" ResizeMode="CanResize" SizeChanged="Window_SizeChanged" AllowsTransparency="True" StateChanged="Window_StateChanged" LocationChanged="Window_LocationChanged">
 
     <Window.RenderTransform>
         <ScaleTransform x:Name="WindowScale" ScaleX="1.0" ScaleY="1.0" />
