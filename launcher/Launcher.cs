@@ -26,8 +26,8 @@ namespace launcher
 
         #region Public URLs
 
-        public const string CONFIG_URL = "https://cdn.playvalkyrie.org/launcher/config.json";
-        public const string BACKGROUND_VIDEO_URL = "https://cdn.playvalkyrie.org/launcher/video_backgrounds/";
+        public const string CONFIG_URL = "https://blaze.playvalkyrie.org/config.json";
+        public const string BACKGROUND_VIDEO_URL = "https://blaze.playvalkyrie.org/video_backgrounds/";
         public const string NEWSURL = "https://blog.playvalkyrie.org/ghost/api/content";
 
         #endregion Public URLs

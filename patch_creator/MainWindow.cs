@@ -37,7 +37,7 @@ namespace patch_creator
 
         private async void Form1_Load(object sender, EventArgs e)
         {
-            _remoteConfig = await _remoteContentService.GetRemoteConfigAsync("https://cdn.playvalkyrie.org/launcher/config.json");
+            _remoteConfig = await _remoteContentService.GetRemoteConfigAsync("https://blaze.playvalkyrie.org/config.json");
 
             foreach (ReleaseChannel channel in _remoteConfig.channels)
             {

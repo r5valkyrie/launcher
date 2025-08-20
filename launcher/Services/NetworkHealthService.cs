@@ -18,7 +18,7 @@ namespace launcher.Services
                 using var client = new HttpClient();
                 client.Timeout = TimeSpan.FromSeconds(5); // Set a timeout (e.g., 5 seconds)
 
-                var response = await client.GetAsync($"https://cdn.playvalkyrie.org/launcher/config.json");
+                var response = await client.GetAsync($"https://blaze.playvalkyrie.org/config.json");
                 return response.IsSuccessStatusCode; // Return true if the request was successful
             }
             catch
@@ -50,7 +50,7 @@ namespace launcher.Services
                 using var client = new HttpClient();
                 client.Timeout = TimeSpan.FromSeconds(5); // Set a timeout (e.g., 5 seconds)
 
-                var response = await client.GetAsync($"https://r5r.org");
+                var response = await client.GetAsync($"https://playvalkyrie.org");
                 return response.IsSuccessStatusCode; // Return true if the request was successful
             }
             catch

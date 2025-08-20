@@ -77,7 +77,7 @@ internal partial class Program
 
     private static async Task DownloadLauncherAsync(string destinationPath)
     {
-        var launcherURL = "https://cdn.playvalkyrie.org/launcher/launcher.exe";
+        var launcherURL = "https://blaze.playvalkyrie.org/launcher.exe";
 
         Console.WriteLine("Downloading new launcher from " + launcherURL);
         HttpClient client = new();

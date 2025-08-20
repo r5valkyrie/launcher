@@ -16,21 +16,22 @@ namespace launcher.Game
     public static class GameFileManager
     {
 
-        public static List<Task<string>> InitializeDownloadTasks(GameManifest GameManifest, string releaseChannelDirectory)
+        public static (List<Task<string>> downloadTasks, List<ManifestEntry> multipartFiles) InitializeDownloadTasks(GameManifest GameManifest, string releaseChannelDirectory)
         {
             if (GameManifest == null) throw new ArgumentNullException(nameof(GameManifest));
             return CreateDownloadTasks(GameManifest.files, releaseChannelDirectory, checkForExistingFiles: true);
         }
 
-        public static List<Task<string>> InitializeRepairTasks(string releaseChannelDirectory)
+        public static (List<Task<string>> downloadTasks, List<ManifestEntry> multipartFiles) InitializeRepairTasks(string releaseChannelDirectory)
         {
             return CreateDownloadTasks(ChecksumManager.MismatchedFiles, releaseChannelDirectory, checkForExistingFiles: false);
         }
 
-        private static List<Task<string>> CreateDownloadTasks(IEnumerable<ManifestEntry> files, string releaseChannelDirectory, bool checkForExistingFiles)
+        private static (List<Task<string>> downloadTasks, List<ManifestEntry> multipartFiles) CreateDownloadTasks(IEnumerable<ManifestEntry> files, string releaseChannelDirectory, bool checkForExistingFiles)
         {
             if (string.IsNullOrWhiteSpace(releaseChannelDirectory)) throw new ArgumentException("Release channel directory cannot be null or empty.", nameof(releaseChannelDirectory));
 
+            var multipartFiles = new List<ManifestEntry>();
             var downloadTasks = files
                 .Where(file => !IsUserGeneratedContent(file))
                 .Select(file =>
@@ -39,6 +40,11 @@ namespace launcher.Game
                     file.downloadContext.finalPath = Path.Combine(releaseChannelDirectory, file.path);
                     EnsureDirectoryExists(file);
 
+                    if (file.parts.Count > 0)
+                    {
+                        multipartFiles.Add(file);
+                    }
+
                     return DownloadFileAsync(file, checkForExistingFiles);
                 })
                 .ToList();
@@ -46,7 +52,7 @@ namespace launcher.Game
             long totalSize = files.Sum(f => f.size);
             SetGlobalDownloadStats(totalSize, 0, DateTime.Now);
 
-            return downloadTasks;
+            return (downloadTasks, multipartFiles);
         }
 
         private static bool IsUserGeneratedContent(ManifestEntry file)
@@ -167,8 +173,6 @@ namespace launcher.Game
                 file.downloadContext.downloadProgress.totalBytes = file.size;
 
                 await DownloadMissingPartsAsync(file, checkForExistingFiles);
-                await MergePartsAsync(file);
-                CleanupPartFiles(file);
 
                 return file.downloadContext.finalPath;
             }
@@ -261,6 +265,33 @@ namespace launcher.Game
                     }
                 }
             });
+        }
+
+        public static async Task MergeAndCleanupMultiPartFiles(IEnumerable<ManifestEntry> multipartFiles)
+        {
+            var filesToProcess = multipartFiles.ToList();
+            if (!filesToProcess.Any()) return;
+
+            UpdateStatusLabel("Merging downloaded files...", LogSource.Download);
+            var totalFiles = filesToProcess.Count;
+            var processedFiles = 0;
+
+            foreach (var file in filesToProcess)
+            {
+                try
+                {
+                    processedFiles++;
+                    UpdateStatusLabel($"Merging file {processedFiles} of {totalFiles}: {file.path}", LogSource.Download);
+
+                    await MergePartsAsync(file);
+                    CleanupPartFiles(file);
+                }
+                catch (Exception ex)
+                {
+                    LogException($"Failed to merge and cleanup file {file.path}", LogSource.Download, ex);
+                    appState.BadFilesDetected = true;
+                }
+            }
         }
 
         private static async Task DownloadMultiStreamAsync(string fileUrl, string destinationPath, ManifestEntry file)

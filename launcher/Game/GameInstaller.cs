@@ -87,7 +87,7 @@ namespace launcher.Game
             DownloadService.ConfigureDownloadSpeed();
 
             string releaseChannelDirectory = ReleaseChannelService.GetDirectory();
-            var downloadTasks = GameFileManager.InitializeDownloadTasks(GameManifest, releaseChannelDirectory);
+            var (downloadTasks, multipartFiles) = GameFileManager.InitializeDownloadTasks(GameManifest, releaseChannelDirectory);
 
             using var cts = new CancellationTokenSource();
             Task progressUpdateTask = DownloadService.UpdateGlobalDownloadProgressAsync(cts.Token);
@@ -96,6 +96,7 @@ namespace launcher.Game
             GameFileManager.UpdateStatusLabel(statusLabel, LogSource.Installer);
 
             await Task.WhenAll(downloadTasks);
+            await GameFileManager.MergeAndCleanupMultiPartFiles(multipartFiles);
 
             GameFileManager.ShowSpeedLabels(false, false);
             await cts.CancelAsync();

@@ -33,8 +33,8 @@
             </TextBlock>
             <TextBlock Grid.Row="2" Text="Website:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,130,0,263" Width="114" Height="17" HorizontalAlignment="Left" />
             <TextBlock Grid.Row="2" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationLight}" TextWrapping="Wrap" Margin="165,130,0,263" Width="393" Height="17" HorizontalAlignment="Left">
-                <Hyperlink NavigateUri="https://cdn.playvalkyrie.org" RequestNavigate="Hyperlink_RequestNavigate">
-                    <Run Text="https://cdn.playvalkyrie.org" />
+                <Hyperlink NavigateUri="https://playvalkyrie.org" RequestNavigate="Hyperlink_RequestNavigate">
+                    <Run Text="https://playvalkyrie.org" />
                 </Hyperlink>
             </TextBlock>
             <TextBlock Grid.Row="2" Text="Discord:" Foreground="{DynamicResource ThemePrimaryText}" FontSize="14" FontFamily="{StaticResource SansationRegular}" TextWrapping="Wrap" Margin="43,156,0,237" Width="114" Height="17" HorizontalAlignment="Left" />

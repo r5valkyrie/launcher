@@ -108,7 +108,7 @@ namespace launcher
             {
                 if (await NetworkHealthService.IsCdnAvailableAsync())
                 {
-                    app.ChangeTheme(new Uri("https://cdn.playvalkyrie.org/launcher/theme.xaml"));
+                    app.ChangeTheme(new Uri("https://blaze.playvalkyrie.org/theme.xaml"));
                 }
             }
 

@@ -22,7 +22,7 @@ namespace launcher
         private const string website_url = "https://playvalkyrie.org/";
         private const string status_url = "https://status.playvalkyrie.org/";
         private const string ms_url = "https://ms.playvalkyrie.org/";
-        private const string cdn_url = "https://cdn.playvalkyrie.org/launcher/config.json";
+        private const string cdn_url = "https://blaze.playvalkyrie.org/config.json";
 
         public Popup_Services()
         {

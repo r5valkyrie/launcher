@@ -52,13 +52,14 @@ namespace launcher.Game
             if (badFileCount > 0)
             {
                 GameFileManager.UpdateStatusLabel(downloadStatus, LogSource.Repair);
-                var downloadTasks = GameFileManager.InitializeRepairTasks(releaseChannelDirectory);
+                var (downloadTasks, multipartFiles) = GameFileManager.InitializeRepairTasks(releaseChannelDirectory);
 
                 using var cts = new CancellationTokenSource();
                 Task progressUpdateTask = DownloadService.UpdateGlobalDownloadProgressAsync(cts.Token);
 
                 GameFileManager.ShowSpeedLabels(true, true);
                 await Task.WhenAll(downloadTasks);
+                await GameFileManager.MergeAndCleanupMultiPartFiles(multipartFiles);
                 GameFileManager.ShowSpeedLabels(false, false);
                 await cts.CancelAsync();
                 return true; // Indicates that a repair was attempted.

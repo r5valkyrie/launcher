@@ -96,13 +96,14 @@ namespace launcher.Game
             if (changedFileCount > 0)
             {
                 GameFileManager.UpdateStatusLabel($"Downloading updated {fileType} files", LogSource.Update);
-                var downloadTasks = GameFileManager.InitializeRepairTasks(releaseChannelDirectory);
+                var (downloadTasks, multipartFiles) = GameFileManager.InitializeRepairTasks(releaseChannelDirectory);
 
                 using var cts = new CancellationTokenSource();
                 Task progressUpdateTask = DownloadService.UpdateGlobalDownloadProgressAsync(cts.Token);
 
                 GameFileManager.ShowSpeedLabels(true, true);
                 await Task.WhenAll(downloadTasks);
+                await GameFileManager.MergeAndCleanupMultiPartFiles(multipartFiles);
                 GameFileManager.ShowSpeedLabels(false, false);
                 await cts.CancelAsync();
             }

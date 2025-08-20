@@ -12,8 +12,8 @@ namespace launcher.Services
     {
         public static RemoteConfig GetRemoteConfig()
         {
-            LogInfo(LogSource.API, $"request: https://cdn.playvalkyrie.org/launcher/config.json");
-            return NetworkHealthService.HttpClient.GetFromJsonAsync<RemoteConfig>("https://cdn.playvalkyrie.org/launcher/config.json").Result;
+            LogInfo(LogSource.API, $"request: https://blaze.playvalkyrie.org/config.json");
+            return NetworkHealthService.HttpClient.GetFromJsonAsync<RemoteConfig>("https://blaze.playvalkyrie.org/config.json").Result;
         }
 
         public static string GetGameVersion(ReleaseChannel channel)
