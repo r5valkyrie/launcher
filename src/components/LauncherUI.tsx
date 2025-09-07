@@ -298,6 +298,7 @@ export default function LauncherUI() {
     }
   }
 
+  // Background video from config (cached via custom protocol), with PNG fallback
   const [bgCached, setBgCached] = useState<string | undefined>(undefined);
   const [videoSrc, setVideoSrc] = useState<string | null>(null);
   const videoFilename = useMemo(() => {
@@ -322,9 +323,7 @@ export default function LauncherUI() {
         setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
       });
   }, [videoFilename]);
-  useEffect(() => {
-    if (bgCached) setVideoSrc(bgCached);
-  }, [bgCached]);
+  useEffect(() => { if (bgCached) setVideoSrc(bgCached); }, [bgCached]);
   const bgVideo = videoSrc || undefined;
 
   useEffect(() => {
@@ -611,82 +610,80 @@ export default function LauncherUI() {
         </div>
       </aside>
 
-      <section className="relative overflow-y-auto">
-        <div className="relative h-[360px] rounded-2xl overflow-hidden m-6">
-          {bgVideo ? (
-            <video
-              key={bgVideo}
-              autoPlay
-              muted
-              loop
-              playsInline
-              className="absolute inset-0 w-full h-full object-cover opacity-70 pointer-events-none"
-              src={bgVideo}
-              onError={() => {
-                if (videoFilename) {
-                  setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
-                } else {
-                  setVideoSrc(null);
-                }
-              }}
-            />
-          ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 pointer-events-none"/>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-base-100/70 via-base-100/10 to-transparent pointer-events-none"/>
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
-            <div className="tabs tabs-boxed glass-soft">
-              <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
-              <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
-              <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
-              <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
-              <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
-            </div>
+      <section className="relative overflow-y-auto bg-[#171b20]">
+        <div className="mx-6 mt-4 mb-8 flex justify-center">
+          <div className="tabs tabs-boxed glass-soft rounded-[2.3vw]">
+            <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
+            <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
+            <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
+            <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
+            <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
           </div>
-          <div className="relative z-10 h-full w-full flex flex-col justify-end p-8">
-            <div className="flex items-end justify-between gap-6">
-              <div className="flex items-center gap-5">
+        </div>
+        <div className="relative mx-6 mt-12 mb-6 overflow-visible">
+          <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden">
+            <img src="/r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+            {bgVideo && (
+              <video
+                key={bgVideo}
+                autoPlay
+                muted
+                loop
+                playsInline
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                src={bgVideo}
+                onError={() => { if (videoFilename) { setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`); } else { setVideoSrc(null); } }}
+              />
+            )}
+            
+            <div className="absolute inset-0 bg-gradient-to-t from-base-100/70 via-base-100/10 to-transparent pointer-events-none"/>
+            <div className="relative z-10 h-full w-full flex flex-col items-start justify-start p-9">
+              <div className="flex flex-col h-full w-full">
                 <div>
-                  <div className="text-2xl font-bold tracking-wide">R5VALKYRIE</div>
-                  {enabledChannels.length > 0 && (
-                    <div className="mt-3">
-                      <div className="btn-group">
-                        {enabledChannels.map((c) => (
-                          <button
-                            key={c.name}
-                            className={`btn btn-sm ${selectedChannel===c.name ? 'btn-active btn-primary' : 'btn-ghost'}`}
-                            onClick={() => setSelectedChannel(c.name)}
-                          >
-                            {c.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+                  <img src="/r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto" />
+                  <div className="text-md opacity-80 mt-2">Pilots. Legends. One Frontier. One Battle.</div>
+                </div>
+                <div className="mt-auto flex items-center gap-3 pb-1">
+                  {primaryAction === 'install' && (
+                    <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={startInstall}>Install</button>
                   )}
+                  {primaryAction === 'update' && (
+                    <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
+                  )}
+                  {primaryAction === 'play' && (
+                    <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw]" onClick={async ()=>{
+                      const s: any = await window.electronAPI?.getSettings();
+                      const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                      const lo = s?.launchOptions?.[selectedChannel] || {};
+                      const args = buildLaunchParameters();
+                      const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
+                      if (res && !res.ok) {
+                        console.error('Failed to launch', res.error);
+                      }
+                    }}>Play</button>
+                  )}
+                  <button className="btn btn-lg rounded-[1.5vw]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
                 </div>
               </div>
-            <div className="flex items-center gap-4">
-                {primaryAction === 'install' && (
-                  <button className="btn btn-lg btn-primary text-white shadow-lg" disabled={busy} onClick={startInstall}>Install</button>
-                )}
-                {primaryAction === 'update' && (
-                  <button className="btn btn-lg btn-warning text-white shadow-lg" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
-                )}
-                {primaryAction === 'play' && (
-                  <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20" onClick={async ()=>{
-                    const s: any = await window.electronAPI?.getSettings();
-                    const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
-                    const lo = s?.launchOptions?.[selectedChannel] || {};
-                    const args = buildLaunchParameters();
-                    const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
-                    if (res && !res.ok) {
-                      console.error('Failed to launch', res.error);
-                    }
-                  }}>Play</button>
-                )}
-              </div>
+              {enabledChannels.length > 0 && (
+                <div className="absolute bottom-8 right-8">
+                  <div className="btn-group">
+                    {enabledChannels.map((c) => (
+                      <button
+                        key={c.name}
+                        className={`btn btn-md rounded-[1.5vw] ${selectedChannel===c.name ? 'btn-active btn-primary' : 'btn-ghost'}`}
+                        onClick={() => setSelectedChannel(c.name)}
+                      >
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+          <img src="/r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-[2vw]" />
+          <img src="/r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-3rem)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
         </div>
 
         {activeTab === 'general' && null}
@@ -847,7 +844,7 @@ export default function LauncherUI() {
                   <span className="label-text text-xs opacity-70">Playlist file (string)</span>
                   <input className="input input-bordered input-sm w-full mt-1" value={playlistFile} onChange={(e)=>setPlaylistFile(e.target.value)} placeholder="playlists_r5_patch.txt" />
                 </label>
-              </div>
+        </div>
 
               <div className="glass rounded-xl p-4 grid gap-3">
                 <div className="text-xs uppercase opacity-60">Gameplay & Advanced</div>
@@ -945,8 +942,8 @@ export default function LauncherUI() {
                       </>
                     );
                   })()}
-                </div>
-              )}
+          </div>
+        )}
 
               {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
