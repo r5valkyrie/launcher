@@ -70,7 +70,14 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "artifactName": "${productName} Setup ${version}.${ext}",
+      "nsis": {
+        "oneClick": true,
+        "perMachine": true,
+        "allowToChangeInstallationDirectory": false,
+        "include": "scripts/installer.nsh"
+      }
     }
   }
 }
