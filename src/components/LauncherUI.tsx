@@ -835,6 +835,28 @@ export default function LauncherUI() {
 
         {activeTab !== 'settings' && (
           <div key={`content-main-${activeTab}`} className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in">
+            {updateAvailable && !updateDownloaded && (
+              <div className="glass rounded-xl overflow-hidden xl:col-span-2">
+                <div className="flex items-stretch">
+                  <div className="px-4 py-3 text-sm">Launcher update available</div>
+                  <div className="ml-auto">
+                    <button className="btn btn-primary h-full rounded-none" onClick={() => window.electronAPI?.downloadUpdate?.()}>
+                      {updateProgress > 0 ? `${updateProgress.toFixed(0)}%` : 'Download'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {updateDownloaded && (
+              <div className="glass rounded-xl overflow-hidden xl:col-span-2">
+                <div className="flex items-stretch">
+                  <div className="px-4 py-3 text-sm">Update ready. Restart now?</div>
+                  <div className="ml-auto">
+                    <button className="btn btn-primary h-full rounded-none" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart</button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="space-y-3">
               {activeTab === 'general' && (busy && (hasStarted || overall)) && (
                 <div className="glass rounded-xl p-4">
@@ -945,26 +967,7 @@ export default function LauncherUI() {
               </div>
             )}
 
-            {updateAvailable && !updateDownloaded && (
-              <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-50">
-                <div className="alert alert-info pointer-events-auto flex items-center gap-3">
-                  <span>Launcher update available</span>
-                  <button className="btn btn-xs" onClick={() => window.electronAPI?.downloadUpdate?.()}>Download</button>
-                  {updateProgress > 0 && (
-                    <span className="text-xs opacity-80">{updateProgress.toFixed(0)}%</span>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {updateDownloaded && (
-              <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-50">
-                <div className="alert alert-success pointer-events-auto flex items-center gap-3">
-                  <span>Update ready. Restart now?</span>
-                  <button className="btn btn-xs btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart</button>
-                </div>
-              </div>
-            )}
+            
 
 
             {activeTab === 'patchnotes' && (
