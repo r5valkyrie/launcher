@@ -1,4 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, protocol, shell } from 'electron';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const { autoUpdater } = require('electron-updater');
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import https from 'node:https';
@@ -26,8 +29,10 @@ let activeDownloadToken = null;
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1150,
+    height: 750,
+    minWidth: 1150,
+    minHeight: 750,
     frame: false,
     titleBarStyle: 'hidden',
     webPreferences: {
@@ -110,11 +115,40 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  // Auto-updater wiring
+  try {
+    autoUpdater.autoDownload = false;
+    autoUpdater.on('error', (err) => {
+      try { mainWindow?.webContents.send('update:error', { message: String(err?.stack || err?.message || err) }); } catch {}
+    });
+    autoUpdater.on('update-available', (info) => {
+      try { mainWindow?.webContents.send('update:available', info); } catch {}
+    });
+    autoUpdater.on('update-not-available', (info) => {
+      try { mainWindow?.webContents.send('update:not-available', info); } catch {}
+    });
+    autoUpdater.on('download-progress', (p) => {
+      try { mainWindow?.webContents.send('update:download-progress', p); } catch {}
+    });
+    autoUpdater.on('update-downloaded', (info) => {
+      try { mainWindow?.webContents.send('update:downloaded', info); } catch {}
+    });
+  } catch {}
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
     }
   });
+});
+// Update IPC
+ipcMain.handle('update:check', async () => {
+  try { const res = await autoUpdater.checkForUpdates(); return { ok: true, result: res?.updateInfo || null }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+ipcMain.handle('update:download', async () => {
+  try { await autoUpdater.downloadUpdate(); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+ipcMain.handle('update:quitAndInstall', async () => {
+  try { setImmediate(() => autoUpdater.quitAndInstall(false, true)); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 
 // Basic IPC placeholders

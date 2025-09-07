@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelDownload: () => ipcRenderer.invoke('download:cancel'),
   selectFile: (filters) => ipcRenderer.invoke('select-file', { filters }),
   launchGame: (payload) => ipcRenderer.invoke('game:launch', payload),
+  // Auto-update
+  checkForUpdates: () => ipcRenderer.invoke('update:check'),
+  downloadUpdate: () => ipcRenderer.invoke('update:download'),
+  quitAndInstall: () => ipcRenderer.invoke('update:quitAndInstall'),
+  onUpdate: (channel, listener) => ipcRenderer.on(channel, (_e, payload) => listener(payload)),
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close'),

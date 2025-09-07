@@ -12,7 +12,8 @@
     "astro": "astro"
   },
   "dependencies": {
-    "bytenode": "^1.4.0"
+    "bytenode": "^1.4.0",
+    "electron-updater": "^6.3.9"
   },
   "devDependencies": {
     "@astrojs/react": "^4.3.0",
@@ -38,11 +39,20 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "r5valkyrie",
+        "repo": "launcher_releases"
+      }
+    ],
     "files": [
       "dist/**",
       "electron/**",
       "package.json",
       "node_modules/bytenode/**",
+      "node_modules/electron-updater/**",
+      "node_modules/builder-util-runtime/**",
       "!**/node_modules/**",
       "!**/*.map",
       "!**/*.md",

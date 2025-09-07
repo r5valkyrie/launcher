@@ -39,6 +39,11 @@ declare global {
       minimize: () => void;
       maximize: () => void;
       close: () => void;
+      // Auto update
+      checkForUpdates?: () => Promise<{ ok: boolean; result?: any; error?: string }>;
+      downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
+      quitAndInstall?: () => Promise<{ ok: boolean; error?: string }>;
+      onUpdate?: (channel: string, listener: (payload: any) => void) => void;
     };
   }
 }
@@ -50,13 +55,15 @@ export default function LauncherUI() {
   const [selectedChannel, setSelectedChannel] = useState<string>('');
   const [installDir, setInstallDir] = useState<string>('');
   const [busy, setBusy] = useState(false);
-  const [overall, setOverall] = useState<{index:number,total:number,path:string}|null>(null);
+  const [overall, setOverall] = useState<{index:number,total:number,path:string, completed?: number}|null>(null);
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
   const [includeOptional, setIncludeOptional] = useState(false);
   const [concurrency, setConcurrency] = useState<number>(4);
   const [partConcurrency, setPartConcurrency] = useState<number>(4);
   const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'settings'>('general');
-  const [progressItems, setProgressItems] = useState<Record<string, {status:string; received?:number; total?:number}>>({});
+  type PartInfo = { received: number; total: number };
+  type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
+  const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
   const [doneCount, setDoneCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -66,10 +73,22 @@ export default function LauncherUI() {
   const [etaSeconds, setEtaSeconds] = useState<number>(0);
   const [hasStarted, setHasStarted] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [receivedAnyBytes, setReceivedAnyBytes] = useState<boolean>(false);
+  // Updater UI state
+  const [updateAvailable, setUpdateAvailable] = useState<any | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<number>(0);
+  const [updateDownloaded, setUpdateDownloaded] = useState<boolean>(false);
+  // Auto-hide toast when finished
+  useEffect(() => {
+    if (!finished) return;
+    const t = setTimeout(() => setFinished(false), 3000);
+    return () => clearTimeout(t);
+  }, [finished]);
   const bytesTotalRef = useRef<number>(0);
   const bytesReceivedRef = useRef<number>(0);
   const busyRef = useRef<boolean>(false);
   const pausedRef = useRef<boolean>(false);
+  const runIdRef = useRef<number>(0);
   useEffect(() => { bytesTotalRef.current = bytesTotal; }, [bytesTotal]);
   useEffect(() => { bytesReceivedRef.current = bytesReceived; }, [bytesReceived]);
   useEffect(() => { busyRef.current = busy; }, [busy]);
@@ -86,6 +105,21 @@ export default function LauncherUI() {
         if (first) setSelectedChannel(first.name);
       } catch {}
     })();
+  }, []);
+
+  // Check for launcher updates on startup and wire events
+  useEffect(() => {
+    try {
+      window.electronAPI?.onUpdate?.('update:available', (info: any) => setUpdateAvailable(info));
+      window.electronAPI?.onUpdate?.('update:not-available', () => setUpdateAvailable(null));
+      window.electronAPI?.onUpdate?.('update:download-progress', (p: any) => {
+        const pct = typeof p?.percent === 'number' ? p.percent : 0;
+        setUpdateProgress(pct);
+      });
+      window.electronAPI?.onUpdate?.('update:downloaded', () => setUpdateDownloaded(true));
+      // Kick off check, non-blocking; guard missing handler
+      try { window.electronAPI?.checkForUpdates?.()?.catch(() => {}); } catch {}
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -108,6 +142,12 @@ export default function LauncherUI() {
   const [primaryAction, setPrimaryAction] = useState<'install'|'update'|'play'>('install');
   const enabledChannels = useMemo(() => (config?.channels?.filter((c) => c.enabled) || []), [config]);
   const [channelsSettings, setChannelsSettings] = useState<Record<string, any>>({});
+  // News posts
+  type NewsPost = { title: string; excerpt?: string; published_at?: string; url: string; feature_image?: string };
+  const [newsPosts, setNewsPosts] = useState<NewsPost[] | null>(null);
+  const [newsLoading, setNewsLoading] = useState<boolean>(false);
+  const [patchPosts, setPatchPosts] = useState<NewsPost[] | null>(null);
+  const [patchLoading, setPatchLoading] = useState<boolean>(false);
   // Launch options state
   type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
   const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
@@ -164,7 +204,7 @@ export default function LauncherUI() {
       setTotalCount(filtered.length);
       setDoneCount(0);
       window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
-      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
+      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); });
       {
         let windowBytes = 0;
         let lastTick = Date.now();
@@ -187,15 +227,33 @@ export default function LauncherUI() {
           if (d > 0) {
             setBytesReceived((x) => { const nx = x + d; bytesReceivedRef.current = nx; return nx; });
             windowBytes += d;
+            setReceivedAnyBytes(true);
           }
         });
       }
-      window.electronAPI!.onProgress('progress:file', (p: any) => { setFileProgress(p); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', received: p.received, total: p.total } })); });
-      window.electronAPI!.onProgress('progress:part', (p: any) => { setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `downloading part ${p.part+1}/${p.totalParts}`, received: p.received, total: p.total } })); });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.parts} parts` } })); });
-      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.part+1}/${p.totalParts}` } })); });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'verifying' } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
+      window.electronAPI!.onProgress('progress:file', (p: any) => {
+        setFileProgress(p);
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path]||{}), status: 'downloading', received: p.received, total: p.total }
+        }));
+      });
+      window.electronAPI!.onProgress('progress:part', (p: any) => {
+        setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total });
+        setProgressItems((prev) => {
+          const current = prev[p.path] || { status: 'downloading' } as FileInfo;
+          const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
+          parts[p.part] = { received: p.received, total: p.total };
+          return {
+            ...prev,
+            [p.path]: { ...current, status: 'downloading parts', totalParts: p.totalParts, parts }
+          };
+        });
+      });
+      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts` } })); });
+      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}` } })); });
+      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying' } })); });
+      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped' } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
       window.electronAPI!.onProgress('progress:error', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
@@ -216,6 +274,7 @@ export default function LauncherUI() {
     } finally {
       setBusy(false);
       setHasStarted(false);
+      setReceivedAnyBytes(false);
     }
   }
 
@@ -323,6 +382,43 @@ export default function LauncherUI() {
       } catch {}
     })();
   }, [selectedChannel]);
+
+  useEffect(() => {
+    const loadNews = async () => {
+      if (newsPosts || newsLoading) return;
+      setNewsLoading(true);
+      try {
+        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:community&limit=10&fields=title,excerpt,published_at,url,feature_image');
+        const json = await resp.json();
+        const posts = Array.isArray(json?.posts) ? json.posts : [];
+        setNewsPosts(posts);
+      } catch {
+        setNewsPosts([]);
+      } finally {
+        setNewsLoading(false);
+      }
+    };
+    if (activeTab === 'general') loadNews();
+  }, [activeTab, newsPosts, newsLoading]);
+
+  useEffect(() => {
+    const loadPatch = async () => {
+      setPatchLoading(true);
+      try {
+        const tag = `${(selectedChannel || '').toLowerCase()}-patch-notes`;
+        const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:${encodeURIComponent(tag)}&limit=10&fields=title,excerpt,published_at,url,feature_image`;
+        const resp = await fetch(url);
+        const json = await resp.json();
+        const posts = Array.isArray(json?.posts) ? json.posts : [];
+        setPatchPosts(posts);
+      } catch {
+        setPatchPosts([]);
+      } finally {
+        setPatchLoading(false);
+      }
+    };
+    if (activeTab === 'patchnotes' && selectedChannel) loadPatch();
+  }, [activeTab, selectedChannel]);
   function buildLaunchParameters(): string {
     const params: string[] = [];
     // Common
@@ -446,10 +542,23 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.parts} parts` } })); });
       window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.part+1}/${p.totalParts}` } })); });
       window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'verifying' } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); setDoneCount((x) => x + 1); });
+      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
       await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name });
       setFinished(true);
+      // Update local install state so primary button flips to Play/reflects new version
+      setInstalledVersion(String(checksums?.game_version || ''));
+      setIsInstalled(true);
+      setChannelsSettings((prev) => ({
+        ...prev,
+        [name]: {
+          ...(prev?.[name] || {}),
+          installDir: dir,
+          gameVersion: checksums?.game_version || null,
+          gameBaseUrl: target.game_url,
+          lastUpdatedAt: Date.now(),
+        },
+      }));
     } finally {
       setBusy(false);
       setHasStarted(false);
@@ -457,7 +566,7 @@ export default function LauncherUI() {
   }
 
   return (
-    <div className="h-full grid grid-cols-[88px_1fr]">
+    <div className="h-full grid grid-cols-[88px_1fr] relative">
       <aside className="glass-soft sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
         <div className="w-18 h-18 rounded-xl grid place-items-center overflow-hidden">
           <img src="/favicon.svg" alt="R5 Valkyrie" className="w-16 h-16 object-contain" />
@@ -499,11 +608,8 @@ export default function LauncherUI() {
           <div className="relative z-10 h-full w-full flex flex-col justify-end p-8">
             <div className="flex items-end justify-between gap-6">
               <div className="flex items-center gap-5">
-                <div className="w-26 h-26 rounded-xl grid place-items-center overflow-hidden">
-                  <img src="/favicon.svg" alt="R5 Valkyrie" className="w-24 h-24 object-contain" />
-                </div>
                 <div>
-                  <div className="text-2xl font-bold tracking-wide">R5Valkyrie</div>
+                  <div className="text-2xl font-bold tracking-wide">R5VALKYRIE</div>
                   {enabledChannels.length > 0 && (
                     <div className="mt-3">
                       <div className="btn-group">
@@ -526,7 +632,7 @@ export default function LauncherUI() {
                   <button className="btn btn-lg btn-primary text-white shadow-lg" disabled={busy} onClick={startInstall}>Install</button>
                 )}
                 {primaryAction === 'update' && (
-                  <button className="btn btn-lg btn-warning text-white shadow-lg" disabled={busy} onClick={startInstall}>Update</button>
+                  <button className="btn btn-lg btn-warning text-white shadow-lg" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
                 )}
                 {primaryAction === 'play' && (
                   <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20" onClick={async ()=>{
@@ -620,87 +726,105 @@ export default function LauncherUI() {
 
         {activeTab === 'launch' && (
           <div key="content-launch" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto pb-6 fade-in">
-            <div className="glass rounded-xl p-4 grid gap-3">
-              <div className="flex items-center gap-3">
-                <span className="text-sm opacity-80">Mode</span>
-                <div className="btn-group">
-                  {(['CLIENT','HOST','SERVER'] as LaunchMode[]).map((m) => (
-                    <button key={m} className={`btn btn-sm ${launchMode===m?'btn-active btn-primary':'btn-ghost'}`} onClick={() => setLaunchMode(m)}>{m}</button>
-                  ))}
-                </div>
-              </div>
-              {launchMode !== 'CLIENT' && (
+            {/* Left column */}
+            <div className="grid gap-4">
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Session</div>
                 <div className="flex items-center gap-3">
-                  <span className="text-sm opacity-80">Hostname</span>
-                  <input className="input input-bordered input-sm w-full" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="Server name" />
+                  <span className="text-sm opacity-80">Mode</span>
+                  <div className="btn-group">
+                    {(['CLIENT','HOST','SERVER'] as LaunchMode[]).map((m) => (
+                      <button key={m} className={`btn btn-sm ${launchMode===m?'btn-active btn-primary':'btn-ghost'}`} onClick={() => setLaunchMode(m)}>{m}</button>
+                    ))}
+                  </div>
                 </div>
-              )}
-              <div className="flex items-center gap-3">
-                <span className="text-sm opacity-80">Window</span>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
+                {launchMode === 'SERVER' && (
+                  <div className="flex items-center gap-3">
+                    <span className="text-sm opacity-80">Hostname</span>
+                    <input className="input input-bordered input-sm w-full" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="Server name" />
+                  </div>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="form-control">
-                  <span className="label-text text-xs opacity-70">Max FPS</span>
-                  <input className="input input-bordered input-sm" value={maxFps} onChange={(e)=>setMaxFps(e.target.value)} placeholder="0" />
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  <label className="form-control">
-                    <span className="label-text text-xs opacity-70">Width</span>
-                    <input className="input input-bordered input-sm" value={resW} onChange={(e)=>setResW(e.target.value)} placeholder="1920" />
+
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Video</div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm opacity-80">Window</span>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="form-control flex flex-col">
+                    <span className="label-text text-xs opacity-70">Max FPS</span>
+                    <input className="input input-bordered input-sm mt-1 w-full" value={maxFps} onChange={(e)=>setMaxFps(e.target.value)} placeholder="0" />
                   </label>
-                  <label className="form-control">
-                    <span className="label-text text-xs opacity-70">Height</span>
-                    <input className="input input-bordered input-sm" value={resH} onChange={(e)=>setResH(e.target.value)} placeholder="1080" />
-                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="form-control flex flex-col">
+                      <span className="label-text text-xs opacity-70">Width</span>
+                      <input className="input input-bordered input-sm mt-1 w-full" value={resW} onChange={(e)=>setResW(e.target.value)} placeholder="1920" />
+                    </label>
+                    <label className="form-control flex flex-col">
+                      <span className="label-text text-xs opacity-70">Height</span>
+                      <input className="input input-bordered input-sm mt-1 w-full" value={resH} onChange={(e)=>setResH(e.target.value)} placeholder="1080" />
+                    </label>
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="form-control">
-                  <span className="label-text text-xs opacity-70">Reserved cores</span>
-                  <input className="input input-bordered input-sm" value={reservedCores} onChange={(e)=>setReservedCores(e.target.value)} placeholder="" />
+
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Performance</div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="form-control flex flex-col">
+                    <span className="label-text text-xs opacity-70">Reserved cores</span>
+                    <input className="input input-bordered input-sm mt-1 w-full" value={reservedCores} onChange={(e)=>setReservedCores(e.target.value)} />
+                  </label>
+                  <label className="form-control flex flex-col">
+                    <span className="label-text text-xs opacity-70">Worker threads</span>
+                    <input className="input input-bordered input-sm mt-1 w-full" value={workerThreads} onChange={(e)=>setWorkerThreads(e.target.value)} />
+                  </label>
+                </div>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">Disable async systems</span></label>
+              </div>
+            </div>
+
+            {/* Right column */}
+            <div className="grid gap-4">
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Network</div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
+                </div>
+              </div>
+
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Console & Playlist</div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
+                </div>
+                <label className="form-control flex flex-col">
+                  <span className="label-text text-xs opacity-70">Playlist file (string)</span>
+                  <input className="input input-bordered input-sm w-full mt-1" value={playlistFile} onChange={(e)=>setPlaylistFile(e.target.value)} placeholder="playlists_r5_patch.txt" />
                 </label>
-                <label className="form-control">
-                  <span className="label-text text-xs opacity-70">Worker threads</span>
-                  <input className="input input-bordered input-sm" value={workerThreads} onChange={(e)=>setWorkerThreads(e.target.value)} placeholder="" />
+              </div>
+
+              <div className="glass rounded-xl p-4 grid gap-3">
+                <div className="text-xs uppercase opacity-60">Gameplay & Advanced</div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
+                </div>
+                <label className="form-control flex flex-col">
+                  <span className="label-text text-xs opacity-70">Custom command line</span>
+                  <input className="input input-bordered input-sm mt-1 w-full" value={customCmd} onChange={(e)=>setCustomCmd(e.target.value)} placeholder="-debug +foo 1" />
                 </label>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
-              </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
-              </div>
-              <label className="form-control">
-                <span className="label-text text-xs opacity-70">Playlist file (string)</span>
-                <input className="input input-bordered input-sm w-full" value={playlistFile} onChange={(e)=>setPlaylistFile(e.target.value)} placeholder="playlists_r5_patch.txt" />
-              </label>
-              <div className="flex flex-wrap items-center gap-3">
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">No async</span></label>
-              </div>
-              <label className="form-control">
-                <span className="label-text text-xs opacity-70">Custom command line</span>
-                <input className="input input-bordered input-sm" value={customCmd} onChange={(e)=>setCustomCmd(e.target.value)} placeholder="-debug +foo 1" />
-              </label>
-              <div className="text-xs opacity-70 font-mono break-words">
-                {buildLaunchParameters()}
-              </div>
-              <div className="flex gap-2">
-                <button className="btn btn-sm" onClick={async ()=>{
-                  const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd };
-                  const s: any = await window.electronAPI?.getSettings();
-                  const next = { ...(s||{}) };
-                  next.launchOptions = { ...(next.launchOptions||{}), [selectedChannel]: lo };
-                  await window.electronAPI?.setSetting('launchOptions', next.launchOptions);
-                }}>Save</button>
+                <div className="text-[11px] opacity-70 font-mono break-words p-2 bg-base-300/40 rounded">
+                  {buildLaunchParameters()}
+                </div>
               </div>
             </div>
           </div>
@@ -711,70 +835,209 @@ export default function LauncherUI() {
         {activeTab !== 'settings' && (
           <div key={`content-main-${activeTab}`} className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in">
             <div className="space-y-3">
-              {activeTab === 'general' && hasStarted && (
+              {activeTab === 'general' && (busy && (hasStarted || overall)) && (
                 <div className="glass rounded-xl p-4">
-                  <progress className="progress w-full" value={(bytesTotal>0? (bytesReceived/bytesTotal)*100 : 0)} max={100}></progress>
-                  <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
-                    <span>{((bytesTotal>0? bytesReceived/bytesTotal : 0)*100).toFixed(1)}%</span>
-                    <span>•</span>
-                    <span>{(speedBps/1024/1024).toFixed(2)} MB/s</span>
-                    <span>•</span>
-                    <span>ETA {etaSeconds > 0 ? `${Math.floor(etaSeconds/60)}m ${etaSeconds%60}s` : '—'}</span>
-                    <span className="ml-auto flex items-center gap-2">
-                      {!isPaused ? (
-                        <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(true); }}>Pause</button>
-                      ) : (
-                        <button className="btn btn-outline btn-xs" onClick={async () => { setIsPaused(false); startInstall(); }}>Resume</button>
-                      )}
-                      <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); }}>Cancel</button>
-                    </span>
-                  </div>
+                  {(() => {
+                    const trackingByBytes = receivedAnyBytes && bytesTotal > 0;
+                    let percent: number;
+                    if (trackingByBytes) {
+                      percent = (bytesReceived / (bytesTotal || 1)) * 100;
+                    } else if (overall && typeof overall.total === 'number') {
+                      const completedSoFar = typeof overall.completed === 'number' ? overall.completed : (overall.index + 1);
+                      percent = (completedSoFar / (overall.total || 1)) * 100;
+                    } else {
+                      percent = totalCount > 0 ? ((doneCount / totalCount) * 100) : 0;
+                    }
+                    const checkedNumerator = overall && typeof overall.total === 'number'
+                      ? (typeof overall.completed === 'number' ? overall.completed : (overall.index + 1))
+                      : doneCount;
+                    const checkedDenominator = overall && typeof overall.total === 'number'
+                      ? (overall.total || totalCount)
+                      : totalCount;
+                    return (
+                      <>
+                        <progress className="progress w-full" value={percent} max={100}></progress>
+                        <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
+                          {trackingByBytes ? (
+                            <>
+                              <span>{Number(percent).toFixed(1)}%</span>
+                              <span>•</span>
+                              <span>{(speedBps/1024/1024).toFixed(2)} MB/s</span>
+                              <span>•</span>
+                              <span>ETA {etaSeconds > 0 ? `${Math.floor(etaSeconds/60)}m ${etaSeconds%60}s` : '—'}</span>
+                            </>
+                          ) : (
+                            <>
+                              <span>
+                                Checking files… {checkedNumerator}/{checkedDenominator}
+                              </span>
+                            </>
+                          )}
+                          <span className="ml-auto flex items-center gap-2">
+                            {!isPaused ? (
+                              <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(true); }}>Pause</button>
+                            ) : (
+                              <button className="btn btn-outline btn-xs" onClick={async () => { setIsPaused(false); startInstall(); }}>Resume</button>
+                            )}
+                            <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); }}>Cancel</button>
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               )}
 
-              {activeTab === 'general' && fileProgress && (
+              {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
-            {fileProgress.path} — {Math.floor((fileProgress.received / (fileProgress.total||1))*100)}%
-          </div>
-        )}
+                  {(fileProgress?.path || '')} — {Math.floor(((fileProgress?.received || 0) / ((fileProgress?.total||1))) * 100)}%
+                </div>
+              )}
 
               {activeTab === 'downloads' && (
                 <div className="glass rounded-xl p-4 max-h-64 overflow-y-auto">
-            {Object.entries(progressItems).map(([p, info]) => {
-              const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
-              return (
+                  {Object.entries(progressItems).length > 0 ? Object.entries(progressItems).map(([p, info]) => {
+                    const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
+                    const parts = info.parts || {};
+                    const totalParts = info.totalParts || Object.keys(parts).length || 0;
+                    return (
                       <div key={p} className="py-2">
                         <div className="flex items-center justify-between text-sm">
-                  <span className="font-mono truncate mr-3">{p}</span>
-                  <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
+                          <span className="font-mono truncate mr-3">{p}</span>
+                          <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
                         </div>
                         {percent !== undefined && (
                           <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
                         )}
+                        {totalParts > 0 && (
+                          <div className="mt-2 pl-3 border-l border-white/10">
+                            {Array.from({ length: totalParts }).map((_, i) => {
+                              const part = parts[i];
+                              const pcent = part ? Math.floor(((part.received || 0) / (part.total || 1)) * 100) : 0;
+                              return (
+                                <div key={`${p}-part-${i}`} className="text-xs mb-1">
+                                  <div className="flex items-center justify-between">
+                                    <span className="opacity-70">Part {i+1}/{totalParts}</span>
+                                    <span className="opacity-60">{pcent}%</span>
+                                  </div>
+                                  <progress className="progress progress-secondary w-full mt-1" value={pcent} max={100}></progress>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }) : (
+                    <div className="text-sm opacity-70 py-6 text-center">No downloads active.</div>
+                  )}
                 </div>
-              );
-            })}
-          </div>
               )}
 
-          {finished && (
-                <div className="alert alert-success">
-              <span>Download finished ({doneCount}/{totalCount})</span>
-            </div>
-          )}
         </div>
 
-            {(activeTab === 'general' || activeTab === 'patchnotes') && (
-              <div className="glass rounded-xl p-4 min-h-[220px]">
-                {activeTab === 'patchnotes' ? (
-                  <div className="prose prose-invert max-w-none">
-                    <h3>Patch Notes</h3>
-                    <p>Patch notes will appear here. Stay tuned for updates.</p>
+            {finished && (
+              <div className="fixed bottom-4 left-0 right-0 flex justify-center pointer-events-none z-50">
+                <div className="alert alert-success toast-slide-in pointer-events-auto">
+                  <span>Completed</span>
+                </div>
+              </div>
+            )}
+
+            {updateAvailable && !updateDownloaded && (
+              <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-50">
+                <div className="alert alert-info pointer-events-auto flex items-center gap-3">
+                  <span>Launcher update available</span>
+                  <button className="btn btn-xs" onClick={() => window.electronAPI?.downloadUpdate?.()}>Download</button>
+                  {updateProgress > 0 && (
+                    <span className="text-xs opacity-80">{updateProgress.toFixed(0)}%</span>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {updateDownloaded && (
+              <div className="fixed bottom-20 left-0 right-0 flex justify-center pointer-events-none z-50">
+                <div className="alert alert-success pointer-events-auto flex items-center gap-3">
+                  <span>Update ready. Restart now?</span>
+                  <button className="btn btn-xs btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart</button>
+                </div>
+              </div>
+            )}
+
+
+            {activeTab === 'patchnotes' && (
+              <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Patch Notes — {selectedChannel}</h3>
+                  <a className="link link-hover text-xs opacity-70" href={`https://blog.playvalkyrie.org/tag/${(selectedChannel || '').toLowerCase()}-patch-notes/`} target="_blank" rel="noreferrer">View all</a>
+                </div>
+                {patchLoading && (
+                  <div className="text-xs opacity-70">Loading…</div>
+                )}
+                {!patchLoading && (
+                  <div className="grid gap-3">
+                    {(patchPosts || []).map((p) => (
+                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group grid grid-cols-[80px_1fr] gap-3 items-center hover:bg-white/5 rounded-md p-2">
+                        <div className="w-20 h-16 rounded-md bg-base-300 overflow-hidden border border-white/10">
+                          {p.feature_image ? (
+                            <img src={p.feature_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center text-xs opacity-60">No image</div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate group-hover:text-primary">{p.title}</div>
+                          {p.published_at && (
+                            <div className="text-[10px] opacity-60">{new Date(p.published_at).toLocaleDateString()}</div>
+                          )}
+                          {p.excerpt && (
+                            <div className="text-xs opacity-70 line-clamp-2">{p.excerpt}</div>
+                          )}
+                        </div>
+                      </a>
+                    ))}
+                    {patchPosts && patchPosts.length === 0 && (
+                      <div className="text-xs opacity-70">No patch notes found for {selectedChannel}.</div>
+                    )}
                   </div>
-                ) : (
-                  <div className="prose prose-invert max-w-none">
-                    <h3>Welcome to Valkyrie</h3>
-                    <p>Choose your install location, pick a channel, and click Install to get started.</p>
+                )}
+              </div>
+            )}
+            {activeTab === 'general' && (
+              <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Community News</h3>
+                  <a className="link link-hover text-xs opacity-70" href="https://blog.playvalkyrie.org/tag/community/" target="_blank" rel="noreferrer">View all</a>
+                </div>
+                {newsLoading && (
+                  <div className="text-xs opacity-70">Loading…</div>
+                )}
+                {!newsLoading && (
+                  <div className="grid gap-3">
+                    {(newsPosts || []).map((p) => (
+                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group grid grid-cols-[80px_1fr] gap-3 items-center hover:bg-white/5 rounded-md p-2">
+                        <div className="w-20 h-16 rounded-md bg-base-300 overflow-hidden border border-white/10">
+                          {p.feature_image ? (
+                            <img src={p.feature_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                          ) : (
+                            <div className="w-full h-full grid place-items-center text-xs opacity-60">No image</div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium truncate group-hover:text-primary">{p.title}</div>
+                          {p.published_at && (
+                            <div className="text-[10px] opacity-60">{new Date(p.published_at).toLocaleDateString()}</div>
+                          )}
+                          {p.excerpt && (
+                            <div className="text-xs opacity-70 line-clamp-2">{p.excerpt}</div>
+                          )}
+                        </div>
+                      </a>
+                    ))}
+                    {newsPosts && newsPosts.length === 0 && (
+                      <div className="text-xs opacity-70">No posts found.</div>
+                    )}
                   </div>
                 )}
               </div>
