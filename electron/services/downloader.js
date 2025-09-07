@@ -149,16 +149,43 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
         const part = fileObj.parts[i];
         const partUrl = `${baseUrl.replace(/\/$/, '')}/${part.path.replace(/\\/g, '/')}`;
         const tmpPart = `${targetPath}.part${i}`;
-        let last = 0;
-        await downloadToFile(partUrl, tmpPart, (rec, tot) => {
-          const delta = Math.max(0, rec - last);
-          last = rec;
-          try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
-          emit('progress:part', { path: fileObj.path, part: i, totalParts, received: rec, total: tot });
-        }, 1, token);
-        const hash = await sha256File(tmpPart);
-        if (hash.toLowerCase() !== String(part.checksum).toLowerCase()) {
-          throw new Error(`Checksum mismatch for ${part.path}`);
+        // If temp part already exists and matches checksum, reuse it
+        try {
+          if (fs.existsSync(tmpPart)) {
+            const existingHash = await sha256File(tmpPart);
+            if (existingHash.toLowerCase() === String(part.checksum).toLowerCase()) {
+              emit('progress:part', { path: fileObj.path, part: i, totalParts, received: Number(part.size || 0), total: Number(part.size || 0) });
+              partPaths[i] = tmpPart;
+              continue;
+            } else {
+              try { fs.unlinkSync(tmpPart); } catch {}
+            }
+          }
+        } catch {}
+
+        // Download with checksum retry; subtract bytes from failed attempts to keep global counters accurate
+        let attempts = 0;
+        while (true) {
+          attempts += 1;
+          let attemptBytes = 0;
+          let last = 0;
+          await downloadToFile(partUrl, tmpPart, (rec, tot) => {
+            const delta = Math.max(0, rec - last);
+            last = rec;
+            try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
+            attemptBytes += delta;
+            emit('progress:part', { path: fileObj.path, part: i, totalParts, received: rec, total: tot });
+          }, 1, token);
+          const hash = await sha256File(tmpPart);
+          if (hash.toLowerCase() === String(part.checksum).toLowerCase()) {
+            break;
+          }
+          try { fs.unlinkSync(tmpPart); } catch {}
+          // Undo counted bytes for failed attempt
+          try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
+          if (attempts >= 2) {
+            throw new Error(`Checksum mismatch for ${part.path}`);
+          }
         }
         partPaths[i] = tmpPart;
       }
@@ -190,13 +217,25 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
     try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
   } else {
     const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileObj.path.replace(/\\/g, '/')}`;
-    let last = 0;
-    await downloadToFile(fileUrl, targetPath, (rec, tot) => {
-      const delta = Math.max(0, rec - last);
-      last = rec;
-      try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
-      emit('progress:file', { path: fileObj.path, received: rec, total: tot });
-    }, 1, token);
+    // Download with checksum verification and retry; subtract bytes from failed attempts
+    let attempts = 0;
+    while (true) {
+      attempts += 1;
+      let attemptBytes = 0;
+      let last = 0;
+      await downloadToFile(fileUrl, targetPath, (rec, tot) => {
+        const delta = Math.max(0, rec - last);
+        last = rec;
+        try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
+        attemptBytes += delta;
+        emit('progress:file', { path: fileObj.path, received: rec, total: tot });
+      }, 1, token);
+      const fhash = await sha256File(targetPath);
+      if (fhash.toLowerCase() === String(fileObj.checksum).toLowerCase()) break;
+      try { fs.unlinkSync(targetPath); } catch {}
+      try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
+      if (attempts >= 2) throw new Error(`Checksum mismatch for ${fileObj.path}`);
+    }
   }
 
   emit('progress:verify', { path: fileObj.path });
@@ -207,7 +246,10 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
 }
 
 export async function downloadAll(baseUrl, checksums, installDir, emit, includeOptional = false, concurrency = 4, partConcurrency = 4, token) {
-  const files = (checksums.files || []).filter((f) => includeOptional || !f.optional);
+  const filtered = (checksums.files || []).filter((f) => includeOptional || !f.optional);
+  const singles = filtered.filter((f) => !(Array.isArray(f.parts) && f.parts.length > 0));
+  const multis = filtered.filter((f) => Array.isArray(f.parts) && f.parts.length > 0);
+  const files = singles.concat(multis);
   const total = files.length;
   let nextIndex = 0;
   let completed = 0;

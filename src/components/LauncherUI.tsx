@@ -205,7 +205,7 @@ export default function LauncherUI() {
       setTotalCount(filtered.length);
       setDoneCount(0);
       window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
-      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); });
+      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); });
       {
         let windowBytes = 0;
         let lastTick = Date.now();
@@ -225,10 +225,10 @@ export default function LauncherUI() {
         requestAnimationFrame(tick);
         window.electronAPI!.onProgress('progress:bytes', (p: any) => {
           const d = Number(p?.delta || 0);
-          if (d > 0) {
-            setBytesReceived((x) => { const nx = x + d; bytesReceivedRef.current = nx; return nx; });
-            windowBytes += d;
-            setReceivedAnyBytes(true);
+          if (d !== 0) {
+            setBytesReceived((x) => { const nx = Math.max(0, x + d); bytesReceivedRef.current = nx; return nx; });
+            if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
+            if (d > 0) setReceivedAnyBytes(true);
           }
         });
       }
@@ -531,7 +531,7 @@ export default function LauncherUI() {
       setTotalCount(filtered.length);
       setDoneCount(0);
       window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
-      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
+      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
       {
         let windowBytes = 0;
         let lastTick = Date.now();
@@ -551,9 +551,9 @@ export default function LauncherUI() {
         requestAnimationFrame(tick);
         window.electronAPI!.onProgress('progress:bytes', (p: any) => {
           const d = Number(p?.delta || 0);
-          if (d > 0) {
-            setBytesReceived((x) => x + d);
-            windowBytes += d;
+          if (d !== 0) {
+            setBytesReceived((x) => Math.max(0, x + d));
+            if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
           }
         });
       }
