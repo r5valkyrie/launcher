@@ -130,7 +130,6 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
   const targetPath = path.join(installDir, fileObj.path.replace(/\\/g, path.sep));
   ensureDir(path.dirname(targetPath));
 
-  // Skip download if file already matches checksum
   if (await fileExistsAndValid(targetPath, fileObj.checksum, fileObj.size)) {
     emit('progress:skip', { path: fileObj.path });
     return;
@@ -139,20 +138,24 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
   if (token?.cancelled) throw new Error('cancelled');
 
   if (Array.isArray(fileObj.parts) && fileObj.parts.length > 0) {
-    // Download parts concurrently then merge in order
     const totalParts = fileObj.parts.length;
     const partPaths = new Array(totalParts);
     let next = 0;
 
     async function partWorker() {
-      // eslint-disable-next-line no-constant-condition
       while (true) {
         const i = next++;
         if (i >= totalParts) return;
         const part = fileObj.parts[i];
         const partUrl = `${baseUrl.replace(/\/$/, '')}/${part.path.replace(/\\/g, '/')}`;
         const tmpPart = `${targetPath}.part${i}`;
-        await downloadToFile(partUrl, tmpPart, (rec, tot) => emit('progress:part', { path: fileObj.path, part: i, totalParts, received: rec, total: tot }), 1, token);
+        let last = 0;
+        await downloadToFile(partUrl, tmpPart, (rec, tot) => {
+          const delta = Math.max(0, rec - last);
+          last = rec;
+          try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
+          emit('progress:part', { path: fileObj.path, part: i, totalParts, received: rec, total: tot });
+        }, 1, token);
         const hash = await sha256File(tmpPart);
         if (hash.toLowerCase() !== String(part.checksum).toLowerCase()) {
           throw new Error(`Checksum mismatch for ${part.path}`);
@@ -163,11 +166,10 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
 
     const workers = Array.from({ length: Math.max(1, partConcurrency) }, () => partWorker());
     await Promise.all(workers);
-    // Merge safely (avoid ending the stream between parts)
     emit('progress:merge:start', { path: fileObj.path, parts: partPaths.length });
     const out = fs.createWriteStream(targetPath);
-    for (const p of partPaths) {
-      const idx = partPaths.indexOf(p);
+    for (let idx = 0; idx < partPaths.length; idx++) {
+      const p = partPaths[idx];
       emit('progress:merge:part', { path: fileObj.path, part: idx, totalParts: partPaths.length });
       await new Promise((resolve, reject) => {
         const read = fs.createReadStream(p);
@@ -187,10 +189,15 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
     });
   } else {
     const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileObj.path.replace(/\\/g, '/')}`;
-    await downloadToFile(fileUrl, targetPath, (rec, tot) => emit('progress:file', { path: fileObj.path, received: rec, total: tot }), 1, token);
+    let last = 0;
+    await downloadToFile(fileUrl, targetPath, (rec, tot) => {
+      const delta = Math.max(0, rec - last);
+      last = rec;
+      try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
+      emit('progress:file', { path: fileObj.path, received: rec, total: tot });
+    }, 1, token);
   }
 
-  // Verify final file
   emit('progress:verify', { path: fileObj.path });
   const finalHash = await sha256File(targetPath);
   if (finalHash.toLowerCase() !== String(fileObj.checksum).toLowerCase()) {
@@ -203,19 +210,41 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   const total = files.length;
   let nextIndex = 0;
   let completed = 0;
+  const totalBytes = files.reduce((sum, f) => {
+    const size = Number(f.size || 0);
+    if (size > 0) return sum + size;
+    if (Array.isArray(f.parts) && f.parts.length) {
+      return sum + f.parts.reduce((s, p) => s + Number(p.size || 0), 0);
+    }
+    return sum;
+  }, 0);
+  try { emit('progress:bytes:total', { totalBytes }); } catch {}
 
-  async function worker(workerId) {
+  async function worker() {
     while (true) {
       const i = nextIndex++;
       if (i >= total) return;
       const f = files[i];
       emit('progress:start', { index: i, total, path: f.path, completed });
-      await downloadFileObject(baseUrl, f, installDir, emit, partConcurrency, token);
+      const doOnce = async () => downloadFileObject(baseUrl, f, installDir, emit, partConcurrency, token);
+      try {
+        await doOnce();
+      } catch (err) {
+        const message = String(err?.message || err || 'error');
+        if (message.includes('cancelled')) throw err;
+        try {
+          const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
+          try { fs.unlinkSync(targetPath); } catch {}
+          await doOnce();
+        } catch (err2) {
+          try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+        }
+      }
       completed += 1;
-      emit('progress:done', { index: i, total, path: f.path, completed });
+      emit('progress:done', { index: completed - 1, total, path: f.path, completed });
     }
   }
 
-  const pool = Array.from({ length: Math.max(1, concurrency) }, (_, id) => worker(id));
+  const pool = Array.from({ length: Math.max(1, concurrency) }, () => worker());
   await Promise.all(pool);
 }

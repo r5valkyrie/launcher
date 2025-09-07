@@ -3,27 +3,28 @@ import '../styles/global.css';
 import LauncherUI from "../components/LauncherUI";
 ---
 
-<html lang="en" data-theme="dark">
+	<html lang="en" data-theme="dark">
 	<head>
 		<meta charset="utf-8" />
 		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
 		<meta name="viewport" content="width=device-width" />
 		<meta name="generator" content={Astro.generator} />
-		<title>R5 Valkyrie Launcher</title>
+		<title>R5Valkyrie Launcher</title>
 	</head>
-	<body class="min-h-screen bg-base-200 text-base-content">
-		<header class="drag-region h-10 flex items-center justify-end px-2 gap-2">
-			<button class="btn btn-xs no-drag" onclick="window.electronAPI?.minimize()">_</button>
-			<button class="btn btn-xs no-drag" onclick="window.electronAPI?.maximize()">▢</button>
+	<body class="min-h-screen bg-base-200 text-base-content overflow-hidden">
+		<!-- Animated, subtle background -->
+		<div class="fixed inset-0 -z-10 bg-animated"></div>
+
+		<!-- Window controls header -->
+		<header class="drag-region h-10 flex items-center justify-end px-2 gap-2 bg-base-100/10 backdrop-blur border-b border-white/5">
+			<button class="btn btn-xs btn-ghost no-drag" onclick="window.electronAPI?.minimize()">_</button>
+			<button class="btn btn-xs btn-ghost no-drag" onclick="window.electronAPI?.maximize()">▢</button>
 			<button class="btn btn-xs btn-error no-drag" onclick="window.electronAPI?.close()">✕</button>
 		</header>
-		<main class="container mx-auto p-6">
-			<div class="card shadow-xl bg-base-100">
-				<div class="card-body">
-					<h2 class="card-title">R5 Valkyrie Launcher</h2>
-					<LauncherUI client:load />
-				</div>
-			</div>
+
+		<!-- Full-bleed launcher surface -->
+		<main class="h-[calc(100vh-2.5rem)] overflow-y-auto">
+			<LauncherUI client:load />
 		</main>
 	</body>
-</html>
+	</html>

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Home, Settings, Download, Wrench, FolderOpen, Info } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { FolderOpen } from 'lucide-react';
 
 type Channel = {
   name: string;
@@ -23,6 +23,22 @@ declare global {
   interface Window {
     electronAPI?: {
       selectDirectory: () => Promise<string | null>;
+      getSettings: () => Promise<any>;
+      setSetting: (key: string, value: any) => Promise<any>;
+      fetchChecksums: (baseUrl: string) => Promise<any>;
+      downloadAll: (args: any) => Promise<any>;
+      onProgress: (channel: string, listener: (payload: any) => void) => void;
+      getDefaultInstallDir: (channelName?: string) => Promise<string | null>;
+      fetchLauncherConfig: (url: string) => Promise<LauncherConfig>;
+      cacheBackgroundVideo: (filename: string) => Promise<string>;
+      exists: (path: string) => Promise<boolean>;
+      openPath: (path: string) => Promise<boolean>;
+      cancelDownload: () => Promise<boolean>;
+      selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
+      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string }) => Promise<{ok:boolean; error?:string}>;
+      minimize: () => void;
+      maximize: () => void;
+      close: () => void;
     };
   }
 }
@@ -39,11 +55,25 @@ export default function LauncherUI() {
   const [includeOptional, setIncludeOptional] = useState(false);
   const [concurrency, setConcurrency] = useState<number>(4);
   const [partConcurrency, setPartConcurrency] = useState<number>(4);
-  const [activeTab, setActiveTab] = useState<'general'|'patchnotes'|'settings'>('general');
+  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'settings'>('general');
   const [progressItems, setProgressItems] = useState<Record<string, {status:string; received?:number; total?:number}>>({});
   const [doneCount, setDoneCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [bytesTotal, setBytesTotal] = useState<number>(0);
+  const [bytesReceived, setBytesReceived] = useState<number>(0);
+  const [speedBps, setSpeedBps] = useState<number>(0);
+  const [etaSeconds, setEtaSeconds] = useState<number>(0);
+  const [hasStarted, setHasStarted] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const bytesTotalRef = useRef<number>(0);
+  const bytesReceivedRef = useRef<number>(0);
+  const busyRef = useRef<boolean>(false);
+  const pausedRef = useRef<boolean>(false);
+  useEffect(() => { bytesTotalRef.current = bytesTotal; }, [bytesTotal]);
+  useEffect(() => { bytesReceivedRef.current = bytesReceived; }, [bytesReceived]);
+  useEffect(() => { busyRef.current = busy; }, [busy]);
+  useEffect(() => { pausedRef.current = isPaused; }, [isPaused]);
 
   useEffect(() => {
     (async () => {
@@ -72,14 +102,53 @@ export default function LauncherUI() {
     [config, selectedChannel]
   );
 
+  const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
+  const [installedVersion, setInstalledVersion] = useState<string | null>(null);
+  const [isInstalled, setIsInstalled] = useState<boolean>(false);
+  const [primaryAction, setPrimaryAction] = useState<'install'|'update'|'play'>('install');
+  const enabledChannels = useMemo(() => (config?.channels?.filter((c) => c.enabled) || []), [config]);
+  const [channelsSettings, setChannelsSettings] = useState<Record<string, any>>({});
+  // Launch options state
+  type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
+  const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
+  const [hostname, setHostname] = useState<string>('');
+  const [visibility, setVisibility] = useState<number>(0);
+  const [windowed, setWindowed] = useState<boolean>(false);
+  const [borderless, setBorderless] = useState<boolean>(false);
+  const [maxFps, setMaxFps] = useState<string>('0');
+  const [resW, setResW] = useState<string>('');
+  const [resH, setResH] = useState<string>('');
+  const [reservedCores, setReservedCores] = useState<string>('-1');
+  const [workerThreads, setWorkerThreads] = useState<string>('-1');
+  const [encryptPackets, setEncryptPackets] = useState<boolean>(true);
+  const [randomNetkey, setRandomNetkey] = useState<boolean>(true);
+  const [queuedPackets, setQueuedPackets] = useState<boolean>(true);
+  const [noTimeout, setNoTimeout] = useState<boolean>(false);
+  const [showConsole, setShowConsole] = useState<boolean>(false);
+  const [colorConsole, setColorConsole] = useState<boolean>(true);
+  const [playlistFile, setPlaylistFile] = useState<string>('playlists_r5_patch.txt');
+  const [mapIndex, setMapIndex] = useState<number>(0);
+  const [playlistIndex, setPlaylistIndex] = useState<number>(0);
+  const [enableDeveloper, setEnableDeveloper] = useState<boolean>(false);
+  const [enableCheats, setEnableCheats] = useState<boolean>(false);
+  const [offlineMode, setOfflineMode] = useState<boolean>(false);
+  const [noAsync, setNoAsync] = useState<boolean>(false);
+  const [customCmd, setCustomCmd] = useState<string>('');
+  const launchSaveTimer = useRef<any>(null);
+
   async function chooseFolder() {
     const picked = await window.electronAPI?.selectDirectory();
-    if (picked) setInstallDir(picked);
+    if (picked) await persistDir(picked);
   }
 
   async function persistDir(dir: string) {
     setInstallDir(dir);
-    await window.electronAPI?.setSetting('installDir', dir);
+    try {
+      const s: any = await window.electronAPI?.getSettings();
+      const channels = { ...(s?.channels || {}) };
+      channels[selectedChannel] = { ...(channels[selectedChannel] || {}), installDir: dir };
+      await window.electronAPI?.setSetting('channels', channels);
+    } catch {}
   }
 
   async function startInstall() {
@@ -93,7 +162,285 @@ export default function LauncherUI() {
       const checksums = await window.electronAPI!.fetchChecksums(channel.game_url);
       const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
       setTotalCount(filtered.length);
-      window.electronAPI!.onProgress('progress:start', (p: any) => setOverall(p));
+      setDoneCount(0);
+      window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
+      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
+      {
+        let windowBytes = 0;
+        let lastTick = Date.now();
+        const tick = () => {
+          const now = Date.now();
+          const dt = (now - lastTick) / 1000;
+          if (dt >= 0.5) {
+            const speed = windowBytes / dt; // bytes per sec
+            setSpeedBps(speed);
+            const remain = Math.max(0, bytesTotalRef.current - (bytesReceivedRef.current));
+            setEtaSeconds(speed > 0 ? Math.ceil(remain / speed) : 0);
+            windowBytes = 0;
+            lastTick = now;
+          }
+          if (busyRef.current && !pausedRef.current) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        window.electronAPI!.onProgress('progress:bytes', (p: any) => {
+          const d = Number(p?.delta || 0);
+          if (d > 0) {
+            setBytesReceived((x) => { const nx = x + d; bytesReceivedRef.current = nx; return nx; });
+            windowBytes += d;
+          }
+        });
+      }
+      window.electronAPI!.onProgress('progress:file', (p: any) => { setFileProgress(p); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', received: p.received, total: p.total } })); });
+      window.electronAPI!.onProgress('progress:part', (p: any) => { setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `downloading part ${p.part+1}/${p.totalParts}`, received: p.received, total: p.total } })); });
+      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.parts} parts` } })); });
+      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.part+1}/${p.totalParts}` } })); });
+      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'verifying' } })); });
+      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
+      window.electronAPI!.onProgress('progress:error', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); });
+      window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
+      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
+      setFinished(true);
+      // Update local install state so primary button flips to Play
+      setInstalledVersion(String(checksums?.game_version || ''));
+      setIsInstalled(true);
+      setChannelsSettings((prev) => ({
+        ...prev,
+        [channel.name]: {
+          ...(prev?.[channel.name] || {}),
+          installDir,
+          gameVersion: checksums?.game_version || null,
+          gameBaseUrl: channel.game_url,
+          lastUpdatedAt: Date.now(),
+        },
+      }));
+    } finally {
+      setBusy(false);
+      setHasStarted(false);
+    }
+  }
+
+  const [bgCached, setBgCached] = useState<string | undefined>(undefined);
+  const [videoSrc, setVideoSrc] = useState<string | null>(null);
+  const videoFilename = useMemo(() => {
+    const raw = config?.backgroundVideo;
+    if (!raw) return undefined;
+    const parts = raw.split('/');
+    return parts[parts.length - 1];
+  }, [config?.backgroundVideo]);
+  useEffect(() => {
+    if (!videoFilename) {
+      setBgCached(undefined);
+      setVideoSrc(null);
+      return;
+    }
+    window.electronAPI?.cacheBackgroundVideo(videoFilename)
+      .then((url: string) => {
+        setBgCached(url);
+        setVideoSrc(url);
+      })
+      .catch(() => {
+        setBgCached(undefined);
+        setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
+      });
+  }, [videoFilename]);
+  useEffect(() => {
+    if (bgCached) setVideoSrc(bgCached);
+  }, [bgCached]);
+  const bgVideo = videoSrc || undefined;
+
+  useEffect(() => {
+    (async () => {
+      if (!channel) return;
+      try {
+        const j = await window.electronAPI!.fetchChecksums(channel.game_url);
+        setRemoteVersion(String(j?.game_version || ''));
+      } catch { setRemoteVersion(null); }
+    })();
+  }, [channel?.game_url]);
+
+  useEffect(() => {
+    const handler = () => {
+      setBusy(false);
+      setIsPaused(true);
+      setFinished(false);
+      setOverall(null);
+      setFileProgress(null);
+      setProgressItems({});
+      setBytesTotal(0);
+      setBytesReceived(0);
+      setSpeedBps(0);
+      setEtaSeconds(0);
+      setHasStarted(false);
+    };
+    window.electronAPI?.onProgress?.('progress:cancelled', handler);
+    return () => {
+      // no off() provided; safe to ignore for this context
+    };
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const s: any = await window.electronAPI?.getSettings();
+        const ch = s?.channels?.[selectedChannel];
+        setChannelsSettings(s?.channels || {});
+        if (ch?.installDir) setInstallDir(ch.installDir);
+        setInstalledVersion(ch?.gameVersion || null);
+        if (ch?.installDir) {
+          const exists = await window.electronAPI?.exists?.(ch.installDir);
+          setIsInstalled(Boolean(exists));
+        } else {
+          setIsInstalled(false);
+        }
+        // Load launch options per channel
+        const lo = s?.launchOptions?.[selectedChannel];
+        if (lo) {
+          setLaunchMode(lo.mode || 'HOST');
+          setHostname(lo.hostname || '');
+          setVisibility(Number(lo.visibility || 0));
+          setWindowed(Boolean(lo.windowed));
+          setBorderless(lo.borderless !== false);
+          setMaxFps(String(lo.maxFps ?? '0'));
+          setResW(String(lo.resW || ''));
+          setResH(String(lo.resH || ''));
+          setReservedCores(String(lo.reservedCores || ''));
+          setWorkerThreads(String(lo.workerThreads || ''));
+          setEncryptPackets(lo.encryptPackets !== false);
+          setRandomNetkey(lo.randomNetkey !== false);
+          setQueuedPackets(lo.queuedPackets !== false);
+          setNoTimeout(Boolean(lo.noTimeout));
+          setShowConsole(Boolean(lo.showConsole));
+          setColorConsole(Boolean(lo.colorConsole));
+          setPlaylistFile(String(lo.playlistFile || ''));
+          setMapIndex(Number(lo.mapIndex || 0));
+          setPlaylistIndex(Number(lo.playlistIndex || 0));
+          setEnableDeveloper(Boolean(lo.enableDeveloper));
+          setEnableCheats(Boolean(lo.enableCheats));
+          setOfflineMode(Boolean(lo.offlineMode));
+          setNoAsync(Boolean(lo.noAsync));
+          setCustomCmd(String(lo.customCmd || ''));
+        }
+      } catch {}
+    })();
+  }, [selectedChannel]);
+  function buildLaunchParameters(): string {
+    const params: string[] = [];
+    // Common
+    if (reservedCores) params.push(`-numreservedcores ${reservedCores}`);
+    if (workerThreads) params.push(`-numworkerthreads ${workerThreads}`);
+    params.push(encryptPackets ? '+net_encryptionEnable 1' : '+net_encryptionEnable 0');
+    params.push(randomNetkey ? '+net_useRandomKey 1' : '+net_useRandomKey 0');
+    params.push(queuedPackets ? '+net_queued_packet_thread 1' : '+net_queued_packet_thread 0');
+    if (noTimeout) params.push('-notimeout');
+    const mode = launchMode;
+    if (showConsole || mode === 'SERVER') params.push('-wconsole'); else params.push('-noconsole');
+    if (colorConsole) params.push('-ansicolor');
+    if (playlistFile) params.push(`-playlistfile "${playlistFile}"`);
+    if (mapIndex > 0) params.push(`+map ${mapIndex}`);
+    if (playlistIndex > 0) params.push(`+launchplaylist ${playlistIndex}`);
+    if (enableDeveloper) params.push('-dev -devsdk');
+    if (enableCheats) params.push('+sv_cheats 1');
+    if (offlineMode) params.push('-offline');
+    // Hostname/visibility only for dedicated server mode
+    if (mode === 'SERVER' && hostname) {
+      params.push(`+hostname "${hostname}"`);
+      params.push(`+sv_pylonVisibility ${visibility}`);
+    }
+    // Video
+    params.push(windowed ? '-windowed' : '-fullscreen');
+    params.push(borderless ? '-noborder' : '-forceborder');
+    params.push(`+fps_max ${/^-?\d+$/.test(maxFps) ? maxFps : '0'}`);
+    if (/^\d+$/.test(resW)) params.push(`-w ${resW}`);
+    if (/^\d+$/.test(resH)) params.push(`-h ${resH}`);
+    // Mode specifics
+    if (mode === 'CLIENT') params.push('-noserverdll');
+    if (noAsync) {
+      params.push('-noasync');
+      params.push('+async_serialize 0 +sv_asyncAIInit 0 +sv_asyncSendSnapshot 0 +sv_scriptCompileAsync 0 +physics_async_sv 0');
+      if (mode !== 'SERVER') {
+        params.push('+buildcubemaps_async 0 +cl_scriptCompileAsync 0 +cl_async_bone_setup 0 +cl_updatedirty_async 0 +mat_syncGPU 1 +mat_sync_rt 1 +mat_sync_rt_flushes_gpu 1 +net_async_sendto 0 +physics_async_cl 0');
+      }
+    }
+    if (customCmd) params.push(customCmd);
+    return params.join(' ').trim();
+  }
+
+  async function persistLaunchOptions() {
+    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd };
+    const s: any = await window.electronAPI?.getSettings();
+    const next = { ...(s || {}) } as any;
+    next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
+    await window.electronAPI?.setSetting('launchOptions', next.launchOptions);
+  }
+
+  useEffect(() => {
+    if (!selectedChannel) return;
+    if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current);
+    launchSaveTimer.current = setTimeout(() => {
+      persistLaunchOptions().catch(() => {});
+    }, 500);
+    return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd]);
+
+  useEffect(() => {
+    // Decide primary action
+    if (!isInstalled) setPrimaryAction('install');
+    else if (remoteVersion && installedVersion && remoteVersion !== installedVersion) setPrimaryAction('update');
+    else setPrimaryAction('play');
+  }, [isInstalled, installedVersion, remoteVersion]);
+
+  async function repairChannel(name: string) {
+    const target = config?.channels.find((c) => c.name === name);
+    if (!target) return;
+    let dir = channelsSettings?.[name]?.installDir;
+    if (!dir) {
+      dir = (await window.electronAPI?.getDefaultInstallDir(name)) || '';
+    }
+    if (!dir) return;
+    setBusy(true);
+    setFinished(false);
+    setProgressItems({});
+    setDoneCount(0);
+    setTotalCount(0);
+    setHasStarted(true);
+    setActiveTab('general');
+    setBytesTotal(0);
+    setBytesReceived(0);
+    setSpeedBps(0);
+    setEtaSeconds(0);
+    try {
+      const checksums = await window.electronAPI!.fetchChecksums(target.game_url);
+      const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
+      setTotalCount(filtered.length);
+      setDoneCount(0);
+      window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
+      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Number(p.totalBytes || 0); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
+      {
+        let windowBytes = 0;
+        let lastTick = Date.now();
+        const tick = () => {
+          const now = Date.now();
+          const dt = (now - lastTick) / 1000;
+          if (dt >= 0.5) {
+            const speed = windowBytes / dt;
+            setSpeedBps(speed);
+            const remain = Math.max(0, bytesTotal - (bytesReceived));
+            setEtaSeconds(speed > 0 ? Math.ceil(remain / speed) : 0);
+            windowBytes = 0;
+            lastTick = now;
+          }
+          if (busy && !isPaused) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        window.electronAPI!.onProgress('progress:bytes', (p: any) => {
+          const d = Number(p?.delta || 0);
+          if (d > 0) {
+            setBytesReceived((x) => x + d);
+            windowBytes += d;
+          }
+        });
+      }
       window.electronAPI!.onProgress('progress:file', (p: any) => { setFileProgress(p); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', received: p.received, total: p.total } })); });
       window.electronAPI!.onProgress('progress:part', (p: any) => { setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `downloading part ${p.part+1}/${p.totalParts}`, received: p.received, total: p.total } })); });
       window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.parts} parts` } })); });
@@ -101,78 +448,113 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'verifying' } })); });
       window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); setDoneCount((x) => x + 1); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
-      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency });
+      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name });
       setFinished(true);
     } finally {
       setBusy(false);
+      setHasStarted(false);
     }
   }
 
-  const [bgCached, setBgCached] = useState<string | undefined>(undefined);
-  useEffect(() => {
-    if (config?.backgroundVideo) {
-      window.electronAPI?.cacheBackgroundVideo(config.backgroundVideo).then((url: string) => setBgCached(url)).catch(() => setBgCached(undefined));
-    }
-  }, [config?.backgroundVideo]);
-  const bgVideo = bgCached;
-
   return (
-    <div className="min-h-[75vh] grid grid-cols-[72px_1fr] gap-0">
-      <aside className="bg-base-300/60 backdrop-blur sticky top-0 h-full flex flex-col items-center py-4 gap-4">
-        <button className="btn btn-ghost btn-circle" title="Home"><Home size={18}/></button>
-        <button className="btn btn-ghost btn-circle" title="Downloads"><Download size={18}/></button>
-        <button className="btn btn-ghost btn-circle" title="Repair"><Wrench size={18}/></button>
-        <div className="mt-auto flex flex-col items-center gap-3">
-          <button className="btn btn-ghost btn-circle" title="Settings" onClick={() => setActiveTab('settings')}><Settings size={18}/></button>
-          <button className="btn btn-ghost btn-circle" title="About"><Info size={18}/></button>
+    <div className="h-full grid grid-cols-[88px_1fr]">
+      <aside className="glass-soft sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
+        <div className="w-18 h-18 rounded-xl grid place-items-center overflow-hidden">
+          <img src="/favicon.svg" alt="R5 Valkyrie" className="w-16 h-16 object-contain" />
         </div>
       </aside>
 
-      <section className="relative overflow-hidden rounded-xl">
-        <div className="relative h-72 rounded-xl overflow-hidden">
+      <section className="relative overflow-y-auto">
+        <div className="relative h-[360px] rounded-2xl overflow-hidden m-6">
           {bgVideo ? (
-            <video autoPlay muted loop playsInline className="absolute inset-0 w-full h-full object-cover opacity-60">
-              <source src={bgVideo} type="video/mp4" />
-            </video>
+            <video
+              key={bgVideo}
+              autoPlay
+              muted
+              loop
+              playsInline
+              className="absolute inset-0 w-full h-full object-cover opacity-70 pointer-events-none"
+              src={bgVideo}
+              onError={() => {
+                if (videoFilename) {
+                  setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
+                } else {
+                  setVideoSrc(null);
+                }
+              }}
+            />
           ) : (
-            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20"/>
+            <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-secondary/20 pointer-events-none"/>
           )}
-          <div className="relative z-10 h-full w-full flex items-end p-6">
+          <div className="absolute inset-0 bg-gradient-to-t from-base-100/70 via-base-100/10 to-transparent pointer-events-none"/>
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-40">
+            <div className="tabs tabs-boxed glass-soft">
+              <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
+              <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
+              <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
+              <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
+              <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
+            </div>
+          </div>
+          <div className="relative z-10 h-full w-full flex flex-col justify-end p-8">
+            <div className="flex items-end justify-between gap-6">
+              <div className="flex items-center gap-5">
+                <div className="w-26 h-26 rounded-xl grid place-items-center overflow-hidden">
+                  <img src="/favicon.svg" alt="R5 Valkyrie" className="w-24 h-24 object-contain" />
+                </div>
+                <div>
+                  <div className="text-2xl font-bold tracking-wide">R5Valkyrie</div>
+                  {enabledChannels.length > 0 && (
+                    <div className="mt-3">
+                      <div className="btn-group">
+                        {enabledChannels.map((c) => (
+                          <button
+                            key={c.name}
+                            className={`btn btn-sm ${selectedChannel===c.name ? 'btn-active btn-primary' : 'btn-ghost'}`}
+                            onClick={() => setSelectedChannel(c.name)}
+                          >
+                            {c.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             <div className="flex items-center gap-4">
-              <button className="btn btn-lg btn-error text-white">Play</button>
-              <div className="tabs tabs-boxed">
-                <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
-                <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
+                {primaryAction === 'install' && (
+                  <button className="btn btn-lg btn-primary text-white shadow-lg" disabled={busy} onClick={startInstall}>Install</button>
+                )}
+                {primaryAction === 'update' && (
+                  <button className="btn btn-lg btn-warning text-white shadow-lg" disabled={busy} onClick={startInstall}>Update</button>
+                )}
+                {primaryAction === 'play' && (
+                  <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20" onClick={async ()=>{
+                    const s: any = await window.electronAPI?.getSettings();
+                    const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                    const lo = s?.launchOptions?.[selectedChannel] || {};
+                    const args = buildLaunchParameters();
+                    const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
+                    if (res && !res.ok) {
+                      console.error('Failed to launch', res.error);
+                    }
+                  }}>Play</button>
+                )}
               </div>
             </div>
           </div>
         </div>
 
-        <div className="p-6 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold">Channel</span>
-            <select className="select select-bordered" value={selectedChannel} onChange={(e) => setSelectedChannel(e.target.value)}>
-              {config?.channels?.filter((c) => c.enabled).map((c) => (
-                <option key={c.name} value={c.name}>{c.name}</option>
-              ))}
-            </select>
+        {activeTab === 'general' && null}
+        {activeTab === 'settings' && (
+          <div key="content-settings" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
+            <div className="glass rounded-xl p-4 flex items-center gap-3">
+              <span className="text-sm opacity-80">Install to</span>
+              <input className="input input-bordered input-sm w-full max-w-xl" value={installDir} onChange={(e) => persistDir(e.target.value)} placeholder="Choose folder" />
+              <button className="btn btn-sm" onClick={chooseFolder}><FolderOpen size={16}/></button>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="text-lg font-semibold">Install to</span>
-            <input className="input input-bordered w-96" value={installDir} onChange={(e) => persistDir(e.target.value)} placeholder="Choose folder" />
-            <button className="btn" onClick={chooseFolder}><FolderOpen size={16}/></button>
-          </div>
-        </div>
-
-        <div className="px-6 pb-6 flex items-center gap-2">
-          <button className="btn btn-primary" disabled={busy} onClick={startInstall}>Install</button>
-          <button className="btn" disabled={busy}>Update</button>
-          <button className="btn btn-outline" disabled={busy}>Repair</button>
-          <label className="label cursor-pointer justify-start gap-3 ml-4">
-            <input type="checkbox" className="checkbox" checked={includeOptional} onChange={(e) => setIncludeOptional(e.target.checked)} />
-            <span className="label-text">Include optional files</span>
-          </label>
-          <div className="ml-4 flex items-center gap-2">
+            <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-2">
             <span className="text-sm opacity-70">Concurrent files</span>
             <select
               className="select select-bordered select-sm"
@@ -188,7 +570,7 @@ export default function LauncherUI() {
               ))}
             </select>
           </div>
-          <div className="ml-2 flex items-center gap-2">
+              <div className="flex items-center gap-2">
             <span className="text-sm opacity-70">Concurrent parts</span>
             <select
               className="select select-bordered select-sm"
@@ -204,43 +586,201 @@ export default function LauncherUI() {
               ))}
             </select>
           </div>
+              <label className="label cursor-pointer justify-start gap-3 ml-2">
+                <input type="checkbox" className="checkbox" checked={includeOptional} onChange={(e) => setIncludeOptional(e.target.checked)} />
+                <span className="label-text">Include optional files</span>
+              </label>
+              {channel && (
+                <div className="ml-auto text-xs opacity-70 truncate">
+                  Using: <span className="font-mono">{channel.game_url}</span>
+                </div>
+              )}
         </div>
 
-        {channel && (
-          <div className="px-6 pb-4 opacity-70">
-            <span className="text-sm">Using: <span className="font-mono">{channel.game_url}</span></span>
+            <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2">
+              <div className="mb-3 text-sm opacity-80">Repair installed channels</div>
+              <div className="grid gap-2">
+                {enabledChannels.map((c) => {
+                  const ch = channelsSettings?.[c.name];
+                  const dir = ch?.installDir;
+                  const ver = ch?.gameVersion;
+                  return (
+                    <div key={c.name} className="flex items-center gap-3">
+                      <div className="min-w-24 badge badge-ghost">{c.name}</div>
+                      <div className="text-xs opacity-80 truncate">{dir || 'Not installed'}</div>
+                      {ver && <div className="ml-auto text-xs opacity-60">{ver}</div>}
+                      <button className="btn btn-sm" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
-        {overall && (
-          <div className="px-6 pb-2">
-            <progress className="progress w-full" value={overall.index+1} max={overall.total}></progress>
+        {activeTab === 'launch' && (
+          <div key="content-launch" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto pb-6 fade-in">
+            <div className="glass rounded-xl p-4 grid gap-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm opacity-80">Mode</span>
+                <div className="btn-group">
+                  {(['CLIENT','HOST','SERVER'] as LaunchMode[]).map((m) => (
+                    <button key={m} className={`btn btn-sm ${launchMode===m?'btn-active btn-primary':'btn-ghost'}`} onClick={() => setLaunchMode(m)}>{m}</button>
+                  ))}
+                </div>
+              </div>
+              {launchMode !== 'CLIENT' && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm opacity-80">Hostname</span>
+                  <input className="input input-bordered input-sm w-full" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="Server name" />
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="text-sm opacity-80">Window</span>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="form-control">
+                  <span className="label-text text-xs opacity-70">Max FPS</span>
+                  <input className="input input-bordered input-sm" value={maxFps} onChange={(e)=>setMaxFps(e.target.value)} placeholder="0" />
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="form-control">
+                    <span className="label-text text-xs opacity-70">Width</span>
+                    <input className="input input-bordered input-sm" value={resW} onChange={(e)=>setResW(e.target.value)} placeholder="1920" />
+                  </label>
+                  <label className="form-control">
+                    <span className="label-text text-xs opacity-70">Height</span>
+                    <input className="input input-bordered input-sm" value={resH} onChange={(e)=>setResH(e.target.value)} placeholder="1080" />
+                  </label>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="form-control">
+                  <span className="label-text text-xs opacity-70">Reserved cores</span>
+                  <input className="input input-bordered input-sm" value={reservedCores} onChange={(e)=>setReservedCores(e.target.value)} placeholder="" />
+                </label>
+                <label className="form-control">
+                  <span className="label-text text-xs opacity-70">Worker threads</span>
+                  <input className="input input-bordered input-sm" value={workerThreads} onChange={(e)=>setWorkerThreads(e.target.value)} placeholder="" />
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
+              </div>
+              <label className="form-control">
+                <span className="label-text text-xs opacity-70">Playlist file (string)</span>
+                <input className="input input-bordered input-sm w-full" value={playlistFile} onChange={(e)=>setPlaylistFile(e.target.value)} placeholder="playlists_r5_patch.txt" />
+              </label>
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">No async</span></label>
+              </div>
+              <label className="form-control">
+                <span className="label-text text-xs opacity-70">Custom command line</span>
+                <input className="input input-bordered input-sm" value={customCmd} onChange={(e)=>setCustomCmd(e.target.value)} placeholder="-debug +foo 1" />
+              </label>
+              <div className="text-xs opacity-70 font-mono break-words">
+                {buildLaunchParameters()}
+              </div>
+              <div className="flex gap-2">
+                <button className="btn btn-sm" onClick={async ()=>{
+                  const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd };
+                  const s: any = await window.electronAPI?.getSettings();
+                  const next = { ...(s||{}) };
+                  next.launchOptions = { ...(next.launchOptions||{}), [selectedChannel]: lo };
+                  await window.electronAPI?.setSetting('launchOptions', next.launchOptions);
+                }}>Save</button>
+              </div>
+            </div>
           </div>
         )}
-        {fileProgress && (
-          <div className="px-6 pb-2 text-sm opacity-70 font-mono">
+
+        {activeTab === 'general' && null}
+
+        {activeTab !== 'settings' && (
+          <div key={`content-main-${activeTab}`} className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in">
+            <div className="space-y-3">
+              {activeTab === 'general' && hasStarted && (
+                <div className="glass rounded-xl p-4">
+                  <progress className="progress w-full" value={(bytesTotal>0? (bytesReceived/bytesTotal)*100 : 0)} max={100}></progress>
+                  <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
+                    <span>{((bytesTotal>0? bytesReceived/bytesTotal : 0)*100).toFixed(1)}%</span>
+                    <span>•</span>
+                    <span>{(speedBps/1024/1024).toFixed(2)} MB/s</span>
+                    <span>•</span>
+                    <span>ETA {etaSeconds > 0 ? `${Math.floor(etaSeconds/60)}m ${etaSeconds%60}s` : '—'}</span>
+                    <span className="ml-auto flex items-center gap-2">
+                      {!isPaused ? (
+                        <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(true); }}>Pause</button>
+                      ) : (
+                        <button className="btn btn-outline btn-xs" onClick={async () => { setIsPaused(false); startInstall(); }}>Resume</button>
+                      )}
+                      <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); }}>Cancel</button>
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'general' && fileProgress && (
+                <div className="text-sm opacity-80 font-mono">
             {fileProgress.path} — {Math.floor((fileProgress.received / (fileProgress.total||1))*100)}%
           </div>
         )}
 
-        <div className="px-6 pb-6">
-          <div className="bg-base-300 rounded-md p-3 max-h-64 overflow-y-auto">
+              {activeTab === 'downloads' && (
+                <div className="glass rounded-xl p-4 max-h-64 overflow-y-auto">
             {Object.entries(progressItems).map(([p, info]) => {
               const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
               return (
-                <div key={p} className="flex items-center justify-between text-sm py-1">
+                      <div key={p} className="py-2">
+                        <div className="flex items-center justify-between text-sm">
                   <span className="font-mono truncate mr-3">{p}</span>
                   <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
+                        </div>
+                        {percent !== undefined && (
+                          <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
+                        )}
                 </div>
               );
             })}
           </div>
+              )}
+
           {finished && (
-            <div className="mt-2 alert alert-success">
+                <div className="alert alert-success">
               <span>Download finished ({doneCount}/{totalCount})</span>
             </div>
           )}
         </div>
+
+            {(activeTab === 'general' || activeTab === 'patchnotes') && (
+              <div className="glass rounded-xl p-4 min-h-[220px]">
+                {activeTab === 'patchnotes' ? (
+                  <div className="prose prose-invert max-w-none">
+                    <h3>Patch Notes</h3>
+                    <p>Patch notes will appear here. Stay tuned for updates.</p>
+                  </div>
+                ) : (
+                  <div className="prose prose-invert max-w-none">
+                    <h3>Welcome to Valkyrie</h3>
+                    <p>Choose your install location, pick a channel, and click Install to get started.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </section>
     </div>
   );

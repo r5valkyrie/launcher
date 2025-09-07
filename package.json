@@ -1,5 +1,5 @@
 {
-  "name": "bizarre-belt",
+  "name": "r5vlauncher",
   "type": "module",
   "version": "0.0.1",
   "main": "electron/main.js",
@@ -11,7 +11,9 @@
     "preview": "astro preview",
     "astro": "astro"
   },
-  "dependencies": {},
+  "dependencies": {
+    "bytenode": "^1.4.0"
+  },
   "devDependencies": {
     "@astrojs/react": "^4.3.0",
     "@types/react": "^19.1.12",
@@ -27,7 +29,8 @@
     "tailwindcss": "^4.1.13",
     "electron": "^38.0.0",
     "electron-builder": "^26.0.12",
-    "wait-on": "^8.0.4"
+    "wait-on": "^8.0.4",
+    "esbuild": "^0.23.0"
   },
   "build": {
     "appId": "org.playvalkyrie.r5vlauncher",
@@ -39,13 +42,20 @@
       "dist/**",
       "electron/**",
       "package.json",
-      "!**/node_modules/**"
+      "node_modules/bytenode/**",
+      "!**/node_modules/**",
+      "!**/*.map",
+      "!**/*.md",
+      "!**/test/**",
+      "!release/**"
     ],
     "npmRebuild": false,
     "extraMetadata": {
       "main": "electron/main.js"
     },
     "asar": true,
+    "compression": "maximum",
+    "afterPack": "scripts/afterPack.cjs",
     "win": {
       "target": [
         "nsis"

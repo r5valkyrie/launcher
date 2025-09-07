@@ -1,8 +1,9 @@
-import { app, BrowserWindow, ipcMain, dialog, protocol } from 'electron';
+import { app, BrowserWindow, ipcMain, dialog, protocol, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import https from 'node:https';
 import fs from 'node:fs';
+import { spawn } from 'node:child_process';
 // Preload is CommonJS to avoid ESM named export issues
 import { fetchChecksums, downloadAll, createCancelToken, cancelToken } from './services/downloader.js';
 import { getSetting, setSetting, getAllSettings } from './services/store.js';
@@ -44,10 +45,19 @@ async function createWindow() {
     const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
     await mainWindow.loadFile(indexPath);
   }
-  mainWindow.once('ready-to-show', () => mainWindow.show());
-
-  // Open DevTools even in production to debug blank window
-  mainWindow.webContents.openDevTools({ mode: 'detach' });
+  const ensureShown = () => {
+    if (!mainWindow) return;
+    if (!mainWindow.isVisible()) mainWindow.show();
+    if (!mainWindow.isFocused()) mainWindow.focus();
+  };
+  mainWindow.once('ready-to-show', ensureShown);
+  mainWindow.webContents.once('did-finish-load', ensureShown);
+  const safetyShow = setTimeout(ensureShown, 1000);
+  mainWindow.on('show', () => clearTimeout(safetyShow));
+  const isDev = !!process.env.VITE_DEV_SERVER_URL || process.env.NODE_ENV === 'development';
+  if (isDev) {
+    mainWindow.webContents.openDevTools({ mode: 'detach' });
+  }
 
   // Basic diagnostics if load fails
   mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDesc, validatedURL) => {
@@ -121,11 +131,23 @@ ipcMain.handle('download:checksums', async (_e, { baseUrl }) => {
   return fetchChecksums(baseUrl);
 });
 
-ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, includeOptional, concurrency, partConcurrency }) => {
+ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName }) => {
   const emit = (channel, payload) => e.sender.send(channel, payload);
   activeDownloadToken = createCancelToken();
   try {
     await downloadAll(baseUrl, checksums, installDir, emit, Boolean(includeOptional), Number(concurrency) || 4, Number(partConcurrency) || 4, activeDownloadToken);
+    try {
+      const channels = getSetting('channels', {}) || {};
+      channels[String(channelName || 'default')] = {
+        installDir,
+        gameVersion: checksums?.game_version || null,
+        gameBaseUrl: baseUrl,
+        lastUpdatedAt: Date.now(),
+      };
+      setSetting('channels', channels);
+    } catch (persistErr) {
+      console.error('Failed to persist channel info', persistErr);
+    }
   } finally {
     activeDownloadToken = null;
   }
@@ -178,6 +200,50 @@ ipcMain.handle('video:cache', async (_e, { filename }) => {
     }).on('error', (err) => { fs.unlink(dest, () => reject(err)); });
   });
   return `r5v://videos/${filename}`;
+});
+
+ipcMain.handle('fs:exists', async (_e, { path: targetPath }) => {
+  try { await fs.promises.access(targetPath); return true; } catch { return false; }
+});
+
+ipcMain.handle('path:open', async (_e, { path: targetPath }) => {
+  try { await shell.openPath(targetPath); return true; } catch { return false; }
+});
+
+ipcMain.handle('download:cancel', async () => {
+  try { cancelToken(activeDownloadToken); } catch {}
+  activeDownloadToken = null;
+  try { mainWindow?.webContents.send('progress:cancelled', {}); } catch {}
+  return true;
+});
+
+ipcMain.handle('select-file', async (_e, { filters }) => {
+  const res = await dialog.showOpenDialog({
+    properties: ['openFile'],
+    filters: Array.isArray(filters) ? filters : undefined,
+  });
+  if (res.canceled || res.filePaths.length === 0) return null;
+  return res.filePaths[0];
+});
+
+ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsString }) => {
+  try {
+    if (!installDir) throw new Error('Missing installDir');
+    const exeName = String(mode).toUpperCase() === 'SERVER' ? 'r5apex_ds.exe' : 'r5apex.exe';
+    const exePath = path.join(installDir, exeName);
+    await fs.promises.access(exePath).catch(() => { throw new Error(`Executable not found: ${exePath}`); });
+    const parseArgs = (s) => {
+      if (!s || typeof s !== 'string') return [];
+      const tokens = s.match(/(?:[^\s\"]+|\"[^\"]*\")+/g) || [];
+      return tokens.map((t) => t.replace(/^\"|\"$/g, ''));
+    };
+    const args = parseArgs(argsString);
+    const child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
+    child.unref();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
 });
 
 ipcMain.on('window:minimize', () => { mainWindow?.minimize(); });

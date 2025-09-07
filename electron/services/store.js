@@ -33,5 +33,3 @@ export function setSetting(key, value) {
 export function getAllSettings() {
   return readStore();
 }
-
-
