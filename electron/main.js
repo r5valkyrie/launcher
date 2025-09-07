@@ -110,6 +110,12 @@ app.whenReady().then(() => {
         const resolved = path.join(distDir, 'favicon.svg');
         return callback({ path: resolved });
       }
+      // Map absolute-root public assets (e.g. /r5v_bannerBG.png) to dist root in production
+      if (posixPath.startsWith('/')) {
+        const rest = posixPath.replace(/^\/+/, '');
+        const candidate = path.join(distDir, rest);
+        try { fs.accessSync(candidate); return callback({ path: candidate }); } catch {}
+      }
       return callback({ path: pathname });
     } catch (e) {
       return callback({ error: -6 });

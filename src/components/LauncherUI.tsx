@@ -622,7 +622,7 @@ export default function LauncherUI() {
         </div>
         <div className="relative mx-6 mt-12 mb-6 overflow-visible">
           <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden">
-            <img src="/r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
+            <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
             {bgVideo && (
               <video
                 key={bgVideo}
@@ -640,7 +640,7 @@ export default function LauncherUI() {
             <div className="relative z-10 h-full w-full flex flex-col items-start justify-start p-9">
               <div className="flex flex-col h-full w-full">
                 <div>
-                  <img src="/r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto" />
+                  <img src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto" />
                   <div className="text-md opacity-80 mt-2">Pilots. Legends. One Frontier. One Battle.</div>
                 </div>
                 <div className="mt-auto flex items-center gap-3 pb-1">
@@ -682,8 +682,8 @@ export default function LauncherUI() {
               )}
             </div>
           </div>
-          <img src="/r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-[2vw]" />
-          <img src="/r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-3rem)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
+          <img src="r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-[2vw]" />
+          <img src="r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-3rem)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
         </div>
 
         {activeTab === 'general' && null}
