@@ -141,11 +141,14 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
     const totalParts = fileObj.parts.length;
     const partPaths = new Array(totalParts);
     let next = 0;
+    const started = new Set();
 
     async function partWorker() {
       while (true) {
         const i = next++;
         if (i >= totalParts) return;
+        if (started.has(i)) continue;
+        started.add(i);
         const part = fileObj.parts[i];
         const partUrl = `${baseUrl.replace(/\/$/, '')}/${part.path.replace(/\\/g, '/')}`;
         const tmpPart = `${targetPath}.part${i}`;
@@ -251,7 +254,6 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   const multis = filtered.filter((f) => Array.isArray(f.parts) && f.parts.length > 0);
   const files = singles.concat(multis);
   const total = files.length;
-  let nextIndex = 0;
   let completed = 0;
   const totalBytes = files.reduce((sum, f) => {
     const size = Number(f.size || 0);
@@ -263,31 +265,39 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   }, 0);
   try { emit('progress:bytes:total', { totalBytes }); } catch {}
 
-  async function worker() {
-    while (true) {
-      const i = nextIndex++;
-      if (i >= total) return;
-      const f = files[i];
-      emit('progress:start', { index: i, total, path: f.path, completed });
-      const doOnce = async () => downloadFileObject(baseUrl, f, installDir, emit, partConcurrency, token);
-      try {
-        await doOnce();
-      } catch (err) {
-        const message = String(err?.message || err || 'error');
-        if (message.includes('cancelled')) throw err;
+  async function processGroup(group, offset, groupConcurrency) {
+    let nextLocal = 0;
+    async function worker() {
+      while (true) {
+        const iLocal = nextLocal++;
+        if (iLocal >= group.length) return;
+        const f = group[iLocal];
+        const globalIndex = offset + iLocal;
+        emit('progress:start', { index: globalIndex, total, path: f.path, completed });
+        const doOnce = async () => downloadFileObject(baseUrl, f, installDir, emit, partConcurrency, token);
         try {
-          const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
-          try { fs.unlinkSync(targetPath); } catch {}
           await doOnce();
-        } catch (err2) {
-          try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+        } catch (err) {
+          const message = String(err?.message || err || 'error');
+          if (message.includes('cancelled')) throw err;
+          try {
+            const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
+            try { fs.unlinkSync(targetPath); } catch {}
+            await doOnce();
+          } catch (err2) {
+            try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+          }
         }
+        completed += 1;
+        emit('progress:done', { index: globalIndex, total, path: f.path, completed });
       }
-      completed += 1;
-      emit('progress:done', { index: completed - 1, total, path: f.path, completed });
     }
+    const pool = Array.from({ length: Math.max(1, groupConcurrency) }, () => worker());
+    await Promise.all(pool);
   }
 
-  const pool = Array.from({ length: Math.max(1, concurrency) }, () => worker());
-  await Promise.all(pool);
+  // Stage 1: regular files with full concurrency
+  await processGroup(singles, 0, Math.max(1, concurrency));
+  // Stage 2: multipart files, serialized (one at a time)
+  await processGroup(multis, singles.length, 1);
 }
