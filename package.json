@@ -50,15 +50,7 @@
     "files": [
       "dist/**",
       "electron/**",
-      "package.json",
-      "node_modules/bytenode/**",
-      "node_modules/electron-updater/**",
-      "node_modules/builder-util-runtime/**",
-      "!**/node_modules/**",
-      "!**/*.map",
-      "!**/*.md",
-      "!**/test/**",
-      "!release/**"
+      "package.json"
     ],
     "npmRebuild": false,
     "extraMetadata": {
