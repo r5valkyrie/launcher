@@ -44,6 +44,7 @@ declare global {
       downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
       quitAndInstall?: () => Promise<{ ok: boolean; error?: string }>;
       onUpdate?: (channel: string, listener: (payload: any) => void) => void;
+      openExternal?: (url: string) => Promise<boolean>;
     };
   }
 }
@@ -759,6 +760,14 @@ export default function LauncherUI() {
                       <div className="text-xs opacity-80 truncate">{dir || 'Not installed'}</div>
                       {ver && <div className="ml-auto text-xs opacity-60">{ver}</div>}
                       <button className="btn btn-sm" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
+                      {(() => {
+                        const info = config?.channels.find((x) => x.name === c.name);
+                        const dedi = info?.dedi_url;
+                        if (!dedi) return null;
+                        return (
+                          <button className="btn btn-sm btn-outline" onClick={() => window.electronAPI?.openExternal?.(dedi)}>Download Dedicated Server</button>
+                        );
+                      })()}
                     </div>
                   );
                 })}

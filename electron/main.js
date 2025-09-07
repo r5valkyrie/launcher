@@ -265,6 +265,10 @@ ipcMain.handle('path:open', async (_e, { path: targetPath }) => {
   try { await shell.openPath(targetPath); return true; } catch { return false; }
 });
 
+ipcMain.handle('open-external', async (_e, { url }) => {
+  try { await shell.openExternal(url); return true; } catch { return false; }
+});
+
 ipcMain.handle('download:cancel', async () => {
   try { cancelToken(activeDownloadToken); } catch {}
   activeDownloadToken = null;
