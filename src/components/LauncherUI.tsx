@@ -251,10 +251,29 @@ export default function LauncherUI() {
           };
         });
       });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts` } })); });
-      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}` } })); });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying' } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped' } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
+      window.electronAPI!.onProgress('progress:merge:start', (p: any) => {
+        setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 }
+        }));
+      });
+      window.electronAPI!.onProgress('progress:merge:part', (p: any) => {
+        setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts });
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 }
+        }));
+      });
+      window.electronAPI!.onProgress('progress:merge:done', (p: any) => {
+        setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 });
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 }
+        }));
+      });
+      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
       window.electronAPI!.onProgress('progress:error', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
@@ -538,12 +557,30 @@ export default function LauncherUI() {
           }
         });
       }
-      window.electronAPI!.onProgress('progress:file', (p: any) => { setFileProgress(p); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', received: p.received, total: p.total } })); });
-      window.electronAPI!.onProgress('progress:part', (p: any) => { setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `downloading part ${p.part+1}/${p.totalParts}`, received: p.received, total: p.total } })); });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.parts} parts` } })); });
-      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: `merging ${p.part+1}/${p.totalParts}` } })); });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'verifying' } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'skipped' } })); });
+      window.electronAPI!.onProgress('progress:file', (p: any) => {
+        setFileProgress(p);
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path]||{}), status: 'downloading', received: p.received, total: p.total }
+        }));
+      });
+      window.electronAPI!.onProgress('progress:part', (p: any) => {
+        setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total });
+        setProgressItems((prev) => {
+          const current = prev[p.path] || { status: 'downloading' } as FileInfo;
+          const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
+          parts[p.part] = { received: p.received, total: p.total };
+          return {
+            ...prev,
+            [p.path]: { ...current, status: 'downloading parts', totalParts: p.totalParts, parts }
+          };
+        });
+      });
+      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:merge:done', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
       await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name });
       setFinished(true);
@@ -914,20 +951,20 @@ export default function LauncherUI() {
               {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
                   {(fileProgress?.path || '')} — {Math.floor(((fileProgress?.received || 0) / ((fileProgress?.total||1))) * 100)}%
-                </div>
-              )}
+          </div>
+        )}
 
               {activeTab === 'downloads' && (
                 <div className="glass rounded-xl p-4 max-h-64 overflow-y-auto">
                   {Object.entries(progressItems).length > 0 ? Object.entries(progressItems).map(([p, info]) => {
-                    const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
+              const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
                     const parts = info.parts || {};
                     const totalParts = info.totalParts || Object.keys(parts).length || 0;
-                    return (
+              return (
                       <div key={p} className="py-2">
                         <div className="flex items-center justify-between text-sm">
-                          <span className="font-mono truncate mr-3">{p}</span>
-                          <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
+                  <span className="font-mono truncate mr-3">{p}</span>
+                  <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
                         </div>
                         {percent !== undefined && (
                           <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
@@ -944,10 +981,10 @@ export default function LauncherUI() {
                                     <span className="opacity-60">{pcent}%</span>
                                   </div>
                                   <progress className="progress progress-secondary w-full mt-1" value={pcent} max={100}></progress>
-                                </div>
-                              );
-                            })}
-                          </div>
+                </div>
+              );
+            })}
+          </div>
                         )}
                       </div>
                     );
@@ -959,7 +996,7 @@ export default function LauncherUI() {
 
         </div>
 
-            {finished && (
+          {finished && (
               <div className="fixed bottom-4 left-0 right-0 flex justify-center pointer-events-none z-50">
                 <div className="alert alert-success toast-slide-in pointer-events-auto">
                   <span>Completed</span>
@@ -1044,9 +1081,9 @@ export default function LauncherUI() {
                     )}
                   </div>
                 )}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
+        </div>
         )}
       </section>
     </div>

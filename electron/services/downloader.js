@@ -187,6 +187,7 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
       out.on('finish', resolve);
       out.end();
     });
+    try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
   } else {
     const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileObj.path.replace(/\\/g, '/')}`;
     let last = 0;
