@@ -90,3 +90,10 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   100% { opacity: 1; transform: translateY(0); }
 }
 .toast-slide-in { animation: toastSlideIn 240ms ease-out both; }
+
+/* Toast (top-right) */
+@keyframes toastSlideInTR {
+  0% { opacity: 0; transform: translate(12px, -12px); }
+  100% { opacity: 1; transform: translate(0, 0); }
+}
+.toast-slide-in-tr { animation: toastSlideInTR 220ms ease-out both; }

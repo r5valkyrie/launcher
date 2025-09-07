@@ -52,6 +52,19 @@ async function createWindow() {
     const indexPath = path.join(__dirname, '..', 'dist', 'index.html');
     await mainWindow.loadFile(indexPath);
   }
+  // Open external links in the user's default browser
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try { shell.openExternal(url); } catch {}
+    return { action: 'deny' };
+  });
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    const isFile = url.startsWith('file:');
+    const isDevLocal = !!process.env.VITE_DEV_SERVER_URL && url.startsWith(String(process.env.VITE_DEV_SERVER_URL));
+    if (!isFile && !isDevLocal) {
+      event.preventDefault();
+      try { shell.openExternal(url); } catch {}
+    }
+  });
   const ensureShown = () => {
     if (!mainWindow) return;
     if (!mainWindow.isVisible()) mainWindow.show();
@@ -198,10 +211,9 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 });
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
-  // Prefer app path one level up, then "R5V Library"
-  const appPath = app.getAppPath();
-  const base = path.resolve(appPath, '..');
-  const lib = path.join(base, 'R5V Library');
+  // Default to Program Files\R5RValk Library\<channel>
+  const programFiles = process.env['PROGRAMFILES'] || path.resolve(app.getAppPath(), '..');
+  const lib = path.join(programFiles, 'R5RValk Library');
   return channelName ? path.join(lib, channelName) : lib;
 });
 

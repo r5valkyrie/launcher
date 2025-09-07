@@ -67,6 +67,7 @@ export default function LauncherUI() {
   const [doneCount, setDoneCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string>('Completed');
   const [bytesTotal, setBytesTotal] = useState<number>(0);
   const [bytesReceived, setBytesReceived] = useState<number>(0);
   const [speedBps, setSpeedBps] = useState<number>(0);
@@ -277,6 +278,7 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:error', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
+      setToastMessage('Install completed');
       setFinished(true);
       // Update local install state so primary button flips to Play
       setInstalledVersion(String(checksums?.game_version || ''));
@@ -582,10 +584,12 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
       await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name });
+      setToastMessage('Repair completed');
       setFinished(true);
       // Update local install state so primary button flips to Play/reflects new version
       setInstalledVersion(String(checksums?.game_version || ''));
       setIsInstalled(true);
+      setPrimaryAction('play');
       setChannelsSettings((prev) => ({
         ...prev,
         [name]: {
@@ -605,21 +609,21 @@ export default function LauncherUI() {
   return (
     <div className="h-full grid grid-cols-[88px_1fr] relative">
       <aside className="glass-soft sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
-        <div className="w-18 h-18 rounded-xl grid place-items-center overflow-hidden">
-          <img src="/favicon.svg" alt="R5 Valkyrie" className="w-16 h-16 object-contain" />
+        <div className="w-16 h-16 rounded-xl grid place-items-center overflow-hidden glass-soft">
+          <img src="/favicon.svg" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
         </div>
       </aside>
 
       <section className="relative overflow-y-auto bg-[#171b20]">
         <div className="mx-6 mt-4 mb-8 flex justify-center">
           <div className="tabs tabs-boxed glass-soft rounded-[2.3vw]">
-            <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
+                <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
             <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
             <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
-            <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
+                <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
             <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
-          </div>
-        </div>
+              </div>
+            </div>
         <div className="relative mx-6 mt-12 mb-6 overflow-visible">
           <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden">
             <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
@@ -651,7 +655,8 @@ export default function LauncherUI() {
                     <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
                   )}
                   {primaryAction === 'play' && (
-                    <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw]" onClick={async ()=>{
+                    <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw]" disabled={busy} onClick={async ()=>{
+                      if (busy) return;
                       const s: any = await window.electronAPI?.getSettings();
                       const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
                       const lo = s?.launchOptions?.[selectedChannel] || {};
@@ -660,11 +665,11 @@ export default function LauncherUI() {
                       if (res && !res.ok) {
                         console.error('Failed to launch', res.error);
                       }
-                    }}>Play</button>
+                    }}>{busy ? 'Working…' : 'Play'}</button>
                   )}
                   <button className="btn btn-lg rounded-[1.5vw]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
-                </div>
-              </div>
+          </div>
+        </div>
               {enabledChannels.length > 0 && (
                 <div className="absolute bottom-8 right-8">
                   <div className="btn-group">
@@ -678,12 +683,12 @@ export default function LauncherUI() {
                       </button>
                     ))}
                   </div>
-                </div>
+          </div>
               )}
-            </div>
+          </div>
           </div>
           <img src="r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-[2vw]" />
-          <img src="r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-3rem)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
+          <img src="r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-5%)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
         </div>
 
         {activeTab === 'general' && null}
@@ -868,7 +873,10 @@ export default function LauncherUI() {
         {activeTab === 'general' && null}
 
         {activeTab !== 'settings' && (
-          <div key={`content-main-${activeTab}`} className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in">
+          <div
+            key={`content-main-${activeTab}`}
+            className={`mx-6 mt-4 grid ${activeTab==='downloads' ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.2fr_.8fr]'} gap-4 items-start pb-6 fade-in`}
+          >
             {updateAvailable && !updateDownloaded && (
               <div className="glass rounded-xl overflow-hidden xl:col-span-2">
                 <div className="flex items-stretch">
@@ -952,7 +960,7 @@ export default function LauncherUI() {
         )}
 
               {activeTab === 'downloads' && (
-                <div className="glass rounded-xl p-4 max-h-64 overflow-y-auto">
+                <div className="glass rounded-xl p-4 overflow-y-auto" style={{ minHeight: 'calc(88vh - 360px)' }}>
                   {Object.entries(progressItems).length > 0 ? Object.entries(progressItems).map(([p, info]) => {
               const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
                     const parts = info.parts || {};
@@ -993,13 +1001,13 @@ export default function LauncherUI() {
 
         </div>
 
-          {finished && (
-              <div className="fixed bottom-4 left-0 right-0 flex justify-center pointer-events-none z-50">
-                <div className="alert alert-success toast-slide-in pointer-events-auto">
-                  <span>Completed</span>
-                </div>
+          {false && finished && (
+            <div className="fixed top-4 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
+              <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
+                <span>Completed</span>
               </div>
-            )}
+            </div>
+          )}
 
             
 
@@ -1083,6 +1091,13 @@ export default function LauncherUI() {
         </div>
         )}
       </section>
+      {finished && (
+        <div className="fixed top-14 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
+          <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
+            <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
