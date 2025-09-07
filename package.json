@@ -36,6 +36,7 @@
   "build": {
     "appId": "org.playvalkyrie.r5vlauncher",
     "productName": "R5 Valkyrie Launcher",
+    "artifactName": "${productName} Setup ${version}.${ext}",
     "directories": {
       "output": "release"
     },
@@ -70,14 +71,13 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false,
-      "artifactName": "${productName} Setup ${version}.${ext}",
-      "nsis": {
-        "oneClick": true,
-        "perMachine": true,
-        "allowToChangeInstallationDirectory": false,
-        "include": "scripts/installer.nsh"
-      }
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": true,
+      "allowToChangeInstallationDirectory": false,
+      "include": "scripts/installer.nsh"
     }
   }
 }
