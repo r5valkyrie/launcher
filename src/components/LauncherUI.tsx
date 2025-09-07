@@ -253,6 +253,14 @@ export default function LauncherUI() {
           };
         });
       });
+      window.electronAPI!.onProgress('progress:part:reset', (p: any) => {
+        setProgressItems((prev) => {
+          const current = prev[p.path] || { status: 'downloading parts' } as FileInfo;
+          const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
+          if (parts[p.part]) parts[p.part] = { received: 0, total: parts[p.part].total || 0 };
+          return { ...prev, [p.path]: { ...current, parts } };
+        });
+      });
       window.electronAPI!.onProgress('progress:merge:start', (p: any) => {
         setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
         setProgressItems((prev) => ({

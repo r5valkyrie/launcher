@@ -186,6 +186,7 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
           try { fs.unlinkSync(tmpPart); } catch {}
           // Undo counted bytes for failed attempt
           try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
+          try { emit('progress:part:reset', { path: fileObj.path, part: i, totalParts }); } catch {}
           if (attempts >= 2) {
             throw new Error(`Checksum mismatch for ${part.path}`);
           }
