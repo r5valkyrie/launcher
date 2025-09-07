@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.0.4",
+  "version": "0.1.0",
   "main": "electron/main.js",
   "scripts": {
     "web": "astro dev",
