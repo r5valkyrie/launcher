@@ -43,6 +43,7 @@
     "appId": "org.playvalkyrie.r5vlauncher",
     "productName": "R5 Valkyrie Launcher",
     "artifactName": "${productName} Setup ${version}.${ext}",
+    "icon": "public/logo.ico",
     "directories": {
       "output": "release"
     },
@@ -70,13 +71,17 @@
       "target": [
         "nsis"
       ],
-      "signAndEditExecutable": false
+      "signAndEditExecutable": false,
+      "icon": "public/logo.ico"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": true,
       "allowToChangeInstallationDirectory": false,
-      "include": "scripts/installer.nsh"
+      "include": "scripts/installer.nsh",
+      "installerIcon": "public/logo.ico",
+      "uninstallerIcon": "public/logo.ico",
+      "installerHeaderIcon": "public/logo.ico"
     }
   }
 }
