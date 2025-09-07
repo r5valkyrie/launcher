@@ -367,8 +367,11 @@ export default function LauncherUI() {
         if (ch?.installDir) setInstallDir(ch.installDir);
         setInstalledVersion(ch?.gameVersion || null);
         if (ch?.installDir) {
-          const exists = await window.electronAPI?.exists?.(ch.installDir);
-          setIsInstalled(Boolean(exists));
+          const exeClient = `${ch.installDir.replace(/\\+$/,'')}\\r5apex.exe`;
+          const exeServer = `${ch.installDir.replace(/\\+$/,'')}\\r5apex_ds.exe`;
+          const hasClient = await window.electronAPI?.exists?.(exeClient);
+          const hasServer = await window.electronAPI?.exists?.(exeServer);
+          setIsInstalled(Boolean(hasClient || hasServer));
         } else {
           setIsInstalled(false);
         }

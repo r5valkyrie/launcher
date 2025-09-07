@@ -213,7 +213,7 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
   // Default to Program Files\R5RValk Library\<channel>
   const programFiles = process.env['PROGRAMFILES'] || path.resolve(app.getAppPath(), '..');
-  const lib = path.join(programFiles, 'R5RValk Library');
+  const lib = path.join(programFiles, 'R5 Valkyrie Launcher', 'Releases');
   return channelName ? path.join(lib, channelName) : lib;
 });
 
