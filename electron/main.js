@@ -42,6 +42,7 @@ async function createWindow() {
       nodeIntegration: false,
     },
     show: false,
+    icon: path.join(__dirname, 'icon.ico'),
   });
 
   const devUrl = process.env.VITE_DEV_SERVER_URL;

@@ -2,12 +2,13 @@
   "name": "r5vlauncher",
   "type": "module",
   "version": "0.3.0",
-  "main": "electron/main.js",
+  "main": "electron/main.js", 
+  "icon": "build/icon.ico",
   "scripts": {
     "web": "astro dev",
     "dev": "concurrently \"astro dev\" \"wait-on http://localhost:4321 && cross-env VITE_DEV_SERVER_URL=http://localhost:4321 electron .\"",
     "build:web": "astro build",
-    "build": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder",
+    "build": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder ",
     "preview": "astro preview",
     "astro": "astro",
     "release": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder --win nsis --publish always",
@@ -41,11 +42,12 @@
   },
   "build": {
     "appId": "org.playvalkyrie.r5vlauncher",
-    "productName": "R5 Valkyrie Launcher",
+    "productName": "R5Valkyrie Launcher",
     "artifactName": "${productName} Setup ${version}.${ext}",
-    "icon": "public/logo.ico",
+    "icon": "build/icon.ico",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
     "publish": [
       {
@@ -72,16 +74,16 @@
         "nsis"
       ],
       "signAndEditExecutable": false,
-      "icon": "public/logo.ico"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": true,
       "allowToChangeInstallationDirectory": false,
       "include": "scripts/installer.nsh",
-      "installerIcon": "public/logo.ico",
-      "uninstallerIcon": "public/logo.ico",
-      "installerHeaderIcon": "public/logo.ico"
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeaderIcon": "build/icon.ico"
     }
   }
 }
