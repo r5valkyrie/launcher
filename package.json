@@ -9,7 +9,12 @@
     "build:web": "astro build",
     "build": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder",
     "preview": "astro preview",
-    "astro": "astro"
+    "astro": "astro",
+    "release": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder --win nsis --publish always",
+    "release:dry": "npm run build:web && electron-builder --win nsis --publish never",
+    "release:patch": "npm version patch && git push && git push --tags && npm run release",
+    "release:minor": "npm version minor && git push && git push --tags && npm run release",
+    "release:major": "npm version major && git push && git push --tags && npm run release"
   },
   "dependencies": {
     "bytenode": "^1.4.0",
