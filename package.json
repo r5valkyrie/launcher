@@ -1,0 +1,56 @@
+{
+  "name": "bizarre-belt",
+  "type": "module",
+  "version": "0.0.1",
+  "main": "electron/main.js",
+  "scripts": {
+    "web": "astro dev",
+    "dev": "concurrently \"astro dev\" \"wait-on http://localhost:4321 && cross-env VITE_DEV_SERVER_URL=http://localhost:4321 electron .\"",
+    "build:web": "astro build",
+    "build": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@astrojs/react": "^4.3.0",
+    "@types/react": "^19.1.12",
+    "@types/react-dom": "^19.1.9",
+    "astro": "^5.13.5",
+    "lucide-react": "^0.542.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.0.0",
+    "daisyui": "^5.1.7",
+    "@tailwindcss/vite": "^4.1.13",
+    "tailwindcss": "^4.1.13",
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.12",
+    "wait-on": "^8.0.4"
+  },
+  "build": {
+    "appId": "org.playvalkyrie.r5vlauncher",
+    "productName": "R5 Valkyrie Launcher",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**",
+      "electron/**",
+      "package.json",
+      "!**/node_modules/**"
+    ],
+    "npmRebuild": false,
+    "extraMetadata": {
+      "main": "electron/main.js"
+    },
+    "asar": true,
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "signAndEditExecutable": false
+    }
+  }
+}
