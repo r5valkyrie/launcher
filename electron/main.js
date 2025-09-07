@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, dialog, protocol, shell } from 'electron';
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import https from 'node:https';
@@ -118,6 +119,7 @@ app.whenReady().then(() => {
   // Auto-updater wiring
   try {
     autoUpdater.autoDownload = false;
+    try { autoUpdater.logger = log; log.transports.file.level = 'info'; } catch {}
     autoUpdater.on('error', (err) => {
       try { mainWindow?.webContents.send('update:error', { message: String(err?.stack || err?.message || err) }); } catch {}
     });

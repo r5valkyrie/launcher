@@ -18,7 +18,8 @@
   },
   "dependencies": {
     "bytenode": "^1.4.0",
-    "electron-updater": "^6.3.9"
+    "electron-updater": "^6.3.9",
+    "electron-log": "^5.2.2"
   },
   "devDependencies": {
     "@astrojs/react": "^4.3.0",
@@ -55,7 +56,8 @@
     "files": [
       "dist/**",
       "electron/**",
-      "package.json"
+      "package.json",
+      "node_modules/**"
     ],
     "npmRebuild": false,
     "extraMetadata": {

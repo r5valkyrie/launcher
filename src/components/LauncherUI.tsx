@@ -117,6 +117,7 @@ export default function LauncherUI() {
         setUpdateProgress(pct);
       });
       window.electronAPI?.onUpdate?.('update:downloaded', () => setUpdateDownloaded(true));
+      window.electronAPI?.onUpdate?.('update:error', (_e: any) => { /* keep silent or show toast if needed */ });
       // Kick off check, non-blocking; guard missing handler
       try { window.electronAPI?.checkForUpdates?.()?.catch(() => {}); } catch {}
     } catch {}
