@@ -622,7 +622,7 @@ export default function LauncherUI() {
     <div className="h-full grid grid-cols-[88px_1fr] relative">
       <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
         <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft">
-          <img src="/logo.png" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
+          <img src="logo.png" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
         </div>
       </aside>
 
