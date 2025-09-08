@@ -211,9 +211,9 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 });
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
-  // Default to %LOCALAPPDATA%\Programs\r5vlauncher\Releases\<channel>
+  // Default to %LOCALAPPDATA%\Programs\R5VLibrary\<channel>
   const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-  const base = path.join(localAppData, 'Programs', 'r5vlauncher', 'Releases');
+  const base = path.join(localAppData, 'Programs', 'R5VLibrary');
   return channelName ? path.join(base, channelName) : base;
 });
 

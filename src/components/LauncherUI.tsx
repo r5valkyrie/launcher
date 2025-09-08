@@ -1153,6 +1153,9 @@ export default function LauncherUI() {
           <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
             <div className="text-sm font-semibold mb-2">Choose install location</div>
             <div className="text-xs opacity-80 mb-3">The game will be installed inside a folder named <span className="font-mono">{selectedChannel}</span> at the path you pick.</div>
+            <div className="alert alert-warning text-xs mb-3">
+              <span>Do not select the launchers own install folder. Pick a separate base directory; the <span className="font-mono">{selectedChannel}</span> subfolder will be created automatically.</span>
+            </div>
             <div className="flex items-center gap-2">
               <input className="input input-bordered input-sm w-full" value={installBaseDir} onChange={(e)=>setInstallBaseDir(e.target.value)} placeholder="Select base folder" />
               <button className="btn btn-sm" onClick={async()=>{ const picked = await window.electronAPI?.selectDirectory?.(); if (picked) setInstallBaseDir(picked); }}>Browse</button>
