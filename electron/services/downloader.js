@@ -58,40 +58,68 @@ const RETRYABLE_ERROR_CODES = new Set([
   'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNABORTED', 'ENETRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE',
 ]);
 
-async function downloadToFile(url, dest, onProgress, attempt = 1, token) {
+async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeFrom = 0, expectedTotal = 0) {
   return new Promise((resolve, reject) => {
     ensureDir(path.dirname(dest));
-    const file = fs.createWriteStream(dest);
+    const file = fs.createWriteStream(dest, { flags: resumeFrom > 0 ? 'a' : 'w' });
     if (token?.cancelled) { file.close(() => {}); return reject(new Error('cancelled')); }
-    const req = https.get(url, (res) => {
+    const reqOptions = {};
+    if (resumeFrom > 0) {
+      reqOptions.headers = { Range: `bytes=${resumeFrom}-` };
+    }
+    const req = https.get(url, reqOptions, (res) => {
       if (res.statusCode !== 200) {
-        file.close(() => {});
-        fs.unlink(dest, () => {});
-        if (res.statusCode && [429,500,502,503,504].includes(res.statusCode) && attempt < 5) {
-          const backoff = Math.min(2000 * attempt, 10000);
+        if (resumeFrom > 0 && res.statusCode === 206) {
+          // ok partial content
+        } else {
+          file.close(() => {});
+          // If server ignored Range and returned 200 for a resume request, fallback to full restart
+          if (resumeFrom > 0 && res.statusCode === 200) {
+            try { fs.unlinkSync(dest); } catch {}
+            const backoff = Math.min(2000 * attempt, 10000);
+            res.resume();
+            return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, 0, expectedTotal)));
+          }
+          fs.unlink(dest, () => {});
+          if (res.statusCode && [429,500,502,503,504].includes(res.statusCode) && attempt < 5) {
+            const backoff = Math.min(2000 * attempt, 10000);
+            res.resume();
+            return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom, expectedTotal)));
+          }
+          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
           res.resume();
-          return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token)));
+          return;
         }
-        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-        res.resume();
-        return;
       }
-      const total = Number(res.headers['content-length'] || 0);
+      const contentLen = Number(res.headers['content-length'] || 0);
+      const total = expectedTotal > 0
+        ? expectedTotal
+        : (resumeFrom > 0 ? (resumeFrom + contentLen) : contentLen);
       let received = 0;
+      let lastProgressAt = Date.now();
+      const watchdog = setInterval(() => {
+        if (token?.cancelled) return;
+        if (Date.now() - lastProgressAt > 15000) {
+          try { const err = new Error('stalled'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {}
+        }
+      }, 5000);
       res.on('data', (chunk) => {
         received += chunk.length;
-        if (total && onProgress) onProgress(Math.min(received, total), total);
+        lastProgressAt = Date.now();
+        if (onProgress) onProgress(Math.min(resumeFrom + received, total || (resumeFrom + received)), total || 0);
       });
       res.on('aborted', () => {
         file.close(() => {});
-        fs.unlink(dest, () => {});
+        try { clearInterval(watchdog); } catch {}
         if (attempt < 5) {
           const backoff = Math.min(2000 * attempt, 10000);
-          return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token)));
+          return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom + received, expectedTotal)));
         }
         reject(new Error('response aborted'));
       });
-      streamPipeline(res, file).then(() => resolve()).catch(reject);
+      streamPipeline(res, file)
+        .then(() => { try { clearInterval(watchdog); } catch {}; resolve(); })
+        .catch((e) => { try { clearInterval(watchdog); } catch {}; reject(e); });
     });
     token?.requests.add(req);
     req.on('close', () => token?.requests.delete(req));
@@ -100,13 +128,14 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token) {
     req.on('error', (err) => {
       const code = err?.code;
       const canRetry = attempt < 5 && (code && RETRYABLE_ERROR_CODES.has(String(code)));
-      fs.unlink(dest, () => {
-        if (canRetry) {
-          const backoff = Math.min(2000 * attempt, 10000);
-          return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token)));
-        }
-        reject(err);
-      });
+      try { file.close(() => {}); } catch {}
+      if (canRetry) {
+        const backoff = Math.min(2000 * attempt, 10000);
+        let newResume = resumeFrom;
+        try { const st = fs.statSync(dest); newResume = st.size; } catch {}
+        return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, newResume, expectedTotal)));
+      }
+      reject(err);
     });
   });
 }
@@ -177,13 +206,19 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
           let attemptBytes = 0;
           let last = 0;
           try {
+            let existing = 0;
+            try { const st = fs.statSync(tmpPart); existing = st.size; } catch {}
+            const expected = Number(part.size || 0);
+            // If existing exceeds expected (corrupt), restart from 0
+            if (expected > 0 && existing > expected) { try { fs.unlinkSync(tmpPart); existing = 0; } catch {} }
             await downloadToFile(partUrl, tmpPart, (rec, tot) => {
               const delta = Math.max(0, rec - last);
               last = rec;
               try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
               attemptBytes += delta;
-              emit('progress:part', { path: fileObj.path, part: i, totalParts, received: Math.min(rec, tot || rec), total: tot });
-            }, 1, token);
+              const totalForPart = expected || tot || 0;
+              emit('progress:part', { path: fileObj.path, part: i, totalParts, received: Math.min(rec, totalForPart || rec), total: totalForPart });
+            }, 1, token, existing, expected);
           } catch (e) {
             try { fs.unlinkSync(tmpPart); } catch {}
             // Undo counted bytes for failed attempt
@@ -242,13 +277,18 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
       attempts += 1;
       let attemptBytes = 0;
       let last = 0;
+      let existing = 0;
+      try { const st = fs.statSync(targetPath); existing = st.size; } catch {}
+      const expected = Number(fileObj.size || 0);
+      if (expected > 0 && existing > expected) { try { fs.unlinkSync(targetPath); existing = 0; } catch {} }
       await downloadToFile(fileUrl, targetPath, (rec, tot) => {
         const delta = Math.max(0, rec - last);
         last = rec;
         try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
         attemptBytes += delta;
-        emit('progress:file', { path: fileObj.path, received: rec, total: tot });
-      }, 1, token);
+        const totalForFile = expected || tot || 0;
+        emit('progress:file', { path: fileObj.path, received: Math.min(rec, totalForFile || rec), total: totalForFile });
+      }, 1, token, existing, expected);
       const fhash = await sha256File(targetPath);
       if (fhash.toLowerCase() === String(fileObj.checksum).toLowerCase()) break;
       try { fs.unlinkSync(targetPath); } catch {}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { FolderOpen } from 'lucide-react';
+ 
 
 type Channel = {
   name: string;
@@ -80,6 +80,9 @@ export default function LauncherUI() {
   const [updateAvailable, setUpdateAvailable] = useState<any | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number>(0);
   const [updateDownloaded, setUpdateDownloaded] = useState<boolean>(false);
+  // Install prompt modal state
+  const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
+  const [installBaseDir, setInstallBaseDir] = useState<string>('');
   // Auto-hide toast when finished
   useEffect(() => {
     if (!finished) return;
@@ -179,10 +182,7 @@ export default function LauncherUI() {
   const [customCmd, setCustomCmd] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
 
-  async function chooseFolder() {
-    const picked = await window.electronAPI?.selectDirectory();
-    if (picked) await persistDir(picked);
-  }
+  
 
   async function persistDir(dir: string) {
     setInstallDir(dir);
@@ -192,6 +192,31 @@ export default function LauncherUI() {
       channels[selectedChannel] = { ...(channels[selectedChannel] || {}), installDir: dir };
       await window.electronAPI?.setSetting('channels', channels);
     } catch {}
+  }
+
+  function deriveBaseFromDir(dir: string, channelName: string): string {
+    if (!dir) return '';
+    const norm = dir.replace(/\\+$/,'');
+    const suffix = `\\${channelName.replace(/\\+/g,'\\')}`;
+    if (norm.toLowerCase().endsWith(suffix.toLowerCase())) {
+      return norm.slice(0, -suffix.length) || '';
+    }
+    return norm;
+  }
+
+  async function openInstallPrompt() {
+    const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
+    const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
+    setInstallBaseDir(base || '');
+    setInstallPromptOpen(true);
+  }
+
+  async function confirmInstallWithDir() {
+    const base = (installBaseDir || '').replace(/\\+$/,'');
+    const finalPath = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    await persistDir(finalPath);
+    setInstallPromptOpen(false);
+    await startInstall();
   }
 
   async function startInstall() {
@@ -671,7 +696,7 @@ export default function LauncherUI() {
                 </div>
                 <div className="mt-auto flex items-center gap-3 pb-1">
                   {primaryAction === 'install' && (
-                    <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={startInstall}>Install</button>
+                    <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={openInstallPrompt}>Install</button>
                   )}
                   {primaryAction === 'update' && (
                     <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
@@ -716,11 +741,6 @@ export default function LauncherUI() {
         {activeTab === 'general' && null}
         {activeTab === 'settings' && (
           <div key="content-settings" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
-            <div className="glass rounded-xl p-4 flex items-center gap-3">
-              <span className="text-sm opacity-80">Install to</span>
-              <input className="input input-bordered input-sm w-full max-w-xl" value={installDir} onChange={(e) => persistDir(e.target.value)} placeholder="Choose folder" />
-              <button className="btn btn-sm" onClick={chooseFolder}><FolderOpen size={16}/></button>
-          </div>
             <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-4">
               <div className="flex items-center gap-2">
             <span className="text-sm opacity-70">Concurrent files</span>
@@ -1125,6 +1145,24 @@ export default function LauncherUI() {
         <div className="fixed top-14 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
           <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
             <span>{toastMessage}</span>
+          </div>
+        </div>
+      )}
+      {installPromptOpen && (
+        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center">
+          <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
+            <div className="text-sm font-semibold mb-2">Choose install location</div>
+            <div className="text-xs opacity-80 mb-3">The game will be installed inside a folder named <span className="font-mono">{selectedChannel}</span> at the path you pick.</div>
+            <div className="flex items-center gap-2">
+              <input className="input input-bordered input-sm w-full" value={installBaseDir} onChange={(e)=>setInstallBaseDir(e.target.value)} placeholder="Select base folder" />
+              <button className="btn btn-sm" onClick={async()=>{ const picked = await window.electronAPI?.selectDirectory?.(); if (picked) setInstallBaseDir(picked); }}>Browse</button>
+            </div>
+            <div className="mt-3 text-xs opacity-70">Final path</div>
+            <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">{(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? `\\${selectedChannel}` : selectedChannel}</div>
+            <div className="mt-4 flex justify-end gap-2">
+              <button className="btn btn-sm btn-ghost" onClick={()=>setInstallPromptOpen(false)}>Cancel</button>
+              <button className="btn btn-sm btn-primary" onClick={confirmInstallWithDir} disabled={!installBaseDir}>Install here</button>
+            </div>
           </div>
         </div>
       )}

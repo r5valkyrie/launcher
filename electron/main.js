@@ -211,10 +211,10 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 });
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
-  // Default to Program Files\R5RValk Library\<channel>
-  const programFiles = process.env['PROGRAMFILES'] || path.resolve(app.getAppPath(), '..');
-  const lib = path.join(programFiles, 'R5 Valkyrie Launcher', 'Releases');
-  return channelName ? path.join(lib, channelName) : lib;
+  // Default to %LOCALAPPDATA%\Programs\r5vlauncher\Releases\<channel>
+  const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+  const base = path.join(localAppData, 'Programs', 'r5vlauncher', 'Releases');
+  return channelName ? path.join(base, channelName) : base;
 });
 
 ipcMain.handle('launcher:config', async (_e, { url }) => {
