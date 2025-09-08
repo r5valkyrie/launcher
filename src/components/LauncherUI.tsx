@@ -620,13 +620,13 @@ export default function LauncherUI() {
 
   return (
     <div className="h-full grid grid-cols-[88px_1fr] relative">
-      <aside className="glass-soft sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
-        <div className="w-16 h-16 rounded-xl grid place-items-center overflow-hidden glass-soft">
-          <img src="/favicon.svg" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
+      <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
+        <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft">
+          <img src="/logo.png" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
         </div>
       </aside>
 
-      <section className="relative overflow-y-auto bg-[#171b20]">
+      <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <div className="mx-6 mt-4 mb-8 flex justify-center">
           <div className="tabs tabs-boxed glass-soft rounded-[2.3vw]">
                 <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
@@ -785,7 +785,7 @@ export default function LauncherUI() {
         )}
 
         {activeTab === 'launch' && (
-          <div key="content-launch" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto pb-6 fade-in">
+          <div key="content-launch" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto pb-6 fade-in launch-panels">
             {/* Left column */}
             <div className="grid gap-4">
               <div className="glass rounded-xl p-4 grid gap-3">

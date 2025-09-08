@@ -5,6 +5,16 @@ html, body, #root {
   height: 100%;
 }
 
+/* Unified surface tokens */
+:root {
+  --panel-radius: 14px;
+  --panel-bg: #171b20;
+  --panel-bg-2: #1b2026;
+  --panel-border: rgba(255, 255, 255, 0.08);
+  --panel-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --panel-inner: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
 /* App font: Century Gothic */
 @font-face {
   font-family: 'CenturyGothic';
@@ -41,20 +51,29 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
 }
 
 .glass {
-  background-color: rgba(12, 12, 18, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  box-shadow:
-    0 8px 24px rgba(0, 0, 0, 0.50),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: linear-gradient(180deg, var(--panel-bg-2) 0%, var(--panel-bg) 100%);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  background-clip: padding-box;
+  box-shadow: 0 14px 28px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.25), var(--panel-inner);
 }
 
 .glass-soft {
-  background-color: rgba(16, 16, 22, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow:
-    0 6px 20px rgba(0, 0, 0, 0.45),
-    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  background-color: rgba(27, 32, 38, 0.94);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
+  background-clip: padding-box;
+  box-shadow: 0 14px 28px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.25), var(--panel-inner);
 }
+
+/* Softer shadow inside the Launch Options grid to avoid stacked heavy shadows */
+.launch-panels .glass,
+.launch-panels .glass-soft {
+  box-shadow: 0 10px 24px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.02);
+}
+
+/* Ensure horizontal shadows aren't clipped in launch grid */
+.launch-panels { overflow-x: visible; }
 
 .neon-text {
   text-shadow: 0 0 10px rgba(99, 102, 241, 0.35), 0 0 20px rgba(99, 102, 241, 0.25);
@@ -62,12 +81,12 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
 
 /* Minimal scrollbars to match a launcher */
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 *::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.12);
-  border: 3px solid transparent;
+  background-color: rgba(255, 255, 255, 0.16);
+  border: 2px solid transparent;
   border-radius: 9999px;
   background-clip: padding-box;
 }
@@ -97,3 +116,22 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   100% { opacity: 1; transform: translate(0, 0); }
 }
 .toast-slide-in-tr { animation: toastSlideInTR 220ms ease-out both; }
+
+/* Shared rounding for common elements */
+.tabs.tabs-boxed,
+.alert,
+.progress,
+.input, .select, .textarea,
+.btn { border-radius: var(--panel-radius); }
+
+/* Panel headings */
+.panel-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: .5rem; }
+.panel-label { text-transform: uppercase; font-size: .72rem; opacity: .6; letter-spacing: .04em; }
+.panel-title { font-weight: 600; font-size: .95rem; }
+
+/* Rows inside panels */
+.panel-row { display: flex; align-items: center; gap: .75rem; padding: .5rem .25rem; border-radius: calc(var(--panel-radius) - 6px); }
+.panel-row:hover { background: rgba(255, 255, 255, 0.05); }
+
+/* Inputs sizing */
+.input, .select { height: 2.25rem; }
