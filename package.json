@@ -78,7 +78,7 @@
     },
     "nsis": {
       "oneClick": true,
-      "perMachine": true,
+      "perMachine": false,
       "allowToChangeInstallationDirectory": false,
       "include": "scripts/installer.nsh",
       "installerIcon": "build/icon.ico",
