@@ -228,7 +228,12 @@ export default function LauncherUI() {
         window.electronAPI!.onProgress('progress:bytes', (p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
-            setBytesReceived((x) => { const nx = Math.max(0, x + d); bytesReceivedRef.current = nx; return nx; });
+            setBytesReceived((x) => {
+              const tentative = Math.max(0, x + d);
+              const capped = bytesTotalRef.current > 0 ? Math.min(tentative, bytesTotalRef.current) : tentative;
+              bytesReceivedRef.current = capped;
+              return capped;
+            });
             if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
             if (d > 0) setReceivedAnyBytes(true);
           }
@@ -238,15 +243,20 @@ export default function LauncherUI() {
         setFileProgress(p);
         setProgressItems((prev) => ({
           ...prev,
-          [p.path]: { ...(prev[p.path]||{}), status: 'downloading', received: p.received, total: p.total }
+          [p.path]: {
+            ...(prev[p.path]||{}),
+            status: 'downloading',
+            received: Math.min(p.received, p.total || p.received),
+            total: p.total
+          }
         }));
       });
       window.electronAPI!.onProgress('progress:part', (p: any) => {
-        setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total });
+        setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: Math.min(p.received, p.total || p.received), total: p.total });
         setProgressItems((prev) => {
           const current = prev[p.path] || { status: 'downloading' } as FileInfo;
           const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
-          parts[p.part] = { received: p.received, total: p.total };
+          parts[p.part] = { received: Math.min(p.received, p.total || p.received), total: p.total };
           return {
             ...prev,
             [p.path]: { ...current, status: 'downloading parts', totalParts: p.totalParts, parts }
@@ -926,12 +936,12 @@ export default function LauncherUI() {
                     const trackingByBytes = receivedAnyBytes && bytesTotal > 0;
                     let percent: number;
                     if (trackingByBytes) {
-                      percent = (bytesReceived / (bytesTotal || 1)) * 100;
+                      percent = Math.min(100, (bytesReceived / (bytesTotal || 1)) * 100);
                     } else if (overall && typeof overall.total === 'number') {
-                      const completedSoFar = typeof overall.completed === 'number' ? overall.completed : (overall.index + 1);
-                      percent = (completedSoFar / (overall.total || 1)) * 100;
+                      const completedSoFar = typeof overall.completed === 'number' ? Math.min(overall.completed, overall.total || overall.completed) : Math.min(overall.index + 1, overall.total || (overall.index + 1));
+                      percent = Math.min(100, (completedSoFar / (overall.total || 1)) * 100);
                     } else {
-                      percent = totalCount > 0 ? ((doneCount / totalCount) * 100) : 0;
+                      percent = totalCount > 0 ? Math.min(100, ((doneCount / totalCount) * 100)) : 0;
                     }
                     const checkedNumerator = overall && typeof overall.total === 'number'
                       ? (typeof overall.completed === 'number' ? overall.completed : (overall.index + 1))

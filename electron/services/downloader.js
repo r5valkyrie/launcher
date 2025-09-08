@@ -78,7 +78,10 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token) {
       }
       const total = Number(res.headers['content-length'] || 0);
       let received = 0;
-      res.on('data', (chunk) => { received += chunk.length; if (total && onProgress) onProgress(received, total); });
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (total && onProgress) onProgress(Math.min(received, total), total);
+      });
       res.on('aborted', () => {
         file.close(() => {});
         fs.unlink(dest, () => {});
@@ -169,16 +172,28 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
         // Download with checksum retry; subtract bytes from failed attempts to keep global counters accurate
         let attempts = 0;
         while (true) {
+          if (token?.cancelled) throw new Error('cancelled');
           attempts += 1;
           let attemptBytes = 0;
           let last = 0;
-          await downloadToFile(partUrl, tmpPart, (rec, tot) => {
-            const delta = Math.max(0, rec - last);
-            last = rec;
-            try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
-            attemptBytes += delta;
-            emit('progress:part', { path: fileObj.path, part: i, totalParts, received: rec, total: tot });
-          }, 1, token);
+          try {
+            await downloadToFile(partUrl, tmpPart, (rec, tot) => {
+              const delta = Math.max(0, rec - last);
+              last = rec;
+              try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
+              attemptBytes += delta;
+              emit('progress:part', { path: fileObj.path, part: i, totalParts, received: Math.min(rec, tot || rec), total: tot });
+            }, 1, token);
+          } catch (e) {
+            try { fs.unlinkSync(tmpPart); } catch {}
+            // Undo counted bytes for failed attempt
+            try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
+            try { emit('progress:part:reset', { path: fileObj.path, part: i, totalParts }); } catch {}
+            const backoff = Math.min(2000 * attempts, 10000);
+            await delay(backoff);
+            continue; // retry
+          }
+
           const hash = await sha256File(tmpPart);
           if (hash.toLowerCase() === String(part.checksum).toLowerCase()) {
             break;
@@ -187,9 +202,9 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
           // Undo counted bytes for failed attempt
           try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
           try { emit('progress:part:reset', { path: fileObj.path, part: i, totalParts }); } catch {}
-          if (attempts >= 2) {
-            throw new Error(`Checksum mismatch for ${part.path}`);
-          }
+          const backoff = Math.min(2000 * attempts, 10000);
+          await delay(backoff);
+          // and loop to retry
         }
         partPaths[i] = tmpPart;
       }
