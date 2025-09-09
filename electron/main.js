@@ -173,6 +173,10 @@ ipcMain.handle('update:quitAndInstall', async () => {
   try { setImmediate(() => autoUpdater.quitAndInstall(false, true)); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 
+ipcMain.handle('app:getVersion', async () => {
+  try { return app.getVersion(); } catch { return '0.0.0'; }
+});
+
 // Basic IPC placeholders
 ipcMain.handle('select-directory', async () => {
   const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });

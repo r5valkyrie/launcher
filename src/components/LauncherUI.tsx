@@ -45,6 +45,7 @@ declare global {
       quitAndInstall?: () => Promise<{ ok: boolean; error?: string }>;
       onUpdate?: (channel: string, listener: (payload: any) => void) => void;
       openExternal?: (url: string) => Promise<boolean>;
+      getAppVersion?: () => Promise<string>;
     };
   }
 }
@@ -61,6 +62,7 @@ export default function LauncherUI() {
   const [includeOptional, setIncludeOptional] = useState(false);
   const [concurrency, setConcurrency] = useState<number>(4);
   const [partConcurrency, setPartConcurrency] = useState<number>(4);
+  const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
@@ -81,6 +83,9 @@ export default function LauncherUI() {
   const [updateProgress, setUpdateProgress] = useState<number>(0);
   const [updateDownloaded, setUpdateDownloaded] = useState<boolean>(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [updateBps, setUpdateBps] = useState<number>(0);
+  const [updateTransferred, setUpdateTransferred] = useState<number>(0);
+  const [updateTotal, setUpdateTotal] = useState<number>(0);
   // Install prompt modal state
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
@@ -121,6 +126,9 @@ export default function LauncherUI() {
       window.electronAPI?.onUpdate?.('update:download-progress', (p: any) => {
         const pct = typeof p?.percent === 'number' ? p.percent : 0;
         setUpdateProgress(pct);
+        if (typeof p?.bytesPerSecond === 'number') setUpdateBps(p.bytesPerSecond);
+        if (typeof p?.transferred === 'number') setUpdateTransferred(p.transferred);
+        if (typeof p?.total === 'number') setUpdateTotal(p.total);
       });
       window.electronAPI?.onUpdate?.('update:downloaded', () => setUpdateDownloaded(true));
       window.electronAPI?.onUpdate?.('update:error', (e: any) => { setUpdateError(String(e?.message || 'Update error')); });
@@ -142,6 +150,7 @@ export default function LauncherUI() {
       else window.electronAPI?.getDefaultInstallDir(selectedChannel || undefined).then((d) => { if (d) setInstallDir(d); });
       if (s?.concurrency) setConcurrency(Number(s.concurrency));
       if (s?.partConcurrency) setPartConcurrency(Number(s.partConcurrency));
+      if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
     });
   }, [selectedChannel]);
 
@@ -362,7 +371,7 @@ export default function LauncherUI() {
     return parts[parts.length - 1];
   }, [config?.backgroundVideo]);
   useEffect(() => {
-    if (!videoFilename) {
+    if (!videoFilename || !bannerVideoEnabled) {
       setBgCached(undefined);
       setVideoSrc(null);
       return;
@@ -378,7 +387,7 @@ export default function LauncherUI() {
       });
   }, [videoFilename]);
   useEffect(() => { if (bgCached) setVideoSrc(bgCached); }, [bgCached]);
-  const bgVideo = videoSrc || undefined;
+  const bgVideo = bannerVideoEnabled ? (videoSrc || undefined) : undefined;
 
   useEffect(() => {
     (async () => {
@@ -750,6 +759,7 @@ export default function LauncherUI() {
         {activeTab === 'settings' && (
           <div key="content-settings" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
             <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-4">
+              <div className="mb-2 w-full text-sm opacity-80">Downloads</div>
               <div className="flex items-center gap-2">
             <span className="text-sm opacity-70">Concurrent files</span>
             <select
@@ -793,7 +803,24 @@ export default function LauncherUI() {
               )}
         </div>
 
-            <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2">
+            <div className="glass rounded-xl p-4 grid gap-3">
+              <div className="text-sm opacity-80">Appearance</div>
+              <label className="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="checkbox"
+                  checked={bannerVideoEnabled}
+                  onChange={async (e) => {
+                    const v = e.target.checked;
+                    setBannerVideoEnabled(v);
+                    await window.electronAPI?.setSetting('bannerVideoEnabled', v);
+                  }}
+                />
+                <span className="label-text">Enable banner video</span>
+              </label>
+            </div>
+
+            <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2 mb-4">
               <div className="mb-3 text-sm opacity-80">Repair installed channels</div>
               <div className="grid gap-2">
                 {enabledChannels.map((c) => {
@@ -1157,7 +1184,9 @@ export default function LauncherUI() {
         </div>
       )}
       {installPromptOpen && (
-        <div className="fixed inset-0 bg-black/60 z-50 grid place-items-center">
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 grid place-items-center p-4">
           <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
             <div className="text-sm font-semibold mb-2">Choose install location</div>
             <div className="text-xs opacity-80 mb-3">The game will be installed inside a folder named <span className="font-mono">{selectedChannel}</span> at the path you pick.</div>
@@ -1175,30 +1204,49 @@ export default function LauncherUI() {
               <button className="btn btn-sm btn-primary" onClick={confirmInstallWithDir} disabled={!installBaseDir}>Install here</button>
             </div>
           </div>
+          </div>
         </div>
       )}
 
       {(updateAvailable || updateDownloaded) && (
-        <div className="fixed inset-0 bg-black/70 z-[60] grid place-items-center">
-          <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
-            <div className="text-sm font-semibold mb-1">Launcher update required</div>
-            <div className="text-xs opacity-80 mb-3">You must update to continue using the launcher.</div>
-            {!updateDownloaded && (
-              <>
-                <progress className="progress w-full" value={Math.min(100, Math.max(0, updateProgress))} max={100}></progress>
-                <div className="mt-2 text-xs opacity-80">{Math.floor(updateProgress)}%</div>
-                {updateError && <div className="alert alert-error mt-3 text-xs"><span>{updateError}</span></div>}
-                <div className="mt-4 flex justify-end gap-2">
-                  <button className="btn btn-sm btn-ghost" onClick={() => window.electronAPI?.close?.()}>Exit</button>
-                  <button className="btn btn-sm btn-primary" onClick={() => { setUpdateError(null); window.electronAPI?.downloadUpdate?.(); }}>Download</button>
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div className="absolute inset-0 grid place-items-center p-4">
+            <div className="glass rounded-xl p-0 w-[640px] max-w-[92vw] overflow-hidden shadow-2xl">
+              <div className="bg-gradient-to-r from-primary/20 to-transparent px-5 py-4 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/40 grid place-items-center text-white">↑</div>
+                <div>
+                  <div className="text-sm font-semibold">Launcher update required</div>
+                  <div className="text-xs opacity-80">You must update to continue using the launcher.</div>
                 </div>
-              </>
-            )}
-            {updateDownloaded && (
-              <div className="mt-2 flex justify-end gap-2">
-                <button className="btn btn-sm btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart to update</button>
               </div>
-            )}
+              {!updateDownloaded && (
+                <div className="px-5 py-4">
+                  <progress className="progress w-full" value={Math.min(100, Math.max(0, updateProgress))} max={100}></progress>
+                  <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
+                    <span>{Math.floor(updateProgress)}%</span>
+                    <span>•</span>
+                    <span>{(updateBps/1024/1024).toFixed(2)} MB/s</span>
+                    {updateTotal > 0 && (
+                      <>
+                        <span>•</span>
+                        <span>{(updateTransferred/1024/1024).toFixed(1)} / {(updateTotal/1024/1024).toFixed(1)} MB</span>
+                      </>
+                    )}
+                  </div>
+                  {updateError && <div className="alert alert-error mt-3 text-xs"><span>{updateError}</span></div>}
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button className="btn btn-sm btn-ghost" onClick={() => window.electronAPI?.close?.()}>Exit</button>
+                    <button className="btn btn-sm btn-primary" onClick={() => { setUpdateError(null); window.electronAPI?.downloadUpdate?.(); }}>Download</button>
+                  </div>
+                </div>
+              )}
+              {updateDownloaded && (
+                <div className="px-5 py-4 flex justify-end gap-2">
+                  <button className="btn btn-sm btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart to update</button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
