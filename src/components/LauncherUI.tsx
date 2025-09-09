@@ -80,6 +80,7 @@ export default function LauncherUI() {
   const [updateAvailable, setUpdateAvailable] = useState<any | null>(null);
   const [updateProgress, setUpdateProgress] = useState<number>(0);
   const [updateDownloaded, setUpdateDownloaded] = useState<boolean>(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
   // Install prompt modal state
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
@@ -122,11 +123,18 @@ export default function LauncherUI() {
         setUpdateProgress(pct);
       });
       window.electronAPI?.onUpdate?.('update:downloaded', () => setUpdateDownloaded(true));
-      window.electronAPI?.onUpdate?.('update:error', (_e: any) => { /* keep silent or show toast if needed */ });
+      window.electronAPI?.onUpdate?.('update:error', (e: any) => { setUpdateError(String(e?.message || 'Update error')); });
       // Kick off check, non-blocking; guard missing handler
       try { window.electronAPI?.checkForUpdates?.()?.catch(() => {}); } catch {}
     } catch {}
   }, []);
+
+  // Require updates: auto-start download when available
+  useEffect(() => {
+    if (updateAvailable && !updateDownloaded) {
+      window.electronAPI?.downloadUpdate?.()?.catch(() => {});
+    }
+  }, [updateAvailable, updateDownloaded]);
 
   useEffect(() => {
     window.electronAPI?.getSettings()?.then((s: any) => {
@@ -1166,6 +1174,31 @@ export default function LauncherUI() {
               <button className="btn btn-sm btn-ghost" onClick={()=>setInstallPromptOpen(false)}>Cancel</button>
               <button className="btn btn-sm btn-primary" onClick={confirmInstallWithDir} disabled={!installBaseDir}>Install here</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {(updateAvailable || updateDownloaded) && (
+        <div className="fixed inset-0 bg-black/70 z-[60] grid place-items-center">
+          <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
+            <div className="text-sm font-semibold mb-1">Launcher update required</div>
+            <div className="text-xs opacity-80 mb-3">You must update to continue using the launcher.</div>
+            {!updateDownloaded && (
+              <>
+                <progress className="progress w-full" value={Math.min(100, Math.max(0, updateProgress))} max={100}></progress>
+                <div className="mt-2 text-xs opacity-80">{Math.floor(updateProgress)}%</div>
+                {updateError && <div className="alert alert-error mt-3 text-xs"><span>{updateError}</span></div>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button className="btn btn-sm btn-ghost" onClick={() => window.electronAPI?.close?.()}>Exit</button>
+                  <button className="btn btn-sm btn-primary" onClick={() => { setUpdateError(null); window.electronAPI?.downloadUpdate?.(); }}>Download</button>
+                </div>
+              </>
+            )}
+            {updateDownloaded && (
+              <div className="mt-2 flex justify-end gap-2">
+                <button className="btn btn-sm btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart to update</button>
+              </div>
+            )}
           </div>
         </div>
       )}
