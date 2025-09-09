@@ -1070,7 +1070,7 @@ export default function LauncherUI() {
                                     <span className="opacity-70">Part {i+1}/{totalParts}</span>
                                     <span className="opacity-60">{pcent}%</span>
                                   </div>
-                                  <progress className="progress progress-secondary w-full mt-1" value={pcent} max={100}></progress>
+                                  <progress className="progress progress-accent w-full mt-1" value={pcent} max={100}></progress>
                 </div>
               );
             })}
@@ -1100,31 +1100,51 @@ export default function LauncherUI() {
             {activeTab === 'patchnotes' && (
               <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">Patch Notes — {selectedChannel}</h3>
-                  <a className="link link-hover text-xs opacity-70" href={`https://blog.playvalkyrie.org/tag/${(selectedChannel || '').toLowerCase()}-patch-notes/`} target="_blank" rel="noreferrer">View all</a>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Patch Notes — {selectedChannel}</h3>
+                    {!!(patchPosts && patchPosts.length) && (
+                      <span className="badge badge-ghost text-[10px]">{patchPosts.length}</span>
+                    )}
+                  </div>
+                  <a className="btn btn-xs btn-ghost" href={`https://blog.playvalkyrie.org/tag/${(selectedChannel || '').toLowerCase()}-patch-notes/`} target="_blank" rel="noreferrer">View all</a>
                 </div>
                 {patchLoading && (
-                  <div className="text-xs opacity-70">Loading…</div>
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={`ps-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
+                        <div className="w-full pb-[40%] bg-base-300/50" />
+                        <div className="p-3 space-y-2">
+                          <div className="h-3 bg-base-300/60 rounded w-3/4" />
+                          <div className="h-3 bg-base-300/40 rounded w-11/12" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {!patchLoading && (
-                  <div className="grid gap-3">
-                    {(patchPosts || []).map((p) => (
-                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group grid grid-cols-[80px_1fr] gap-3 items-center hover:bg-white/5 rounded-md p-2">
-                        <div className="w-20 h-16 rounded-md bg-base-300 overflow-hidden border border-white/10">
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    {(patchPosts || []).slice(0, 8).map((p) => (
+                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group rounded-xl overflow-hidden glass border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg">
+                        <div className="relative w-full pb-[40%] bg-base-300">
                           {p.feature_image ? (
-                            <img src={p.feature_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                            <img loading="lazy" src={p.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full grid place-items-center text-xs opacity-60">No image</div>
+                            <div className="absolute inset-0 grid place-items-center text-xs opacity-60">No image</div>
                           )}
+                          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
+                          <div className="absolute left-0 top-0 h-full w-1 bg-primary/60" />
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate group-hover:text-primary">{p.title}</div>
-                          {p.published_at && (
-                            <div className="text-[10px] opacity-60">{new Date(p.published_at).toLocaleDateString()}</div>
-                          )}
+                        <div className="p-3">
+                          <div className="text-sm font-semibold truncate">{p.title}</div>
+                          <div className="flex items-center gap-2 text-[10px] opacity-60 mt-0.5">
+                            {p.published_at && <span>{new Date(p.published_at).toLocaleDateString()}</span>}
+                          </div>
                           {p.excerpt && (
-                            <div className="text-xs opacity-70 line-clamp-2">{p.excerpt}</div>
+                            <div className="text-xs opacity-80 line-clamp-2 mt-1">{p.excerpt}</div>
                           )}
+                          <div className="mt-2 flex justify-end">
+                            <span className="btn btn-xs btn-outline">Open notes</span>
+                          </div>
                         </div>
                       </a>
                     ))}
@@ -1138,31 +1158,50 @@ export default function LauncherUI() {
             {activeTab === 'general' && (
               <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-semibold">Community News</h3>
-                  <a className="link link-hover text-xs opacity-70" href="https://blog.playvalkyrie.org/tag/community/" target="_blank" rel="noreferrer">View all</a>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Community News</h3>
+                    {!!(newsPosts && newsPosts.length) && (
+                      <span className="badge badge-ghost text-[10px]">{newsPosts.length}</span>
+                    )}
+                  </div>
+                  <a className="btn btn-xs btn-ghost" href="https://blog.playvalkyrie.org/tag/community/" target="_blank" rel="noreferrer">View all</a>
                 </div>
                 {newsLoading && (
-                  <div className="text-xs opacity-70">Loading…</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={`s-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
+                        <div className="w-full pb-[45%] bg-base-300/50" />
+                        <div className="p-2 space-y-2">
+                          <div className="h-3 bg-base-300/60 rounded w-3/4" />
+                          <div className="h-3 bg-base-300/40 rounded w-10/12" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
                 {!newsLoading && (
-                  <div className="grid gap-3">
-                    {(newsPosts || []).map((p) => (
-                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group grid grid-cols-[80px_1fr] gap-3 items-center hover:bg-white/5 rounded-md p-2">
-                        <div className="w-20 h-16 rounded-md bg-base-300 overflow-hidden border border-white/10">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {(newsPosts || []).slice(0, 9).map((p) => (
+                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group rounded-xl overflow-hidden glass-soft border border-white/10 hover:border-primary/30 transition-all hover:shadow-lg">
+                        <div className="relative w-full pb-[45%] bg-base-300">
                           {p.feature_image ? (
-                            <img src={p.feature_image} alt="" className="w-full h-full object-cover group-hover:scale-[1.02] transition-transform" />
+                            <img loading="lazy" src={p.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
                           ) : (
-                            <div className="w-full h-full grid place-items-center text-xs opacity-60">No image</div>
+                            <div className="absolute inset-0 grid place-items-center text-xs opacity-60">No image</div>
                           )}
+                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent" />
                         </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium truncate group-hover:text-primary">{p.title}</div>
-                          {p.published_at && (
-                            <div className="text-[10px] opacity-60">{new Date(p.published_at).toLocaleDateString()}</div>
-                          )}
+                        <div className="p-2">
+                          <div className="text-[13px] font-medium truncate group-hover:text-primary">{p.title}</div>
+                          <div className="flex items-center gap-2 text-[10px] opacity-60 mt-0.5">
+                            {p.published_at && <span>{new Date(p.published_at).toLocaleDateString()}</span>}
+                          </div>
                           {p.excerpt && (
-                            <div className="text-xs opacity-70 line-clamp-2">{p.excerpt}</div>
+                            <div className="text-xs opacity-80 line-clamp-2 mt-1">{p.excerpt}</div>
                           )}
+                          <div className="mt-2 flex justify-end">
+                            <span className="link link-hover text-xs opacity-80">Read</span>
+                          </div>
                         </div>
                       </a>
                     ))}
@@ -1171,12 +1210,12 @@ export default function LauncherUI() {
                     )}
                   </div>
                 )}
-            </div>
-          )}
+              </div>
+            )}
         </div>
         )}
       </section>
-      {finished && (
+          {finished && (
         <div className="fixed top-14 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
           <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
             <span>{toastMessage}</span>
@@ -1244,9 +1283,9 @@ export default function LauncherUI() {
               {updateDownloaded && (
                 <div className="px-5 py-4 flex justify-end gap-2">
                   <button className="btn btn-sm btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart to update</button>
-                </div>
-              )}
             </div>
+          )}
+        </div>
           </div>
         </div>
       )}

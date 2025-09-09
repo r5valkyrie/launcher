@@ -13,9 +13,9 @@
     "astro": "astro",
     "release": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --win nsis --publish always",
     "release:dry": "npm run build:web && dotenv -e .env -- electron-builder --win nsis --publish never",
-    "release:patch": "npm version patch && git push && git push --tags && npm run release",
-    "release:minor": "npm version minor && git push && git push --tags && npm run release",
-    "release:major": "npm version major && git push && git push --tags && npm run release"
+    "release:patch": "npm version patch && git push && npm run release",
+    "release:minor": "npm version minor && git push && npm run release",
+    "release:major": "npm version major && git push && npm run release"
   },
   "dependencies": {
     "bytenode": "^1.4.0",
