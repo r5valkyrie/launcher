@@ -31,9 +31,9 @@ let activeDownloadToken = null;
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1150,
-    height: 750,
+    height: 800,
     minWidth: 1150,
-    minHeight: 750,
+    minHeight: 800,
     frame: false,
     titleBarStyle: 'hidden',
     webPreferences: {
