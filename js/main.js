@@ -243,6 +243,7 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
       const modPath = path.join(modsDir, ent.name);
       const manifestPath = path.join(modPath, 'manifest.json');
       const vdfPath = path.join(modPath, 'mod.vdf');
+      const iconPath = path.join(modPath, 'icon.png');
       let manifest = null;
       try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')); } catch {}
       const meta = parseModVdf(vdfPath);
@@ -256,6 +257,7 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
         description: manifest?.description || '',
         enabled: id ? !!enabledMap[id] : false,
         hasManifest: fs.existsSync(manifestPath),
+        iconFileUrl: fs.existsSync(iconPath) ? pathToFileURL(iconPath).toString() : null,
       });
     }
     return { ok: true, mods: list };
