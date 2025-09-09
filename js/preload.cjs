@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   downloadUpdate: () => ipcRenderer.invoke('update:download'),
   quitAndInstall: () => ipcRenderer.invoke('update:quitAndInstall'),
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
+  getBaseDir: () => ipcRenderer.invoke('app:getBaseDir'),
+  getLauncherInstallRoot: () => ipcRenderer.invoke('app:getLauncherInstallRoot'),
   onUpdate: (channel, listener) => ipcRenderer.on(channel, (_e, payload) => listener(payload)),
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),

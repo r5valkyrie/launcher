@@ -46,6 +46,8 @@ declare global {
       onUpdate?: (channel: string, listener: (payload: any) => void) => void;
       openExternal?: (url: string) => Promise<boolean>;
       getAppVersion?: () => Promise<string>;
+      getBaseDir?: () => Promise<string>;
+      getLauncherInstallRoot?: () => Promise<string>;
     };
   }
 }
@@ -67,6 +69,7 @@ export default function LauncherUI() {
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
   const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
+  const [exitingItems, setExitingItems] = useState<Record<string, boolean>>({});
   const [doneCount, setDoneCount] = useState(0);
   const [totalCount, setTotalCount] = useState(0);
   const [finished, setFinished] = useState(false);
@@ -89,6 +92,7 @@ export default function LauncherUI() {
   // Install prompt modal state
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
+  const [launcherRoot, setLauncherRoot] = useState<string>('');
   // Auto-hide toast when finished
   useEffect(() => {
     if (!finished) return;
@@ -225,12 +229,24 @@ export default function LauncherUI() {
     const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
     setInstallBaseDir(base || '');
+    try { const lr = await window.electronAPI?.getLauncherInstallRoot?.(); if (lr) setLauncherRoot(lr); } catch {}
     setInstallPromptOpen(true);
   }
 
   async function confirmInstallWithDir() {
     const base = (installBaseDir || '').replace(/\\+$/,'');
     const finalPath = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    try {
+      const root = await window.electronAPI?.getLauncherInstallRoot?.();
+      if (root) {
+        const normRoot = root.replace(/\\+$/,'').toLowerCase();
+        const normTarget = finalPath.replace(/\\+$/,'').toLowerCase();
+        if (normTarget.startsWith(normRoot)) {
+          alert('Please choose a different folder. Do not install the game into the launcher\'s folder under AppData/Local/Programs/r5vlauncher.');
+          return;
+        }
+      }
+    } catch {}
     await persistDir(finalPath);
     setInstallPromptOpen(false);
     await startInstall();
@@ -243,17 +259,21 @@ export default function LauncherUI() {
     setProgressItems({});
     setDoneCount(0);
     setTotalCount(0);
+    const runId = Date.now();
+    runIdRef.current = runId;
     try {
       const checksums = await window.electronAPI!.fetchChecksums(channel.game_url);
       const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
-      window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
-      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); });
+      const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
+      window.electronAPI!.onProgress('progress:start', guard((p: any) => { setOverall(p); setHasStarted(true); }));
+      window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); }));
       {
         let windowBytes = 0;
         let lastTick = Date.now();
         const tick = () => {
+          if (runIdRef.current !== runId) return;
           const now = Date.now();
           const dt = (now - lastTick) / 1000;
           if (dt >= 0.5) {
@@ -267,7 +287,7 @@ export default function LauncherUI() {
           if (busyRef.current && !pausedRef.current) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
-        window.electronAPI!.onProgress('progress:bytes', (p: any) => {
+        window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
             setBytesReceived((x) => {
@@ -279,9 +299,9 @@ export default function LauncherUI() {
             if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
             if (d > 0) setReceivedAnyBytes(true);
           }
-        });
+        }));
       }
-      window.electronAPI!.onProgress('progress:file', (p: any) => {
+      window.electronAPI!.onProgress('progress:file', guard((p: any) => {
         setFileProgress(p);
         setProgressItems((prev) => ({
           ...prev,
@@ -292,8 +312,8 @@ export default function LauncherUI() {
             total: p.total
           }
         }));
-      });
-      window.electronAPI!.onProgress('progress:part', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:part', guard((p: any) => {
         setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: Math.min(p.received, p.total || p.received), total: p.total });
         setProgressItems((prev) => {
           const current = prev[p.path] || { status: 'downloading' } as FileInfo;
@@ -304,40 +324,49 @@ export default function LauncherUI() {
             [p.path]: { ...current, status: 'downloading parts', totalParts: p.totalParts, parts }
           };
         });
-      });
-      window.electronAPI!.onProgress('progress:part:reset', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:part:reset', guard((p: any) => {
         setProgressItems((prev) => {
           const current = prev[p.path] || { status: 'downloading parts' } as FileInfo;
           const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
           if (parts[p.part]) parts[p.part] = { received: 0, total: parts[p.part].total || 0 };
           return { ...prev, [p.path]: { ...current, parts } };
         });
-      });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => {
         setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 }
         }));
-      });
-      window.electronAPI!.onProgress('progress:merge:part', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:merge:part', guard((p: any) => {
         setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts });
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 }
         }));
-      });
-      window.electronAPI!.onProgress('progress:merge:done', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:merge:done', guard((p: any) => {
         setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 });
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 }
         }));
-      });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
-      window.electronAPI!.onProgress('progress:error', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); });
-      window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); });
+      }));
+      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:skip', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); }));
+      window.electronAPI!.onProgress('progress:error', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); }));
+      window.electronAPI!.onProgress('progress:done', guard((p: any) => {
+        setOverall(p);
+        setExitingItems((prev) => ({ ...prev, [p.path]: true }));
+        setDoneCount((x) => x + 1);
+        if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null);
+        setTimeout(() => {
+          setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
+          setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
+        }, 240);
+      }));
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
       setToastMessage('Install completed');
       setFinished(true);
@@ -793,7 +822,7 @@ export default function LauncherUI() {
             </select>
           </div>
               <label className="label cursor-pointer justify-start gap-3 ml-2">
-                <input type="checkbox" className="checkbox" checked={includeOptional} onChange={(e) => setIncludeOptional(e.target.checked)} />
+                <input type="checkbox" className="toggle-switch" checked={includeOptional} onChange={(e) => setIncludeOptional(e.target.checked)} />
                 <span className="label-text">Include optional files</span>
               </label>
               {channel && (
@@ -808,7 +837,7 @@ export default function LauncherUI() {
               <label className="label cursor-pointer justify-start gap-3">
                 <input
                   type="checkbox"
-                  className="checkbox"
+                  className="toggle-switch"
                   checked={bannerVideoEnabled}
                   onChange={async (e) => {
                     const v = e.target.checked;
@@ -875,8 +904,8 @@ export default function LauncherUI() {
                 <div className="text-xs uppercase opacity-60">Video</div>
                 <div className="flex items-center gap-3">
                   <span className="text-sm opacity-80">Window</span>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="form-control flex flex-col">
@@ -908,7 +937,7 @@ export default function LauncherUI() {
                     <input className="input input-bordered input-sm mt-1 w-full" value={workerThreads} onChange={(e)=>setWorkerThreads(e.target.value)} />
                   </label>
                 </div>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">Disable async systems</span></label>
+                <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">Disable async systems</span></label>
               </div>
             </div>
 
@@ -917,18 +946,18 @@ export default function LauncherUI() {
               <div className="glass rounded-xl p-4 grid gap-3">
                 <div className="text-xs uppercase opacity-60">Network</div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
                 </div>
               </div>
 
               <div className="glass rounded-xl p-4 grid gap-3">
                 <div className="text-xs uppercase opacity-60">Console & Playlist</div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
                 </div>
                 <label className="form-control flex flex-col">
                   <span className="label-text text-xs opacity-70">Playlist file (string)</span>
@@ -939,9 +968,9 @@ export default function LauncherUI() {
               <div className="glass rounded-xl p-4 grid gap-3">
                 <div className="text-xs uppercase opacity-60">Gameplay & Advanced</div>
                 <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="checkbox checkbox-sm" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
                 </div>
                 <label className="form-control flex flex-col">
                   <span className="label-text text-xs opacity-70">Custom command line</span>
@@ -984,7 +1013,7 @@ export default function LauncherUI() {
                 </div>
               </div>
             )}
-            <div className="space-y-3">
+            <div className="space-y-3 xl:col-span-2">
               {activeTab === 'general' && (busy && (hasStarted || overall)) && (
                 <div className="glass rounded-xl p-4">
                   {(() => {
@@ -1050,8 +1079,9 @@ export default function LauncherUI() {
               const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
                     const parts = info.parts || {};
                     const totalParts = info.totalParts || Object.keys(parts).length || 0;
+              const exiting = !!exitingItems[p];
               return (
-                      <div key={p} className="py-2">
+                      <div key={p} className={`py-2 ${exiting ? 'item-exit' : 'item-enter'}`}>
                         <div className="flex items-center justify-between text-sm">
                   <span className="font-mono truncate mr-3">{p}</span>
                   <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
@@ -1065,7 +1095,7 @@ export default function LauncherUI() {
                               const part = parts[i];
                               const pcent = part ? Math.floor(((part.received || 0) / (part.total || 1)) * 100) : 0;
                               return (
-                                <div key={`${p}-part-${i}`} className="text-xs mb-1">
+                                <div key={`${p}-part-${i}`} className={`text-xs mb-1 ${exiting ? 'item-exit' : 'item-enter'}`}>
                                   <div className="flex items-center justify-between">
                                     <span className="opacity-70">Part {i+1}/{totalParts}</span>
                                     <span className="opacity-60">{pcent}%</span>
@@ -1229,9 +1259,17 @@ export default function LauncherUI() {
           <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
             <div className="text-sm font-semibold mb-2">Choose install location</div>
             <div className="text-xs opacity-80 mb-3">The game will be installed inside a folder named <span className="font-mono">{selectedChannel}</span> at the path you pick.</div>
-            <div className="alert alert-warning text-xs mb-3">
-              <span>Do not select the launchers own install folder. Pick a separate base directory; the <span className="font-mono">{selectedChannel}</span> subfolder will be created automatically.</span>
-            </div>
+            {(() => {
+              const normRoot = (launcherRoot || '').replace(/\\+$/,'').toLowerCase();
+              const normBase = (installBaseDir || '').replace(/\\+$/,'').toLowerCase();
+              const isLauncherFolderSelected = normRoot && normBase && normBase === normRoot;
+              if (!isLauncherFolderSelected) return null;
+              return (
+                <div className="alert alert-warning text-xs mb-3">
+                  <span>Do not select the launchers own install folder. Pick a separate base directory; the <span className="font-mono">{selectedChannel}</span> subfolder will be created automatically.</span>
+                </div>
+              );
+            })()}
             <div className="flex items-center gap-2">
               <input className="input input-bordered input-sm w-full" value={installBaseDir} onChange={(e)=>setInstallBaseDir(e.target.value)} placeholder="Select base folder" />
               <button className="btn btn-sm" onClick={async()=>{ const picked = await window.electronAPI?.selectDirectory?.(); if (picked) setInstallBaseDir(picked); }}>Browse</button>

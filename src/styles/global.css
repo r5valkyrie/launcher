@@ -75,6 +75,58 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
 /* Ensure horizontal shadows aren't clipped in launch grid */
 .launch-panels { overflow-x: visible; }
 
+/* Downloads list item animations */
+@keyframes itemEnter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes itemExit {
+  from { opacity: 1; max-height: 200px; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+  to { opacity: 0; max-height: 0; margin-top: 0; margin-bottom: 0; }
+}
+.item-enter { animation: itemEnter 220ms ease-out both; }
+.item-exit { animation: itemExit 240ms ease-in both; overflow: hidden; }
+
+/* Toggle switch style for checkbox */
+.toggle-switch {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 24px;
+  background: #2a2f36;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 999px;
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 20px; height: 20px;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+  transform: translate(0, -50%);
+  transition: transform 160ms ease;
+}
+.toggle-switch:checked {
+  background: #5754e8 !important;
+  border-color: #2a2f36 !important;
+}
+.toggle-switch:checked::after {
+  transform: translate(20px, -50%);
+}
+
+.toggle-switch:focus-visible {
+  outline: 2px solid hsl(var(--p));
+  outline-offset: 2px;
+}
+
 .neon-text {
   text-shadow: 0 0 10px rgba(99, 102, 241, 0.35), 0 0 20px rgba(99, 102, 241, 0.25);
 }

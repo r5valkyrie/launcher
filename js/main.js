@@ -177,6 +177,24 @@ ipcMain.handle('app:getVersion', async () => {
   try { return app.getVersion(); } catch { return '0.0.0'; }
 });
 
+ipcMain.handle('app:getBaseDir', async () => {
+  try {
+    const baseDir = path.resolve(app.getAppPath(), '..');
+    return baseDir;
+  } catch {
+    return '';
+  }
+});
+
+ipcMain.handle('app:getLauncherInstallRoot', async () => {
+  try {
+    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+    return path.join(localAppData, 'Programs', 'r5vlauncher');
+  } catch {
+    return '';
+  }
+});
+
 // Basic IPC placeholders
 ipcMain.handle('select-directory', async () => {
   const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });

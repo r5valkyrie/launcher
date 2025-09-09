@@ -6,6 +6,15 @@ import { promisify } from 'node:util';
 import https from 'node:https';
 
 const streamPipeline = promisify(pipeline);
+function pathKey(p) {
+  return String(p || '').replace(/\\/g, '/').toLowerCase();
+}
+
+// Track in-flight downloads across concurrent downloadAll invocations
+const activePromises = new Map();
+
+// Reuse connections to reduce server-side churn and stalls
+const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 16, keepAliveMsecs: 30000 });
 
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
@@ -63,7 +72,7 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
     ensureDir(path.dirname(dest));
     const file = fs.createWriteStream(dest, { flags: resumeFrom > 0 ? 'a' : 'w' });
     if (token?.cancelled) { file.close(() => {}); return reject(new Error('cancelled')); }
-    const reqOptions = {};
+    const reqOptions = { agent: keepAliveAgent };
     if (resumeFrom > 0) {
       reqOptions.headers = { Range: `bytes=${resumeFrom}-` };
     }
@@ -78,6 +87,7 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
             try { fs.unlinkSync(dest); } catch {}
             const backoff = Math.min(2000 * attempt, 10000);
             res.resume();
+            try { req.destroy(new Error('restart:range-ignored')); } catch {}
             return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, 0, expectedTotal)));
           }
           fs.unlink(dest, () => {});
@@ -97,20 +107,23 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         : (resumeFrom > 0 ? (resumeFrom + contentLen) : contentLen);
       let received = 0;
       let lastProgressAt = Date.now();
+      // Adaptive stall timeout: longer on later attempts
+      const stallMs = attempt <= 2 ? 60000 : 90000;
       const watchdog = setInterval(() => {
         if (token?.cancelled) return;
-        if (Date.now() - lastProgressAt > 15000) {
+        if (Date.now() - lastProgressAt > stallMs) {
           try { const err = new Error('stalled'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {}
         }
-      }, 5000);
+      }, 10000);
       res.on('data', (chunk) => {
         received += chunk.length;
         lastProgressAt = Date.now();
         if (onProgress) onProgress(Math.min(resumeFrom + received, total || (resumeFrom + received)), total || 0);
       });
-      res.on('aborted', () => {
-        file.close(() => {});
+      res.on('aborted', async () => {
+        const fileClosed = new Promise((r) => file.close(() => r()));
         try { clearInterval(watchdog); } catch {}
+        try { await fileClosed; } catch {}
         if (attempt < 5) {
           const backoff = Math.min(2000 * attempt, 10000);
           return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom + received, expectedTotal)));
@@ -122,13 +135,15 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         .catch((e) => { try { clearInterval(watchdog); } catch {}; reject(e); });
     });
     token?.requests.add(req);
+    req.on('socket', (s) => { try { s.setKeepAlive(true, 60000); s.setNoDelay(true); } catch {} });
     req.on('close', () => token?.requests.delete(req));
     req.setTimeout(45000, () => { try { const err = new Error('Request timeout'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {} });
     if (token?.cancelled) { try { req.destroy(new Error('cancelled')); } catch {} }
-    req.on('error', (err) => {
+    req.on('error', async (err) => {
       const code = err?.code;
       const canRetry = attempt < 5 && (code && RETRYABLE_ERROR_CODES.has(String(code)));
-      try { file.close(() => {}); } catch {}
+      const fileClosed = new Promise((r) => { try { file.close(() => r()); } catch { r(); } });
+      try { await fileClosed; } catch {}
       if (canRetry) {
         const backoff = Math.min(2000 * attempt, 10000);
         let newResume = resumeFrom;
@@ -305,7 +320,17 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
 }
 
 export async function downloadAll(baseUrl, checksums, installDir, emit, includeOptional = false, concurrency = 4, partConcurrency = 4, token) {
-  const filtered = (checksums.files || []).filter((f) => includeOptional || !f.optional);
+  // De-duplicate by path to avoid downloading same file multiple times
+  const seen = new Set();
+  const filtered = [];
+  for (const f of (checksums.files || [])) {
+    if (!(includeOptional || !f.optional)) continue;
+    const key = pathKey(f.path);
+    if (!key) continue;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    filtered.push(f);
+  }
   const singles = filtered.filter((f) => !(Array.isArray(f.parts) && f.parts.length > 0));
   const multis = filtered.filter((f) => Array.isArray(f.parts) && f.parts.length > 0);
   const files = singles.concat(multis);
@@ -329,23 +354,40 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
         if (iLocal >= group.length) return;
         const f = group[iLocal];
         const globalIndex = offset + iLocal;
-        emit('progress:start', { index: globalIndex, total, path: f.path, completed });
+        const key = pathKey(f.path);
         const doOnce = async () => downloadFileObject(baseUrl, f, installDir, emit, partConcurrency, token);
+        let awaitingExisting = false;
+        let p = activePromises.get(key);
+        if (!p) {
+          emit('progress:start', { index: globalIndex, total, path: f.path, completed });
+          p = (async () => {
+            try {
+              await doOnce();
+            } catch (err) {
+              const message = String(err?.message || err || 'error');
+              if (message.includes('cancelled')) throw err;
+              try {
+                const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
+                try { fs.unlinkSync(targetPath); } catch {}
+                await doOnce();
+              } catch (err2) {
+                try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+              }
+            }
+          })();
+          activePromises.set(key, p);
+        } else {
+          awaitingExisting = true;
+        }
         try {
-          await doOnce();
-        } catch (err) {
-          const message = String(err?.message || err || 'error');
-          if (message.includes('cancelled')) throw err;
-          try {
-            const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
-            try { fs.unlinkSync(targetPath); } catch {}
-            await doOnce();
-          } catch (err2) {
-            try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
-          }
+          await p;
+        } finally {
+          if (!awaitingExisting) activePromises.delete(key);
         }
         completed += 1;
         emit('progress:done', { index: globalIndex, total, path: f.path, completed });
+        // Small delay to allow agent to reuse sockets gracefully between last multipart and next
+        await delay(10);
       }
     }
     const pool = Array.from({ length: Math.max(1, groupConcurrency) }, () => worker());
@@ -354,6 +396,10 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
 
   // Stage 1: regular files with full concurrency
   await processGroup(singles, 0, Math.max(1, concurrency));
+  // Ensure no lingering retries for singles before starting multipart stage
+  if (activePromises.size > 0) {
+    try { await Promise.all([...activePromises.values()]); } catch {}
+  }
   // Stage 2: multipart files, serialized (one at a time)
   await processGroup(multis, singles.length, 1);
 }
