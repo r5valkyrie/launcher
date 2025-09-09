@@ -248,6 +248,10 @@ export default function LauncherUI() {
       }
     } catch {}
     await persistDir(finalPath);
+    setChannelsSettings((prev) => ({
+      ...prev,
+      [selectedChannel]: { ...(prev?.[selectedChannel] || {}), installDir: finalPath }
+    }));
     setInstallPromptOpen(false);
     await startInstall();
   }

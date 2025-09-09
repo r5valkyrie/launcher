@@ -6,6 +6,11 @@ import { promisify } from 'node:util';
 import https from 'node:https';
 
 const streamPipeline = promisify(pipeline);
+function normalizeRelative(p) {
+  const s = String(p || '');
+  // Convert backslashes to forward slashes, then strip any leading slashes
+  return s.replace(/\\/g, '/').replace(/^\/+/, '');
+}
 function pathKey(p) {
   return String(p || '').replace(/\\/g, '/').toLowerCase();
 }
@@ -174,7 +179,8 @@ export async function fetchChecksums(gameBaseUrl) {
 }
 
 export async function downloadFileObject(baseUrl, fileObj, installDir, emit, partConcurrency = 4, token) {
-  const targetPath = path.join(installDir, fileObj.path.replace(/\\/g, path.sep));
+  const relFilePath = normalizeRelative(fileObj.path).split('/').join(path.sep);
+  const targetPath = path.join(installDir, relFilePath);
   ensureDir(path.dirname(targetPath));
 
   if (await fileExistsAndValid(targetPath, fileObj.checksum, fileObj.size)) {
@@ -197,7 +203,8 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
         if (started.has(i)) continue;
         started.add(i);
         const part = fileObj.parts[i];
-        const partUrl = `${baseUrl.replace(/\/$/, '')}/${part.path.replace(/\\/g, '/')}`;
+        const partRel = normalizeRelative(part.path);
+        const partUrl = `${baseUrl.replace(/\/$/, '')}/${partRel}`;
         const tmpPart = `${targetPath}.part${i}`;
         // If temp part already exists and matches checksum, reuse it
         try {
@@ -285,7 +292,8 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
     });
     try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
   } else {
-    const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileObj.path.replace(/\\/g, '/')}`;
+    const fileRel = normalizeRelative(fileObj.path);
+    const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileRel}`;
     // Download to a temp file with checksum verification and retry; subtract bytes from failed attempts
     let attempts = 0;
     while (true) {
