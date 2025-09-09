@@ -1634,10 +1634,6 @@ export default function LauncherUI() {
                     )}
                   </div>
                   {updateError && <div className="alert alert-error mt-3 text-xs"><span>{updateError}</span></div>}
-                  <div className="mt-4 flex justify-end gap-2">
-                    <button className="btn btn-sm btn-ghost" onClick={() => window.electronAPI?.close?.()}>Exit</button>
-                    <button className="btn btn-sm btn-primary" onClick={() => { setUpdateError(null); window.electronAPI?.downloadUpdate?.(); }}>Download</button>
-                  </div>
                 </div>
               )}
               {updateDownloaded && (
