@@ -286,17 +286,18 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
     try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
   } else {
     const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileObj.path.replace(/\\/g, '/')}`;
-    // Download with checksum verification and retry; subtract bytes from failed attempts
+    // Download to a temp file with checksum verification and retry; subtract bytes from failed attempts
     let attempts = 0;
     while (true) {
       attempts += 1;
       let attemptBytes = 0;
       let last = 0;
+      const tmpPath = `${targetPath}.download`;
       let existing = 0;
-      try { const st = fs.statSync(targetPath); existing = st.size; } catch {}
+      try { const st = fs.statSync(tmpPath); existing = st.size; } catch {}
       const expected = Number(fileObj.size || 0);
-      if (expected > 0 && existing > expected) { try { fs.unlinkSync(targetPath); existing = 0; } catch {} }
-      await downloadToFile(fileUrl, targetPath, (rec, tot) => {
+      if (expected > 0 && existing > expected) { try { fs.unlinkSync(tmpPath); existing = 0; } catch {} }
+      await downloadToFile(fileUrl, tmpPath, (rec, tot) => {
         const delta = Math.max(0, rec - last);
         last = rec;
         try { if (delta > 0) emit('progress:bytes', { delta }); } catch {}
@@ -304,12 +305,15 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
         const totalForFile = expected || tot || 0;
         emit('progress:file', { path: fileObj.path, received: Math.min(rec, totalForFile || rec), total: totalForFile });
       }, 1, token, existing, expected);
-      const fhash = await sha256File(targetPath);
+      const fhash = await sha256File(tmpPath);
       if (fhash.toLowerCase() === String(fileObj.checksum).toLowerCase()) break;
-      try { fs.unlinkSync(targetPath); } catch {}
+      try { fs.unlinkSync(tmpPath); } catch {}
       try { if (attemptBytes > 0) emit('progress:bytes', { delta: -attemptBytes }); } catch {}
       if (attempts >= 2) throw new Error(`Checksum mismatch for ${fileObj.path}`);
     }
+    // Atomically replace target with verified temp
+    try { fs.unlinkSync(targetPath); } catch {}
+    fs.renameSync(`${targetPath}.download`, targetPath);
   }
 
   emit('progress:verify', { path: fileObj.path });
