@@ -1223,8 +1223,8 @@ export default function LauncherUI() {
                         <div key={m.name} className="glass-soft rounded-lg border border-white/10 overflow-hidden">
                           <div className="flex items-stretch min-h-[96px]">
                             <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
-                              {m as any && (m as any).iconFileUrl ? (
-                                <img src={(m as any).iconFileUrl} alt="" className="w-full h-full object-cover" />
+                              {m as any && (m as any).iconDataUrl ? (
+                                <img src={(m as any).iconDataUrl} alt="" className="w-full h-full object-cover" />
                               ) : getModIconUrl(m.name || m.id) ? (
                                 <img src={getModIconUrl(m.name || m.id)} alt="" className="w-full h-full object-cover" />
                               ) : (

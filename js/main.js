@@ -248,6 +248,11 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
       try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')); } catch {}
       const meta = parseModVdf(vdfPath);
       const id = meta.id || manifest?.name || ent.name;
+      let iconDataUrl = null;
+      try {
+        const buf = fs.readFileSync(iconPath);
+        iconDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
+      } catch {}
       list.push({
         id,
         // Prefer manifest name when present, then mod.vdf name, then folder
@@ -257,7 +262,7 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
         description: manifest?.description || '',
         enabled: id ? !!enabledMap[id] : false,
         hasManifest: fs.existsSync(manifestPath),
-        iconFileUrl: fs.existsSync(iconPath) ? pathToFileURL(iconPath).toString() : null,
+        iconDataUrl,
       });
     }
     return { ok: true, mods: list };
@@ -383,6 +388,18 @@ ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
     try { e?.sender?.send('mods:progress', { key: name, phase: 'done' }); } catch {}
     return { ok: true };
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+
+ipcMain.handle('mods:iconDataUrl', async (_e, { installDir, folder }) => {
+  try {
+    const p = path.join(installDir, 'mods', folder, 'icon.png');
+    await fs.promises.access(p);
+    const buf = await fs.promises.readFile(p);
+    const b64 = buf.toString('base64');
+    return { ok: true, dataUrl: `data:image/png;base64,${b64}` };
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
 });
 
 // Basic IPC placeholders
