@@ -27,6 +27,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),
   close: () => ipcRenderer.send('window:close'),
+  // Mods
+  listInstalledMods: (installDir) => ipcRenderer.invoke('mods:listInstalled', { installDir }),
+  setModEnabled: (installDir, name, enabled) => ipcRenderer.invoke('mods:setEnabled', { installDir, name, enabled }),
+  uninstallMod: (installDir, folder) => ipcRenderer.invoke('mods:uninstall', { installDir, folder }),
+  fetchAllMods: (query) => ipcRenderer.invoke('mods:fetchAll', { query }),
+  installMod: (installDir, name, downloadUrl) => ipcRenderer.invoke('mods:install', { installDir, name, downloadUrl }),
+  onModsProgress: (listener) => ipcRenderer.on('mods:progress', (_e, payload) => listener(payload)),
 });
 
 

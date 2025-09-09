@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import https from 'node:https';
 import fs from 'node:fs';
 import { spawn } from 'node:child_process';
+import os from 'node:os';
 // Preload is CommonJS to avoid ESM named export issues
 import { fetchChecksums, downloadAll, createCancelToken, cancelToken } from './services/downloader.js';
 import { getSetting, setSetting, getAllSettings } from './services/store.js';
@@ -193,6 +194,193 @@ ipcMain.handle('app:getLauncherInstallRoot', async () => {
   } catch {
     return '';
   }
+});
+
+// ---- Mods IPC ----
+function readModsVdf(modsDir) {
+  try {
+    const vdfPath = path.join(modsDir, 'mods.vdf');
+    const txt = fs.readFileSync(vdfPath, 'utf-8');
+    const map = {};
+    // naive parse: find lines with "name"  "0/1"
+    const re = /"([^"]+)"\s*"([01])"/g;
+    let m;
+    while ((m = re.exec(txt))) {
+      const k = m[1];
+      if (k && k !== 'ModList') map[k] = m[2] === '1';
+    }
+    return map;
+  } catch { return {}; }
+}
+function parseModVdf(modVdfPath) {
+  try {
+    const txt = fs.readFileSync(modVdfPath, 'utf-8');
+    const idMatch = txt.match(/"id"\s*"([^"]+)"/i);
+    const nameMatch = txt.match(/"name"\s*"([^"]+)"/i);
+    const id = idMatch ? idMatch[1] : null;
+    const name = nameMatch ? nameMatch[1] : null;
+    return { id, name };
+  } catch { return { id: null, name: null }; }
+}
+function writeModsVdf(modsDir, map) {
+  const lines = ['"ModList"', '{'];
+  for (const [k, v] of Object.entries(map)) {
+    lines.push(`\t"${k}"\t\t"${v ? '1' : '0'}"`);
+  }
+  lines.push('}');
+  fs.mkdirSync(modsDir, { recursive: true });
+  fs.writeFileSync(path.join(modsDir, 'mods.vdf'), lines.join('\n'), 'utf-8');
+}
+
+ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    const enabledMap = readModsVdf(modsDir);
+    const list = [];
+    const entries = fs.existsSync(modsDir) ? fs.readdirSync(modsDir, { withFileTypes: true }) : [];
+    for (const ent of entries) {
+      if (!ent.isDirectory()) continue;
+      const modPath = path.join(modsDir, ent.name);
+      const manifestPath = path.join(modPath, 'manifest.json');
+      const vdfPath = path.join(modPath, 'mod.vdf');
+      let manifest = null;
+      try { manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')); } catch {}
+      const meta = parseModVdf(vdfPath);
+      const id = meta.id || manifest?.name || ent.name;
+      list.push({
+        id,
+        // Prefer manifest name when present, then mod.vdf name, then folder
+        name: manifest?.name || meta.name || ent.name,
+        folder: ent.name,
+        version: manifest?.version_number || null,
+        description: manifest?.description || '',
+        enabled: id ? !!enabledMap[id] : false,
+        hasManifest: fs.existsSync(manifestPath),
+      });
+    }
+    return { ok: true, mods: list };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+
+ipcMain.handle('mods:setEnabled', async (_e, { installDir, name, enabled }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    const map = readModsVdf(modsDir);
+    // Here 'name' is expected to be the mod ID
+    map[name] = !!enabled;
+    writeModsVdf(modsDir, map);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+
+ipcMain.handle('mods:uninstall', async (_e, { installDir, folder }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    const target = path.join(modsDir, folder);
+    fs.rmSync(target, { recursive: true, force: true });
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+
+ipcMain.handle('mods:fetchAll', async (_e, { query }) => {
+  const url = 'https://thunderstore.io/c/r5valkyrie/api/v1/package/';
+  return new Promise((resolve) => {
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) { res.resume(); return resolve({ ok: false, error: `HTTP ${res.statusCode}` }); }
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => data += c);
+      res.on('end', () => {
+        try {
+          const json = JSON.parse(data);
+          let packs = Array.isArray(json) ? json : [];
+          if (query && String(query).trim()) {
+            const q = String(query).toLowerCase();
+            packs = packs.filter(p => String(p?.name || '').toLowerCase().includes(q) || String(p?.full_name || '').toLowerCase().includes(q));
+          }
+          resolve({ ok: true, mods: packs });
+        } catch (e) { resolve({ ok: false, error: String(e?.message || e) }); }
+      });
+    }).on('error', (err) => resolve({ ok: false, error: String(err?.message || err) }));
+  });
+});
+
+ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    fs.mkdirSync(modsDir, { recursive: true });
+    const tempZip = path.join(os.tmpdir(), `mod_${Date.now()}.zip`);
+    // Download zip with redirect support
+    const downloadWithRedirects = (url, depth = 0) => new Promise((resolve, reject) => {
+      if (depth > 5) return reject(new Error('Too many redirects'));
+      const file = fs.createWriteStream(tempZip);
+      const req = https.get(url, {
+        headers: {
+          'User-Agent': 'R5Valkyrie-Launcher/1.0',
+          'Accept': 'application/octet-stream,*/*;q=0.8',
+          'Referer': 'https://thunderstore.io/',
+          'Connection': 'keep-alive',
+        },
+      }, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          file.close(() => {});
+          try { fs.unlinkSync(tempZip); } catch {}
+          const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).toString();
+          return resolve(downloadWithRedirects(next, depth + 1));
+        }
+        if (res.statusCode !== 200) { file.close(() => {}); try { fs.unlinkSync(tempZip); } catch {}; res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+        const total = Number(res.headers['content-length'] || 0);
+        let received = 0;
+        let lastTick = Date.now();
+        const emit = (phase) => {
+          try { e?.sender?.send('mods:progress', { key: name, phase, received, total }); } catch {}
+        };
+        res.on('data', (chunk) => {
+          received += Buffer.isBuffer(chunk) ? chunk.length : Buffer.byteLength(String(chunk));
+          const now = Date.now();
+          if (now - lastTick > 150) { lastTick = now; emit('downloading'); }
+        });
+        res.pipe(file);
+        file.on('finish', () => { emit('downloading'); file.close(resolve); });
+      });
+      req.on('error', (err) => { try { fs.unlinkSync(tempZip); } catch {} reject(err); });
+    });
+    await downloadWithRedirects(downloadUrl);
+    // Extract using PowerShell Expand-Archive (Windows)
+    try { e?.sender?.send('mods:progress', { key: name, phase: 'extracting' }); } catch {}
+    const dest = path.join(modsDir, name);
+    try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
+    fs.mkdirSync(dest, { recursive: true });
+    await new Promise((resolve, reject) => {
+      const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath "${tempZip}" -DestinationPath "${dest}" -Force`], { stdio: 'ignore' });
+      ps.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive failed ${code}`)));
+      ps.on('error', reject);
+    });
+    try { fs.unlinkSync(tempZip); } catch {}
+    // Determine mod ID from mod.vdf
+    let modId = null;
+    try {
+      const primary = path.join(dest, 'mod.vdf');
+      if (fs.existsSync(primary)) {
+        modId = parseModVdf(primary).id;
+      } else {
+        const children = fs.readdirSync(dest, { withFileTypes: true });
+        for (const ent of children) {
+          if (ent.isDirectory()) {
+            const p = path.join(dest, ent.name, 'mod.vdf');
+            if (fs.existsSync(p)) { modId = parseModVdf(p).id; if (modId) break; }
+          }
+        }
+      }
+    } catch {}
+    // Enable by ID (fallback to name)
+    const map = readModsVdf(modsDir);
+    map[modId || name] = true;
+    writeModsVdf(modsDir, map);
+    try { e?.sender?.send('mods:progress', { key: name, phase: 'done' }); } catch {}
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 
 // Basic IPC placeholders

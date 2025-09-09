@@ -48,6 +48,13 @@ declare global {
       getAppVersion?: () => Promise<string>;
       getBaseDir?: () => Promise<string>;
       getLauncherInstallRoot?: () => Promise<string>;
+      // Mods
+      listInstalledMods?: (installDir: string) => Promise<{ok:boolean; mods?: any[]; error?: string}>;
+      setModEnabled?: (installDir: string, name: string, enabled: boolean) => Promise<{ok:boolean; error?: string}>;
+      uninstallMod?: (installDir: string, folder: string) => Promise<{ok:boolean; error?: string}>;
+      fetchAllMods?: (query?: string) => Promise<{ok:boolean; mods?: any[]; error?: string}>;
+      installMod?: (installDir: string, name: string, downloadUrl: string) => Promise<{ok:boolean; error?: string}>;
+      onModsProgress?: (listener: (payload: any) => void) => void;
     };
   }
 }
@@ -65,7 +72,7 @@ export default function LauncherUI() {
   const [concurrency, setConcurrency] = useState<number>(4);
   const [partConcurrency, setPartConcurrency] = useState<number>(4);
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'settings'>('general');
+  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
   const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
@@ -169,6 +176,18 @@ export default function LauncherUI() {
   const [primaryAction, setPrimaryAction] = useState<'install'|'update'|'play'>('install');
   const enabledChannels = useMemo(() => (config?.channels?.filter((c) => c.enabled) || []), [config]);
   const [channelsSettings, setChannelsSettings] = useState<Record<string, any>>({});
+  // Mods state
+  type InstalledMod = { id?: string; name: string; folder: string; version?: string|null; description?: string; enabled: boolean; hasManifest?: boolean };
+  const [modsSubtab, setModsSubtab] = useState<'installed'|'all'>('installed');
+  const [installedMods, setInstalledMods] = useState<InstalledMod[] | null>(null);
+  const [installedModsLoading, setInstalledModsLoading] = useState(false);
+  const [allMods, setAllMods] = useState<any[] | null>(null);
+  const [allModsLoading, setAllModsLoading] = useState(false);
+  const [modsQuery, setModsQuery] = useState('');
+  const [modsError, setModsError] = useState<string | null>(null);
+  const [modsRefreshNonce, setModsRefreshNonce] = useState(0);
+  const [installingMods, setInstallingMods] = useState<Record<string, 'install'|'uninstall'|undefined>>({});
+  const [modProgress, setModProgress] = useState<Record<string, { received: number; total: number; phase: string }>>({});
   // News posts
   type NewsPost = { title: string; excerpt?: string; published_at?: string; url: string; feature_image?: string };
   const [newsPosts, setNewsPosts] = useState<NewsPost[] | null>(null);
@@ -431,6 +450,169 @@ export default function LauncherUI() {
       } catch { setRemoteVersion(null); }
     })();
   }, [channel?.game_url]);
+
+  // Load installed mods when Mods tab opens or installDir changes
+  useEffect(() => {
+    if (activeTab !== 'mods') return;
+    (async () => {
+      try {
+        setInstalledModsLoading(true);
+        const res = await window.electronAPI?.listInstalledMods?.(installDir || '');
+        setInstalledMods(res?.ok ? (res?.mods || []) : []);
+      } catch { setInstalledMods([]); } finally { setInstalledModsLoading(false); }
+    })();
+  }, [activeTab, installDir]);
+
+  useEffect(() => {
+    try {
+      if (!window.electronAPI || !window.electronAPI.onModsProgress) return;
+      const handler = (p: any) => {
+        if (!p || !p.key) return;
+        setModProgress((prev) => ({ ...prev, [String(p.key)]: { received: Number(p.received||0), total: Number(p.total||0), phase: String(p.phase||'downloading') } }));
+      };
+      window.electronAPI.onModsProgress(handler);
+    } catch {}
+  }, []);
+
+  // Load all mods list when Mods tab is opened or search changes (debounced). Avoid reloading just by switching subtab.
+  useEffect(() => {
+    if (activeTab !== 'mods') return;
+    const t = setTimeout(async () => {
+      try {
+        setAllModsLoading(true);
+        setModsError(null);
+        let ok = false;
+        let list: any[] = [];
+        let errMsg: string | null = null;
+        try {
+          const res = await window.electronAPI?.fetchAllMods?.(modsQuery);
+          if (res && typeof res === 'object') {
+            ok = !!res.ok; list = Array.isArray(res?.mods) ? res.mods : []; errMsg = res?.error ? String(res.error) : null;
+          }
+        } catch {}
+        if (!ok) {
+          try {
+            const r = await fetch('https://thunderstore.io/c/r5valkyrie/api/v1/package/', {
+              headers: { 'Accept': 'application/json,*/*;q=0.8' },
+            });
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            const json = await r.json();
+            list = Array.isArray(json) ? json : [];
+            ok = true;
+          } catch (e:any) {
+            ok = false; errMsg = String(e?.message || e || 'Fetch failed');
+          }
+        }
+        if (ok) setAllMods(list);
+        else { setAllMods([]); setModsError(String(errMsg || 'Failed to load mods')); }
+      } catch { setAllMods([]); } finally { setAllModsLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [activeTab, modsQuery, modsRefreshNonce]);
+
+  async function toggleModEnabled(mod: InstalledMod) {
+    try {
+      const next = !mod.enabled;
+      const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+      if (!dir) { setModsError('Install the game first to manage mods.'); return; }
+      await window.electronAPI?.setModEnabled?.(dir, String(mod.id || mod.name), next);
+      setInstalledMods((prev) => (prev || []).map(m => m.name === mod.name ? { ...m, enabled: next } : m));
+    } catch {}
+  }
+
+  async function uninstallMod(mod: InstalledMod) {
+    try {
+      const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+      if (!dir) { setModsError('Install the game first to manage mods.'); return; }
+      setInstallingMods((s) => ({ ...s, [mod.name]: 'uninstall' }));
+      await window.electronAPI?.uninstallMod?.(dir, mod.folder || mod.name);
+      setInstalledMods((prev) => (prev || []).filter(m => m.name !== mod.name));
+    } catch {}
+    finally { setInstallingMods((s) => { const n = { ...s }; delete n[mod.name]; return n; }); }
+  }
+
+  async function installMod(mod: any) {
+    try {
+      const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+      if (!dir) { setModsError('Install the game first to install mods.'); return; }
+      const versions = Array.isArray(mod?.versions) ? mod.versions : [];
+      const latest = versions[0] || null;
+      const dl = latest?.download_url || '';
+      const folderName = (mod?.full_name || mod?.name || latest?.name || 'mod').replace(/[\\/:*?"<>|]/g, '_');
+      if (!dl) return;
+      setInstallingMods((s) => ({ ...s, [folderName]: 'install' }));
+      const resInstall = await window.electronAPI?.installMod?.(dir, String(folderName), String(dl));
+      if (!resInstall || (resInstall as any)?.ok === false) {
+        setModsError(String((resInstall as any)?.error || 'Failed to install mod'));
+      }
+      // refresh installed list
+      const res = await window.electronAPI?.listInstalledMods?.(dir || '');
+      setInstalledMods(res?.ok ? (res?.mods || []) : (installedMods || []));
+    } catch {}
+    finally { setInstallingMods((s) => { const n = { ...s }; const k = (mod?.name || (mod?.full_name?.split('-')?.[0]) || 'mod').replace(/[\\/:*?"<>|]/g, '_'); delete n[k]; return n; }); }
+  }
+
+  function getModIconUrl(nameOrId?: string): string | undefined {
+    if (!nameOrId || !Array.isArray(allMods)) return undefined;
+    const needle = String(nameOrId).toLowerCase();
+    const pack = allMods.find((p: any) => {
+      const n = String(p?.name || '').toLowerCase();
+      const fn = String(p?.full_name || '').toLowerCase();
+      return n === needle || fn === needle || fn.startsWith(`${needle}-`);
+    });
+    const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
+    return latest?.icon;
+  }
+
+  function getPackageUrlFromPack(pack: any): string | undefined {
+    const url = pack?.package_url;
+    if (typeof url === 'string' && url) return url;
+    const name = pack?.name || '';
+    if (name) return `https://thunderstore.io/c/r5valkyrie/?search=${encodeURIComponent(name)}`;
+    return 'https://thunderstore.io/c/r5valkyrie';
+  }
+
+  function getPackageUrlByName(name?: string): string {
+    const needle = String(name || '').toLowerCase();
+    const pack = (allMods || []).find((p: any) => String(p?.name||'').toLowerCase() === needle);
+    return getPackageUrlFromPack(pack) || 'https://thunderstore.io/c/r5valkyrie';
+  }
+
+  function sanitizeFolderName(s: string): string {
+    return String(s || 'mod').replace(/[\\/:*?"<>|]/g, '_');
+  }
+
+  function compareVersions(a?: string|null, b?: string|null): number {
+    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const x = pa[i] || 0; const y = pb[i] || 0;
+      if (x > y) return 1; if (x < y) return -1;
+    }
+    return 0;
+  }
+
+  async function installFromAll(pack: any) {
+    const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
+    const baseName = pack?.full_name || pack?.name || latest?.name || 'mod';
+    const folderName = sanitizeFolderName(baseName);
+    if (installingMods[folderName]) return;
+    await installMod({ name: folderName, versions: pack?.versions });
+  }
+
+  async function updateFromAll(pack: any) {
+    const nameKey = String(pack?.name || '').toLowerCase();
+    const installed = (installedMods || []).find((m) => String(m.name || '').toLowerCase() === nameKey);
+    if (!installed) return installFromAll(pack);
+    await installMod({ name: installed.folder || installed.name, versions: pack?.versions });
+  }
+
+  async function uninstallFromAll(pack: any) {
+    const nameKey = String(pack?.name || '').toLowerCase();
+    const installed = (installedMods || []).find((m) => String(m.name || '').toLowerCase() === nameKey);
+    if (installed) await uninstallMod(installed);
+  }
 
   useEffect(() => {
     const handler = () => {
@@ -718,6 +900,7 @@ export default function LauncherUI() {
             <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
             <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
                 <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
+            <a className={`tab ${activeTab==='mods'?'tab-active':''}`} onClick={() => setActiveTab('mods')}>Mods</a>
             <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
               </div>
             </div>
@@ -743,7 +926,7 @@ export default function LauncherUI() {
                 <div>
                   <img src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto" />
                   <div className="text-md opacity-80 mt-2">Pilots. Legends. One Frontier. One Battle.</div>
-                </div>
+          </div>
                 <div className="mt-auto flex items-center gap-3 pb-1">
                   {primaryAction === 'install' && (
                     <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={openInstallPrompt}>Install</button>
@@ -765,7 +948,7 @@ export default function LauncherUI() {
                     }}>{busy ? 'Working…' : 'Play'}</button>
                   )}
                   <button className="btn btn-lg rounded-[1.5vw]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
-          </div>
+        </div>
         </div>
               {enabledChannels.length > 0 && (
                 <div className="absolute bottom-8 right-8">
@@ -779,7 +962,7 @@ export default function LauncherUI() {
                         {c.name}
                       </button>
                     ))}
-                  </div>
+          </div>
           </div>
               )}
           </div>
@@ -900,8 +1083,8 @@ export default function LauncherUI() {
                   <div className="flex items-center gap-3">
                     <span className="text-sm opacity-80">Hostname</span>
                     <input className="input input-bordered input-sm w-full" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="Server name" />
-                  </div>
-                )}
+          </div>
+        )}
               </div>
 
               <div className="glass rounded-xl p-4 grid gap-3">
@@ -1018,6 +1201,139 @@ export default function LauncherUI() {
               </div>
             )}
             <div className="space-y-3 xl:col-span-2">
+              {activeTab === 'mods' && (
+                <div className="glass rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="btn-group">
+                      <button className={`btn btn-md ${modsSubtab==='installed'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('installed')}>Installed</button>
+                      <button className={`btn btn-md ${modsSubtab==='all'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('all')}>All</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {modsSubtab === 'all' && (
+                        <input className="input input-bordered input-sm w-64" placeholder="Search mods" value={modsQuery} onChange={(e)=>setModsQuery(e.target.value)} />
+                      )}
+                      <button className="btn btn-sm" onClick={()=> setModsRefreshNonce((x)=>x+1)}>Refresh</button>
+                    </div>
+                  </div>
+
+                  {modsSubtab === 'installed' && (
+                    <div className="mt-3 grid grid-cols-1 gap-3">
+                      {installedModsLoading && <div className="text-xs opacity-70">Loading…</div>}
+                      {!installedModsLoading && (installedMods||[]).map((m) => (
+                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 overflow-hidden">
+                          <div className="flex items-stretch min-h-[96px]">
+                            <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
+                              {getModIconUrl(m.name || m.id) ? (
+                                <img src={getModIconUrl(m.name || m.id)} alt="" className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full" />
+                              )}
+                            </div>
+                            <div className="flex-1 p-3 flex flex-col">
+                              <div className="flex items-start gap-3">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{m.name || m.id}</div>
+                                  <div className="text-[11px] opacity-60 truncate">{m.version || ''}</div>
+                                </div>
+                                <div className="ml-auto flex items-center gap-2">
+                                  <label className="label cursor-pointer gap-2">
+                                    <input type="checkbox" className="toggle-switch" checked={!!m.enabled} onChange={()=>toggleModEnabled(m)} />
+                                  </label>
+                                  <button className={`btn btn-xs btn-ghost ${(!m.hasManifest || installingMods[m.name]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
+                                    {installingMods[m.name]==='uninstall' ? 'Removing…' : 'Uninstall'}
+                                  </button>
+                                </div>
+                              </div>
+                              {m.description && <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.description}</div>}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                      {!installedModsLoading && (installedMods||[]).length===0 && (
+                        <div className="text-xs opacity-70">No mods installed.</div>
+                      )}
+                    </div>
+                  )}
+
+                  {modsSubtab === 'all' && (
+                    <div className="mt-3 grid grid-cols-1 gap-3">
+                      {allModsLoading && <div className="text-xs opacity-70">Loading…</div>}
+                      {(!allModsLoading && modsError) && <div className="text-xs opacity-80 text-warning">{modsError}</div>}
+                      {!allModsLoading && (allMods||[]).slice(0, 60).map((m:any) => {
+                        const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
+                        const title = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
+                        const ver = latest?.version_number || '';
+                        const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
+                        const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
+                        const key = sanitizeFolderName(m?.full_name || m?.name || title);
+                        return (
+                          <div key={m?.uuid4 || m?.full_name || title} className="glass-soft rounded-lg border border-white/10 overflow-hidden relative">
+                            <div className="flex items-stretch min-h-[96px]">
+                              <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
+                                {m?.versions?.[0]?.icon && (
+                                  <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                                )}
+                              </div>
+                              <div className="flex-1 p-3 pb-5 flex items-start">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-medium truncate">{title}</div>
+                                  <div className="text-[11px] opacity-60 truncate">{ver}</div>
+                                  {m?.versions?.[0]?.description && (
+                                    <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.versions[0].description}</div>
+                                  )}
+                                </div>
+                                <div className="ml-auto flex items-center gap-2">
+                                  {state === 'not' && (
+                                    <button className={`btn btn-xs ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!!installingMods[key]}> 
+                                      {installingMods[key]==='install' ? 'Installing…' : 'Install'}
+                                    </button>
+                                  )}
+                                  {state === 'installed' && (
+                                    <>
+                                      <button className={`btn btn-xs btn-ghost ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                        Uninstall
+                                      </button>
+                                      <span className="badge badge-ghost">Installed</span>
+                                    </>
+                                  )}
+                                  {state === 'update' && (
+                                    <>
+                                      <button className={`btn btn-xs ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
+                                        {installingMods[key]==='install' ? 'Updating…' : 'Update'}
+                                      </button>
+                                      <button className={`btn btn-xs btn-ghost ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                        Uninstall
+                                      </button>
+                                    </>
+                                  )}
+                                  <a className="btn btn-xs btn-ghost" href={getPackageUrlFromPack(m)} target="_blank" rel="noreferrer">View</a>
+                                </div>
+                              </div>
+                            </div>
+                            {installingMods[key]==='install' && (
+                              <div className="absolute bottom-0 right-2 left-30 m-0 p-0">
+                                {(() => { const mp = modProgress[key]; const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; return (
+                                  <>
+                                    <div className="flex items-center justify-between text-[10px] opacity-80 leading-none mb-0">
+                                      <span>{phaseLabel}</span>
+                                      <span>{pct}%</span>
+                                    </div>
+                                    <progress className="progress progress-primary progress-xs w-full rounded-none m-0" value={pct} max={100}></progress>
+                                  </>
+                                ); })()}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {!allModsLoading && (allMods||[]).length===0 && (
+                        <div className="text-xs opacity-70">No mods found.</div>
+                      )}
+                    </div>
+                  )}
+                  <div className="text-[10px] opacity-60 mt-3">Mods powered by <a className="link" href="https://thunderstore.io/c/r5valkyrie" target="_blank" rel="noreferrer">Thunderstore</a></div>
+                </div>
+              )}
               {activeTab === 'general' && (busy && (hasStarted || overall)) && (
                 <div className="glass rounded-xl p-4">
                   {(() => {
@@ -1110,12 +1426,12 @@ export default function LauncherUI() {
             })}
           </div>
                         )}
-                      </div>
+            </div>
                     );
                   }) : (
                     <div className="text-sm opacity-70 py-6 text-center">No downloads active.</div>
-                  )}
-                </div>
+          )}
+        </div>
               )}
 
         </div>
