@@ -524,11 +524,11 @@ export default function LauncherUI() {
     try {
       const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
       if (!dir) { setModsError('Install the game first to manage mods.'); return; }
-      setInstallingMods((s) => ({ ...s, [mod.name]: 'uninstall' }));
+      setInstallingMods((s) => ({ ...s, [mod.folder || mod.name]: 'uninstall' }));
       await window.electronAPI?.uninstallMod?.(dir, mod.folder || mod.name);
       setInstalledMods((prev) => (prev || []).filter(m => m.name !== mod.name));
     } catch {}
-    finally { setInstallingMods((s) => { const n = { ...s }; delete n[mod.name]; return n; }); }
+    finally { setInstallingMods((s) => { const n = { ...s }; delete n[mod.folder || mod.name]; return n; }); }
   }
 
   async function installMod(mod: any) {
@@ -578,6 +578,19 @@ export default function LauncherUI() {
     return getPackageUrlFromPack(pack) || 'https://thunderstore.io/c/r5valkyrie';
   }
 
+  function getLatestVersionForName(name?: string): string | null {
+    const needle = String(name || '').toLowerCase();
+    const pack = (allMods || []).find((p: any) => String(p?.name||'').toLowerCase() === needle);
+    const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
+    return latest?.version_number || null;
+  }
+
+  function getPackByName(name?: string): any | null {
+    const needle = String(name || '').toLowerCase();
+    const pack = (allMods || []).find((p: any) => String(p?.name||'').toLowerCase() === needle);
+    return pack || null;
+  }
+
   function sanitizeFolderName(s: string): string {
     return String(s || 'mod').replace(/[\\/:*?"<>|]/g, '_');
   }
@@ -612,6 +625,12 @@ export default function LauncherUI() {
     const nameKey = String(pack?.name || '').toLowerCase();
     const installed = (installedMods || []).find((m) => String(m.name || '').toLowerCase() === nameKey);
     if (installed) await uninstallMod(installed);
+  }
+
+  async function updateInstalled(mod: InstalledMod) {
+    const pack = getPackByName(mod.name);
+    if (!pack) return;
+    await installMod({ name: mod.folder || mod.name, versions: pack.versions });
   }
 
   useEffect(() => {
@@ -1212,7 +1231,7 @@ export default function LauncherUI() {
                       {modsSubtab === 'all' && (
                         <input className="input input-bordered input-sm w-64" placeholder="Search mods" value={modsQuery} onChange={(e)=>setModsQuery(e.target.value)} />
                       )}
-                      <button className="btn btn-sm" onClick={()=> setModsRefreshNonce((x)=>x+1)}>Refresh</button>
+                      <button className="btn btn-sm btn-primary" title="Refresh" onClick={()=> setModsRefreshNonce((x)=>x+1)}>↻</button>
                     </div>
                   </div>
 
@@ -1220,7 +1239,7 @@ export default function LauncherUI() {
                     <div className="mt-3 grid grid-cols-1 gap-3">
                       {installedModsLoading && <div className="text-xs opacity-70">Loading…</div>}
                       {!installedModsLoading && (installedMods||[]).map((m) => (
-                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 overflow-hidden">
+                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 overflow-hidden relative">
                           <div className="flex items-stretch min-h-[96px]">
                             <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
                               {m as any && (m as any).iconDataUrl ? (
@@ -1235,20 +1254,40 @@ export default function LauncherUI() {
                               <div className="flex items-start gap-3">
                                 <div className="min-w-0">
                                   <div className="text-sm font-medium truncate">{m.name || m.id}</div>
-                                  <div className="text-[11px] opacity-60 truncate">{m.version || ''}</div>
+                                  <div className="text-[11px] opacity-60 truncate">Installed: {m.version || '—'}{(() => { const lv = getLatestVersionForName(m.name); return lv && m.version && compareVersions(m.version, lv) < 0 ? ` • Latest: ${lv}` : ''; })()}</div>
                                 </div>
                                 <div className="ml-auto flex items-center gap-2">
+                                  {(() => { const latest = getLatestVersionForName(m.name); const needs = latest && m.version && compareVersions(m.version, latest) < 0; const key = (m.folder || m.name); if (needs) return (
+                                    <button className={`btn btn-sm btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=> updateInstalled(m)}>
+                                      {installingMods[key]==='install' ? 'Updating…' : 'Update'}
+                                    </button>
+                                  ); return null; })()}
                                   <label className="label cursor-pointer gap-2">
                                     <input type="checkbox" className="toggle-switch" checked={!!m.enabled} onChange={()=>toggleModEnabled(m)} />
                                   </label>
-                                  <button className={`btn btn-xs btn-ghost ${(!m.hasManifest || installingMods[m.name]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
-                                    {installingMods[m.name]==='uninstall' ? 'Removing…' : 'Uninstall'}
-                                  </button>
+                                  {(() => { const key = (m.folder || m.name); return (
+                                    <button className={`btn btn-sm btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
+                                       🗑
+                                    </button>
+                                  ); })()}
                                 </div>
                               </div>
                               {m.description && <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.description}</div>}
                             </div>
                           </div>
+                          {(() => { const key = (m.folder || m.name); if (installingMods[key]==='install') return (
+                            <div className="absolute bottom-0 right-2 left-30 m-0 p-0">
+                              {(() => { const mp = modProgress[key]; const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; return (
+                                <>
+                                  <div className="flex items-center justify-between text-[10px] opacity-80 leading-none mb-0">
+                                    <span>{phaseLabel}</span>
+                                    <span>{pct}%</span>
+                                  </div>
+                                  <progress className="progress progress-primary progress-xs w-full rounded-none m-0" value={pct} max={100}></progress>
+                                </>
+                              ); })()}
+                            </div>
+                          ); return null; })()}
                         </div>
                       ))}
                       {!installedModsLoading && (installedMods||[]).length===0 && (
@@ -1278,7 +1317,10 @@ export default function LauncherUI() {
                               </div>
                               <div className="flex-1 p-3 pb-5 flex items-start">
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium truncate">{title}</div>
+                                  <div className="text-sm font-medium truncate flex items-center gap-2">
+                                    <span className="truncate">{title}</span>
+                                    {(state === 'installed' || state === 'update') && (<span className="badge badge-success">Installed</span>)}
+                                  </div>
                                   <div className="text-[11px] opacity-60 truncate">{ver}</div>
                                   {m?.versions?.[0]?.description && (
                                     <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.versions[0].description}</div>
@@ -1286,25 +1328,22 @@ export default function LauncherUI() {
                                 </div>
                                 <div className="ml-auto flex items-center gap-2">
                                   {state === 'not' && (
-                                    <button className={`btn btn-xs ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!!installingMods[key]}> 
+                                    <button className={`btn btn-sm btn-success ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!!installingMods[key]}> 
                                       {installingMods[key]==='install' ? 'Installing…' : 'Install'}
                                     </button>
                                   )}
                                   {state === 'installed' && (
-                                    <>
-                                      <button className={`btn btn-xs btn-ghost ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                        Uninstall
-                                      </button>
-                                      <span className="badge badge-ghost">Installed</span>
-                                    </>
+                                    <button className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                      🗑
+                                    </button>
                                   )}
                                   {state === 'update' && (
                                     <>
-                                      <button className={`btn btn-xs ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
+                                      <button className={`btn btn-sm btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
                                         {installingMods[key]==='install' ? 'Updating…' : 'Update'}
                                       </button>
-                                      <button className={`btn btn-xs btn-ghost ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                        Uninstall
+                                      <button className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                        🗑
                                       </button>
                                     </>
                                   )}

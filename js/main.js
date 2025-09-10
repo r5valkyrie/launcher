@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import https from 'node:https';
 import fs from 'node:fs';
+import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 // Preload is CommonJS to avoid ESM named export issues
@@ -290,26 +291,65 @@ ipcMain.handle('mods:uninstall', async (_e, { installDir, folder }) => {
 });
 
 ipcMain.handle('mods:fetchAll', async (_e, { query }) => {
-  const url = 'https://thunderstore.io/c/r5valkyrie/api/v1/package/';
-  return new Promise((resolve) => {
-    https.get(url, (res) => {
-      if (res.statusCode !== 200) { res.resume(); return resolve({ ok: false, error: `HTTP ${res.statusCode}` }); }
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', (c) => data += c);
-      res.on('end', () => {
-        try {
-          const json = JSON.parse(data);
-          let packs = Array.isArray(json) ? json : [];
-          if (query && String(query).trim()) {
-            const q = String(query).toLowerCase();
-            packs = packs.filter(p => String(p?.name || '').toLowerCase().includes(q) || String(p?.full_name || '').toLowerCase().includes(q));
-          }
-          resolve({ ok: true, mods: packs });
-        } catch (e) { resolve({ ok: false, error: String(e?.message || e) }); }
-      });
-    }).on('error', (err) => resolve({ ok: false, error: String(err?.message || err) }));
+  const indexUrl = 'https://thunderstore.io/c/r5valkyrie/api/v1/package-listing-index/';
+  const fetchBuffer = (url) => new Promise((resolve, reject) => {
+    const req = https.get(url, { headers: { 'User-Agent': 'R5Valkyrie-Launcher/1.0', 'Accept': '*/*' } }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        const next = res.headers.location.startsWith('http') ? res.headers.location : new URL(res.headers.location, url).toString();
+        return resolve(fetchBuffer(next));
+      }
+      if (res.statusCode !== 200) { res.resume(); return reject(new Error(`HTTP ${res.statusCode}`)); }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      res.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    req.on('error', reject);
   });
+  const gunzipMaybe = (buf) => {
+    try { return zlib.gunzipSync(buf); } catch { return buf; }
+  };
+  try {
+    const idxBuf = await fetchBuffer(indexUrl);
+    const idxJson = JSON.parse(gunzipMaybe(idxBuf).toString('utf8'));
+    const urls = Array.isArray(idxJson) ? idxJson : [];
+    const concurrency = 6;
+    const results = [];
+    let i = 0;
+    await Promise.all(Array.from({ length: concurrency }).map(async () => {
+      while (i < urls.length) {
+        const j = i++;
+        const u = urls[j];
+        try {
+          const buf = await fetchBuffer(u);
+          const text = gunzipMaybe(buf).toString('utf8');
+          const packages = JSON.parse(text);
+          if (Array.isArray(packages)) results.push(...packages);
+        } catch {}
+      }
+    }));
+    let packs = results;
+    if (query && String(query).trim()) {
+      const q = String(query).toLowerCase();
+      packs = packs.filter(p => String(p?.name || '').toLowerCase().includes(q) || String(p?.full_name || '').toLowerCase().includes(q));
+    }
+    return { ok: true, mods: packs };
+  } catch (e) {
+    // Fallback to simple endpoint if index fails
+    try {
+      const fallbackUrl = 'https://thunderstore.io/c/r5valkyrie/api/v1/package/';
+      const buf = await fetchBuffer(fallbackUrl);
+      const json = JSON.parse(buf.toString('utf8'));
+      let packs = Array.isArray(json) ? json : [];
+      if (query && String(query).trim()) {
+        const q = String(query).toLowerCase();
+        packs = packs.filter(p => String(p?.name || '').toLowerCase().includes(q) || String(p?.full_name || '').toLowerCase().includes(q));
+      }
+      return { ok: true, mods: packs };
+    } catch (err) {
+      return { ok: false, error: String(err?.message || e?.message || err || e) };
+    }
+  }
 });
 
 ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
