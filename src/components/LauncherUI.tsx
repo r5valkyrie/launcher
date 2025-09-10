@@ -1243,7 +1243,9 @@ export default function LauncherUI() {
                       {modsSubtab === 'all' && (
                         <input className="input input-bordered input-sm w-64" placeholder="Search mods" value={modsQuery} onChange={(e)=>setModsQuery(e.target.value)} />
                       )}
-                      <button className="btn btn-sm btn-primary" title="Refresh" onClick={()=> setModsRefreshNonce((x)=>x+1)}>↻</button>
+                      <div className="tooltip tooltip-primary tooltip-bottom z-20" data-tip="Refresh">
+                        <button className="btn btn-sm btn-primary text-xl" onClick={()=> setModsRefreshNonce((x)=>x+1)}>↻</button>
+                      </div>
                     </div>
                   </div>
 
@@ -1251,7 +1253,7 @@ export default function LauncherUI() {
                     <div className="mt-3 grid grid-cols-1 gap-3">
                       {installedModsLoading && <div className="text-xs opacity-70">Loading…</div>}
                       {!installedModsLoading && (installedMods||[]).map((m) => (
-                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 overflow-hidden relative">
+                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 relative">
                           <div className="flex items-stretch min-h-[96px]">
                             <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
                               {m as any && (m as any).iconDataUrl ? (
@@ -1278,9 +1280,11 @@ export default function LauncherUI() {
                                     <input type="checkbox" className="toggle-switch" checked={!!m.enabled} onChange={()=>toggleModEnabled(m)} />
                                   </label>
                                   {(() => { const key = (m.folder || m.name); return (
-                                    <button className={`btn btn-md btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
-                                       🗑
-                                    </button>
+                                    <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
+                                      <button className={`btn btn-md btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
+                                        <span className="text-xl leading-none">🗑</span>
+                                      </button>
+                                    </div>
                                   ); })()}
                                 </div>
                               </div>
@@ -1320,7 +1324,7 @@ export default function LauncherUI() {
                         const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
                         const key = sanitizeFolderName(m?.full_name || m?.name || title);
                         return (
-                          <div key={m?.uuid4 || m?.full_name || title} className="glass-soft rounded-lg border border-white/10 overflow-hidden relative">
+                          <div key={m?.uuid4 || m?.full_name || title} className="glass-soft rounded-lg border border-white/10 relative">
                             <div className="flex items-stretch min-h-[96px]">
                               <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
                                 {m?.versions?.[0]?.icon && (
@@ -1345,18 +1349,22 @@ export default function LauncherUI() {
                                     </button>
                                   )}
                                   {state === 'installed' && (
-                                    <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                      🗑
-                                    </button>
+                                    <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
+                                      <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                        <span className="text-xl leading-none">🗑</span>
+                                      </button>
+                                    </div>
                                   )}
                                   {state === 'update' && (
                                     <>
                                       <button className={`btn btn-md btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
                                         {installingMods[key]==='install' ? 'Updating…' : 'Update'}
                                       </button>
-                                      <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                        🗑
-                                      </button>
+                                      <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
+                                        <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                          <span className="text-xl leading-none">🗑</span>
+                                        </button>
+                                      </div>
                                     </>
                                   )}
                                   <button className="btn btn-md btn-ghost" title="View details" onClick={()=>openModDetails(m)}>Details</button>
