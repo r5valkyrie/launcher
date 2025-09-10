@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.7.16",
+  "version": "0.7.17",
   "main": "electron/main.js",
   "icon": "build/icon.png",
   "scripts": {
@@ -78,7 +78,12 @@
       "icon": "build/icon.png"
     },
     "protocols": [
-      { "name": "R5V Link", "schemes": ["r5v"] }
+      {
+        "name": "R5V Link",
+        "schemes": [
+          "r5v"
+        ]
+      }
     ],
     "nsis": {
       "oneClick": true,
