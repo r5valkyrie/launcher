@@ -221,6 +221,8 @@ export default function LauncherUI() {
   const [noAsync, setNoAsync] = useState<boolean>(false);
   const [customCmd, setCustomCmd] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
+  const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
+  const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
 
   
 
@@ -904,6 +906,16 @@ export default function LauncherUI() {
     }
   }
 
+  function openModDetails(pack: any) {
+    setModDetailsPack(pack);
+    setModDetailsOpen(true);
+  }
+
+  async function installSpecificVersion(pack: any, version: any) {
+    const folderName = sanitizeFolderName(pack?.full_name || pack?.name || version?.name || 'mod');
+    await installMod({ name: folderName, full_name: pack?.full_name || pack?.name, versions: [version] });
+  }
+
   return (
     <div className="h-full grid grid-cols-[88px_1fr] relative">
       <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5">
@@ -1258,7 +1270,7 @@ export default function LauncherUI() {
                                 </div>
                                 <div className="ml-auto flex items-center gap-2">
                                   {(() => { const latest = getLatestVersionForName(m.name); const needs = latest && m.version && compareVersions(m.version, latest) < 0; const key = (m.folder || m.name); if (needs) return (
-                                    <button className={`btn btn-sm btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=> updateInstalled(m)}>
+                                    <button className={`btn btn-md btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=> updateInstalled(m)}>
                                       {installingMods[key]==='install' ? 'Updating…' : 'Update'}
                                     </button>
                                   ); return null; })()}
@@ -1266,7 +1278,7 @@ export default function LauncherUI() {
                                     <input type="checkbox" className="toggle-switch" checked={!!m.enabled} onChange={()=>toggleModEnabled(m)} />
                                   </label>
                                   {(() => { const key = (m.folder || m.name); return (
-                                    <button className={`btn btn-sm btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
+                                    <button className={`btn btn-md btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
                                        🗑
                                     </button>
                                   ); })()}
@@ -1328,26 +1340,26 @@ export default function LauncherUI() {
                                 </div>
                                 <div className="ml-auto flex items-center gap-2">
                                   {state === 'not' && (
-                                    <button className={`btn btn-sm btn-success ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!!installingMods[key]}> 
+                                    <button className={`btn btn-md btn-success ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!!installingMods[key]}> 
                                       {installingMods[key]==='install' ? 'Installing…' : 'Install'}
                                     </button>
                                   )}
                                   {state === 'installed' && (
-                                    <button className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                    <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
                                       🗑
                                     </button>
                                   )}
                                   {state === 'update' && (
                                     <>
-                                      <button className={`btn btn-sm btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
+                                      <button className={`btn btn-md btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)}>
                                         {installingMods[key]==='install' ? 'Updating…' : 'Update'}
                                       </button>
-                                      <button className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
+                                      <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
                                         🗑
                                       </button>
                                     </>
                                   )}
-                                  <a className="btn btn-xs btn-ghost" href={getPackageUrlFromPack(m)} target="_blank" rel="noreferrer">View</a>
+                                  <button className="btn btn-md btn-ghost" title="View details" onClick={()=>openModDetails(m)}>Details</button>
                                 </div>
                               </div>
                             </div>
@@ -1681,6 +1693,57 @@ export default function LauncherUI() {
             </div>
           )}
         </div>
+          </div>
+        </div>
+      )}
+
+      {modDetailsOpen && modDetailsPack && (
+        <div className="fixed inset-0 z-[55]">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={()=>setModDetailsOpen(false)} />
+          <div className="absolute inset-0 grid place-items-center p-4">
+            <div className="glass rounded-xl w-[760px] max-w-[95vw] overflow-hidden">
+              <div className="px-5 py-4 flex items-start gap-3 border-b border-white/10">
+                <div className="w-14 h-14 bg-base-300/40 rounded overflow-hidden flex items-center justify-center">
+                  {modDetailsPack?.versions?.[0]?.icon && (
+                    <img src={modDetailsPack.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-base font-semibold truncate">{modDetailsPack?.name || modDetailsPack?.full_name || 'Mod'}</div>
+                  <div className="text-xs opacity-70 truncate">Author: {modDetailsPack?.owner || (modDetailsPack?.full_name||'').split('-')[0] || 'Unknown'}</div>
+                  {(() => { const latest = (Array.isArray(modDetailsPack?.versions) && modDetailsPack.versions[0]) ? modDetailsPack.versions[0] : null; if (!latest) return null; return (
+                    <div className="text-xs opacity-80 mt-1 line-clamp-3">{latest.description || ''}</div>
+                  ); })()}
+                </div>
+                <div className="ml-auto flex items-center gap-2">
+                  <a className="btn btn-sm btn-ghost" href={getPackageUrlFromPack(modDetailsPack) || '#'} target="_blank" rel="noreferrer">Open on Thunderstore</a>
+                  <button className="btn btn-sm btn-ghost" onClick={()=>setModDetailsOpen(false)}>Close</button>
+                </div>
+              </div>
+              <div className="p-4">
+                <div className="text-xs uppercase opacity-60 mb-2">Versions</div>
+                <div className="max-h-[50vh] overflow-y-auto pr-1">
+                  {(modDetailsPack?.versions || []).map((v: any, idx: number) => {
+                    const installed = (installedMods || []).find(im => String(im.name||'').toLowerCase() === String(modDetailsPack?.name||'').toLowerCase());
+                    const isCurrent = installed && installed.version && v?.version_number && compareVersions(installed.version, v.version_number) === 0;
+                    const folderKey = sanitizeFolderName(modDetailsPack?.full_name || modDetailsPack?.name || v?.name || 'mod');
+                    return (
+                      <div key={v?.uuid4 || v?.full_name || v?.version_number || idx} className="flex items-center gap-3 py-2 border-b border-white/10 last:border-b-0">
+                        <div className="min-w-24 text-sm">{v?.version_number || '—'}</div>
+                        <div className="text-xs opacity-70 flex-1 truncate">{v?.description || ''}</div>
+                        {isCurrent ? (
+                          <span className="btn btn-md btn-success btn-outline pointer-events-none">Installed</span>
+                        ) : (
+                          <button className={`btn btn-md ${idx===0 ? 'btn-success' : 'btn-outline'} ${installingMods[folderKey]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installSpecificVersion(modDetailsPack, v)}>
+                            {installingMods[folderKey]==='install' ? 'Installing…' : (idx===0 ? 'Install latest' : 'Install')}
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
