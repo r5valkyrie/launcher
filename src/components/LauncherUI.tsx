@@ -223,6 +223,7 @@ export default function LauncherUI() {
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
+  const [pendingDeepLink, setPendingDeepLink] = useState<{ name?: string; version?: string; downloadUrl?: string } | null>(null);
 
   
 
@@ -392,7 +393,7 @@ export default function LauncherUI() {
           setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
         }, 240);
       }));
-      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name });
+      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
       setFinished(true);
       // Update local install state so primary button flips to Play
@@ -589,7 +590,17 @@ export default function LauncherUI() {
 
   function getPackByName(name?: string): any | null {
     const needle = String(name || '').toLowerCase();
-    const pack = (allMods || []).find((p: any) => String(p?.name||'').toLowerCase() === needle);
+    const packs = (allMods || []);
+    let pack = packs.find((p: any) => String(p?.name||'').toLowerCase() === needle);
+    if (!pack) pack = packs.find((p: any) => String(p?.full_name||'').toLowerCase() === needle);
+    if (!pack) {
+      const base = needle.split('-')[0];
+      pack = packs.find((p: any) => {
+        const n = String(p?.name||'').toLowerCase();
+        const fn = String(p?.full_name||'').toLowerCase();
+        return n === base || fn.startsWith(`${base}-`);
+      });
+    }
     return pack || null;
   }
 
@@ -883,7 +894,7 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
-      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name });
+      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name, mode: 'repair' });
       setToastMessage('Repair completed');
       setFinished(true);
       // Update local install state so primary button flips to Play/reflects new version
@@ -915,6 +926,58 @@ export default function LauncherUI() {
     const folderName = sanitizeFolderName(pack?.full_name || pack?.name || version?.name || 'mod');
     await installMod({ name: folderName, full_name: pack?.full_name || pack?.name, versions: [version] });
   }
+
+  // Handle deep link requests from main: r5v://mod/install?name=...&version=...&downloadUrl=...
+  useEffect(() => {
+    try {
+      window.electronAPI?.onUpdate?.('deeplink:mod-install', (p: any) => {
+        const payload = typeof p === 'object' && p ? p : {};
+        setActiveTab('mods');
+        setModsSubtab('all');
+        setPendingDeepLink({ name: String(payload.name || ''), version: String(payload.version || ''), downloadUrl: String(payload.downloadUrl || '') });
+        // Kick a refresh if list is empty to ensure we can resolve by name
+        if (!allMods || (Array.isArray(allMods) && allMods.length === 0)) setModsRefreshNonce((x) => x + 1);
+      });
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Once Mods list is available and we're on Mods tab, process the pending deep link
+  useEffect(() => {
+    if (activeTab !== 'mods' || !pendingDeepLink) return;
+    const { name, version, downloadUrl } = pendingDeepLink;
+    const doInstall = async () => {
+      try {
+        if (downloadUrl) {
+          const folder = sanitizeFolderName(name || 'mod');
+          setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
+          await installMod({ name: folder, versions: [{ name: name || 'mod', version_number: version || undefined, download_url: downloadUrl }] });
+          setPendingDeepLink(null);
+          return;
+        }
+        if (name) {
+          const pack = getPackByName(name);
+          if (!pack) return; // wait for next effect run after list refresh
+          if (version) {
+            const v = (Array.isArray(pack?.versions) ? pack.versions : []).find((x: any) => String(x?.version_number || '').toLowerCase() === String(version).toLowerCase());
+            if (v) {
+              const folder = sanitizeFolderName(pack.full_name || pack.name || v.name || 'mod');
+              setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
+              await installMod({ name: folder, versions: [v] });
+              setPendingDeepLink(null);
+              return;
+            }
+          }
+          // Fallback to latest
+          const folder = sanitizeFolderName(pack.full_name || pack.name || 'mod');
+          setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
+          await installFromAll(pack);
+          setPendingDeepLink(null);
+        }
+      } catch {}
+    };
+    doInstall();
+  }, [activeTab, allMods, pendingDeepLink]);
 
   return (
     <div className="h-full grid grid-cols-[88px_1fr] relative">

@@ -29,6 +29,62 @@ function getAppUrl() {
 
 let mainWindow;
 let activeDownloadToken = null;
+// Deep link (custom URL scheme) handling
+const deeplinkScheme = 'r5v';
+const deeplinkQueue = [];
+
+function extractDeeplinks(argv) {
+  try {
+    return (argv || []).filter((a) => typeof a === 'string' && a.startsWith(`${deeplinkScheme}://`));
+  } catch { return []; }
+}
+
+function handleDeeplink(url) {
+  try {
+    const u = new URL(url);
+    // Example: r5v://mod/install?name=KralCore-KralCore&version=1.8.25
+    if (u.hostname === 'mod' && u.pathname === '/install') {
+      const name = u.searchParams.get('name') || '';
+      const version = u.searchParams.get('version') || '';
+      const downloadUrl = u.searchParams.get('downloadUrl') || '';
+      if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isLoading()) {
+        try { mainWindow.webContents.send('deeplink:mod-install', { url, name, version, downloadUrl }); } catch {}
+      } else {
+        deeplinkQueue.push(url);
+      }
+    }
+  } catch {}
+}
+
+function flushDeeplinks() {
+  while (deeplinkQueue.length) {
+    const link = deeplinkQueue.shift();
+    handleDeeplink(link);
+  }
+}
+
+// Enforce single instance to route deeplinks to existing window
+const gotInstanceLock = app.requestSingleInstanceLock();
+if (!gotInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', (_e, argv) => {
+    try {
+      const links = extractDeeplinks(argv);
+      links.forEach((link) => handleDeeplink(link));
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.focus();
+      }
+    } catch {}
+  });
+}
+
+// macOS deep link (optional)
+app.on('open-url', (event, url) => {
+  event.preventDefault();
+  handleDeeplink(url);
+});
 
 async function createWindow() {
   mainWindow = new BrowserWindow({
@@ -94,6 +150,15 @@ app.on('window-all-closed', () => {
 });
 
 app.whenReady().then(() => {
+  // Register the OS protocol client so r5v:// links open the app
+  try {
+    if (process.defaultApp && process.platform === 'win32') {
+      app.setAsDefaultProtocolClient(deeplinkScheme, process.execPath, [process.argv[1]]);
+    } else {
+      app.setAsDefaultProtocolClient(deeplinkScheme);
+    }
+  } catch {}
+
   // Register custom protocol to serve cached files from launcher dir
   const baseDir = path.resolve(app.getAppPath(), '..');
   const cacheRoot = path.join(baseDir, 'cache');
@@ -138,6 +203,10 @@ app.whenReady().then(() => {
   });
 
   createWindow();
+  // Queue any deeplinks passed on first launch (Windows)
+  try { extractDeeplinks(process.argv).forEach((link) => deeplinkQueue.push(link)); } catch {}
+  // Flush queued deeplinks when renderer is ready
+  try { mainWindow?.webContents?.once('did-finish-load', flushDeeplinks); } catch {}
   // Auto-updater wiring
   try {
     autoUpdater.autoDownload = false;
@@ -456,8 +525,25 @@ ipcMain.handle('download:checksums', async (_e, { baseUrl }) => {
   return fetchChecksums(baseUrl);
 });
 
-ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName }) => {
+ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName, mode }) => {
   const emit = (channel, payload) => e.sender.send(channel, payload);
+  // Respect user mods.vdf during repair/update: skip replacing it if present
+  try {
+    const isInstall = String(mode || 'install').toLowerCase() === 'install';
+    if (!isInstall) {
+      const modsVdfPath = path.join(installDir, 'mods', 'mods.vdf');
+      if (fs.existsSync(modsVdfPath)) {
+        const files = Array.isArray(checksums?.files) ? checksums.files : [];
+        const filtered = files.filter((f) => {
+          try {
+            const p = String(f?.path || f?.name || '').replace(/\\/g, '/').toLowerCase();
+            return p !== 'mods/mods.vdf';
+          } catch { return true; }
+        });
+        checksums = { ...(checksums || {}), files: filtered };
+      }
+    }
+  } catch {}
   activeDownloadToken = createCancelToken();
   try {
     await downloadAll(baseUrl, checksums, installDir, emit, Boolean(includeOptional), Number(concurrency) || 4, Number(partConcurrency) || 4, activeDownloadToken);
