@@ -30,11 +30,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Mods
   listInstalledMods: (installDir) => ipcRenderer.invoke('mods:listInstalled', { installDir }),
   setModEnabled: (installDir, name, enabled) => ipcRenderer.invoke('mods:setEnabled', { installDir, name, enabled }),
+  reorderMods: (installDir, orderIds) => ipcRenderer.invoke('mods:reorder', { installDir, orderIds }),
   uninstallMod: (installDir, folder) => ipcRenderer.invoke('mods:uninstall', { installDir, folder }),
   fetchAllMods: (query) => ipcRenderer.invoke('mods:fetchAll', { query }),
   installMod: (installDir, name, downloadUrl) => ipcRenderer.invoke('mods:install', { installDir, name, downloadUrl }),
   onModsProgress: (listener) => ipcRenderer.on('mods:progress', (_e, payload) => listener(payload)),
   getModIconDataUrl: (installDir, folder) => ipcRenderer.invoke('mods:iconDataUrl', { installDir, folder }),
+  watchMods: (installDir) => ipcRenderer.invoke('mods:watch', { installDir }),
+  unwatchMods: (installDir) => ipcRenderer.invoke('mods:unwatch', { installDir }),
+  onModsChanged: (listener) => ipcRenderer.on('mods:changed', (_e, payload) => listener(payload)),
 });
 
 

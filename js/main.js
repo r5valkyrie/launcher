@@ -29,6 +29,9 @@ function getAppUrl() {
 
 let mainWindow;
 let activeDownloadToken = null;
+const installingModsInFlight = new Set();
+const modWatchers = new Map();
+const modWatcherTimers = new Map();
 // Deep link (custom URL scheme) handling
 const deeplinkScheme = 'r5v';
 const deeplinkQueue = [];
@@ -282,6 +285,23 @@ function readModsVdf(modsDir) {
     return map;
   } catch { return {}; }
 }
+function readModsVdfOrdered(modsDir) {
+  try {
+    const vdfPath = path.join(modsDir, 'mods.vdf');
+    const txt = fs.readFileSync(vdfPath, 'utf-8');
+    const map = {};
+    const order = [];
+    const re = /"([^"]+)"\s*"([01])"/g;
+    let m;
+    while ((m = re.exec(txt))) {
+      const k = m[1];
+      if (!k || k === 'ModList') continue;
+      if (!(k in map)) order.push(k);
+      map[k] = m[2] === '1';
+    }
+    return { map, order };
+  } catch { return { map: {}, order: [] }; }
+}
 function parseModVdf(modVdfPath) {
   try {
     const txt = fs.readFileSync(modVdfPath, 'utf-8');
@@ -301,11 +321,28 @@ function writeModsVdf(modsDir, map) {
   fs.mkdirSync(modsDir, { recursive: true });
   fs.writeFileSync(path.join(modsDir, 'mods.vdf'), lines.join('\n'), 'utf-8');
 }
+function writeModsVdfOrdered(modsDir, order, map) {
+  const seen = new Set();
+  const lines = ['"ModList"', '{'];
+  const pushLine = (k) => {
+    lines.push(`\t"${k}"\t\t"${map[k] ? '1' : '0'}"`);
+    seen.add(k);
+  };
+  for (const k of Array.isArray(order) ? order : []) {
+    if (Object.prototype.hasOwnProperty.call(map, k) && !seen.has(k)) pushLine(k);
+  }
+  for (const k of Object.keys(map)) {
+    if (!seen.has(k)) pushLine(k);
+  }
+  lines.push('}');
+  fs.mkdirSync(modsDir, { recursive: true });
+  fs.writeFileSync(path.join(modsDir, 'mods.vdf'), lines.join('\n'), 'utf-8');
+}
 
 ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
   try {
     const modsDir = path.join(installDir, 'mods');
-    const enabledMap = readModsVdf(modsDir);
+    const { map: enabledMap, order } = readModsVdfOrdered(modsDir);
     const list = [];
     const entries = fs.existsSync(modsDir) ? fs.readdirSync(modsDir, { withFileTypes: true }) : [];
     for (const ent of entries) {
@@ -335,6 +372,14 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
         iconDataUrl,
       });
     }
+    // Sort by mods.vdf order when possible
+    const indexById = new Map(order.map((k, idx) => [k, idx]));
+    list.sort((a, b) => {
+      const ai = a.id != null && indexById.has(a.id) ? indexById.get(a.id) : Number.MAX_SAFE_INTEGER;
+      const bi = b.id != null && indexById.has(b.id) ? indexById.get(b.id) : Number.MAX_SAFE_INTEGER;
+      if (ai !== bi) return ai - bi;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
     return { ok: true, mods: list };
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
@@ -342,10 +387,24 @@ ipcMain.handle('mods:listInstalled', async (_e, { installDir }) => {
 ipcMain.handle('mods:setEnabled', async (_e, { installDir, name, enabled }) => {
   try {
     const modsDir = path.join(installDir, 'mods');
-    const map = readModsVdf(modsDir);
+    const { map } = readModsVdfOrdered(modsDir);
     // Here 'name' is expected to be the mod ID
     map[name] = !!enabled;
-    writeModsVdf(modsDir, map);
+    writeModsVdfOrdered(modsDir, undefined, map);
+    return { ok: true };
+  } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+});
+
+ipcMain.handle('mods:reorder', async (_e, { installDir, orderIds }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    const { map, order: existingOrder } = readModsVdfOrdered(modsDir);
+    const sanitized = Array.isArray(orderIds) ? orderIds.filter((id) => typeof id === 'string' && id && Object.prototype.hasOwnProperty.call(map, id)) : [];
+    // Preserve any remaining IDs in their previous relative order
+    const existingSet = new Set(sanitized);
+    const tail = existingOrder.filter((id) => Object.prototype.hasOwnProperty.call(map, id) && !existingSet.has(id));
+    const finalOrder = [...sanitized, ...tail];
+    writeModsVdfOrdered(modsDir, finalOrder, map);
     return { ok: true };
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
@@ -423,6 +482,12 @@ ipcMain.handle('mods:fetchAll', async (_e, { query }) => {
 
 ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
   try {
+    const folderKey = String(name || '').trim();
+    if (!folderKey) return { ok: false, error: 'Invalid mod name' };
+    if (installingModsInFlight.has(folderKey)) {
+      return { ok: true };
+    }
+    installingModsInFlight.add(folderKey);
     const modsDir = path.join(installDir, 'mods');
     fs.mkdirSync(modsDir, { recursive: true });
     const tempZip = path.join(os.tmpdir(), `mod_${Date.now()}.zip`);
@@ -497,6 +562,47 @@ ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
     try { e?.sender?.send('mods:progress', { key: name, phase: 'done' }); } catch {}
     return { ok: true };
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+  finally {
+    try { installingModsInFlight.delete(String(name || '')); } catch {}
+  }
+});
+
+ipcMain.handle('mods:watch', async (e, { installDir }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    if (!fs.existsSync(modsDir)) return { ok: true };
+    const key = modsDir;
+    if (modWatchers.has(key)) return { ok: true };
+    const watcher = fs.watch(modsDir, { persistent: true }, (_eventType, _filename) => {
+      const tkey = key;
+      clearTimeout(modWatcherTimers.get(tkey));
+      const timer = setTimeout(() => {
+        try { mainWindow?.webContents?.send('mods:changed', { installDir }); } catch {}
+      }, 300);
+      modWatcherTimers.set(tkey, timer);
+    });
+    modWatchers.set(key, watcher);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
+ipcMain.handle('mods:unwatch', async (_e, { installDir }) => {
+  try {
+    const modsDir = path.join(installDir, 'mods');
+    const key = modsDir;
+    const watcher = modWatchers.get(key);
+    if (watcher) {
+      try { watcher.close(); } catch {}
+      modWatchers.delete(key);
+    }
+    const t = modWatcherTimers.get(key);
+    if (t) { clearTimeout(t); modWatcherTimers.delete(key); }
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
 });
 
 ipcMain.handle('mods:iconDataUrl', async (_e, { installDir, folder }) => {

@@ -55,6 +55,10 @@ declare global {
       fetchAllMods?: (query?: string) => Promise<{ok:boolean; mods?: any[]; error?: string}>;
       installMod?: (installDir: string, name: string, downloadUrl: string) => Promise<{ok:boolean; error?: string}>;
       onModsProgress?: (listener: (payload: any) => void) => void;
+      reorderMods?: (installDir: string, orderIds: string[]) => Promise<{ok:boolean; error?: string}>;
+      watchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
+      unwatchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
+      onModsChanged?: (listener: (payload: any) => void) => void;
     };
   }
 }
@@ -162,6 +166,8 @@ export default function LauncherUI() {
       if (s?.concurrency) setConcurrency(Number(s.concurrency));
       if (s?.partConcurrency) setPartConcurrency(Number(s.partConcurrency));
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
+      if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
+      if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
     });
   }, [selectedChannel]);
 
@@ -188,6 +194,36 @@ export default function LauncherUI() {
   const [modsRefreshNonce, setModsRefreshNonce] = useState(0);
   const [installingMods, setInstallingMods] = useState<Record<string, 'install'|'uninstall'|undefined>>({});
   const [modProgress, setModProgress] = useState<Record<string, { received: number; total: number; phase: string }>>({});
+  const [modsShowDeprecated, setModsShowDeprecated] = useState<boolean>(false);
+  const [modsShowNsfw, setModsShowNsfw] = useState<boolean>(false);
+  const [draggingModName, setDraggingModName] = useState<string | null>(null);
+  const [dragOverModName, setDragOverModName] = useState<string | null>(null);
+  const outdatedMods = useMemo(() => {
+    try {
+      const list = (installedMods || []).map((im) => {
+        const latest = getLatestVersionForName(im.name);
+        const needs = latest && im.version && compareVersions(im.version, latest) < 0;
+        return needs ? { name: im.name, current: im.version || null, latest } : null;
+      }).filter(Boolean) as { name?: string; current: string | null; latest: string | null }[];
+      return list;
+    } catch { return []; }
+  }, [installedMods, allMods]);
+
+  const installedModsAugmented: InstalledMod[] = useMemo(() => {
+    const base = Array.isArray(installedMods) ? installedMods.slice() : [];
+    try {
+      const installingKeys = Object.entries(installingMods)
+        .filter(([_, v]) => v === 'install')
+        .map(([k]) => String(k));
+      for (const key of installingKeys) {
+        const exists = base.some((m) => (m.folder || m.name) === key);
+        if (!exists) {
+          base.push({ name: key, folder: key, enabled: false, version: null, description: '', hasManifest: false });
+        }
+      }
+    } catch {}
+    return base;
+  }, [installedMods, installingMods]);
   // News posts
   type NewsPost = { title: string; excerpt?: string; published_at?: string; url: string; feature_image?: string };
   const [newsPosts, setNewsPosts] = useState<NewsPost[] | null>(null);
@@ -477,6 +513,29 @@ export default function LauncherUI() {
     } catch {}
   }, []);
 
+  // Watch mods folder for changes when on Mods tab
+  useEffect(() => {
+    let unlisten: any = null;
+    (async () => {
+      try {
+        if (activeTab !== 'mods') return;
+        const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+        if (!dir) return;
+        await window.electronAPI?.watchMods?.(dir);
+        const listener = async (_payload: any) => {
+          try { const res = await window.electronAPI?.listInstalledMods?.(dir); if (res?.ok) setInstalledMods(res.mods || []); } catch {}
+        };
+        window.electronAPI?.onModsChanged?.(listener);
+        unlisten = () => { try { /* no direct off API; watcher removed on unwatch */ } catch {} };
+      } catch {}
+    })();
+    return () => {
+      (async () => { try { const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir; if (dir) await window.electronAPI?.unwatchMods?.(dir); } catch {} })();
+      if (typeof unlisten === 'function') try { unlisten(); } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, channelsSettings?.[selectedChannel]?.installDir, installDir]);
+
   // Load all mods list when Mods tab is opened or search changes (debounced). Avoid reloading just by switching subtab.
   useEffect(() => {
     if (activeTab !== 'mods') return;
@@ -542,6 +601,7 @@ export default function LauncherUI() {
       const latest = versions[0] || null;
       const dl = latest?.download_url || '';
       const folderName = (mod?.full_name || mod?.name || latest?.name || 'mod').replace(/[\\/:*?"<>|]/g, '_');
+      if (installingMods[folderName]) return; // de-dup renderer triggers
       if (!dl) return;
       setInstallingMods((s) => ({ ...s, [folderName]: 'install' }));
       const resInstall = await window.electronAPI?.installMod?.(dir, String(folderName), String(dl));
@@ -552,7 +612,7 @@ export default function LauncherUI() {
       const res = await window.electronAPI?.listInstalledMods?.(dir || '');
       setInstalledMods(res?.ok ? (res?.mods || []) : (installedMods || []));
     } catch {}
-    finally { setInstallingMods((s) => { const n = { ...s }; const k = (mod?.name || (mod?.full_name?.split('-')?.[0]) || 'mod').replace(/[\\/:*?"<>|]/g, '_'); delete n[k]; return n; }); }
+    finally { setInstallingMods((s) => { const n = { ...s }; const k = (mod?.full_name || mod?.name || (mod?.full_name?.split('-')?.[0]) || 'mod').replace(/[\\/:*?"<>|]/g, '_'); delete n[k]; return n; }); }
   }
 
   function getModIconUrl(nameOrId?: string): string | undefined {
@@ -604,8 +664,35 @@ export default function LauncherUI() {
     return pack || null;
   }
 
+  function isInstalledModVisible(mod: InstalledMod): boolean {
+    const pack = getPackByName(mod.name || mod.id);
+    const isDeprecated = !!(pack && pack.is_deprecated);
+    const isNsfw = !!(pack && pack.has_nsfw_content);
+    if (!modsShowDeprecated && isDeprecated) return false;
+    if (!modsShowNsfw && isNsfw) return false;
+    return true;
+  }
+
   function sanitizeFolderName(s: string): string {
     return String(s || 'mod').replace(/[\\/:*?"<>|]/g, '_');
+  }
+
+  function deriveFolderFromDownloadUrl(url?: string): string | null {
+    if (!url) return null;
+    try {
+      const u = new URL(url);
+      const parts = u.pathname.split('/').filter(Boolean);
+      // Expect: /package/download/{owner}/{package}/{version}/
+      const pkgIdx = parts.findIndex((p) => p.toLowerCase() === 'package');
+      if (pkgIdx >= 0 && parts[pkgIdx + 1]?.toLowerCase() === 'download') {
+        const owner = parts[pkgIdx + 2];
+        const pack = parts[pkgIdx + 3];
+        if (owner && pack) return sanitizeFolderName(`${owner}-${pack}`);
+      }
+      return null;
+    } catch {
+      return null;
+    }
   }
 
   function compareVersions(a?: string|null, b?: string|null): number {
@@ -933,7 +1020,7 @@ export default function LauncherUI() {
       window.electronAPI?.onUpdate?.('deeplink:mod-install', (p: any) => {
         const payload = typeof p === 'object' && p ? p : {};
         setActiveTab('mods');
-        setModsSubtab('all');
+        setModsSubtab('installed');
         setPendingDeepLink({ name: String(payload.name || ''), version: String(payload.version || ''), downloadUrl: String(payload.downloadUrl || '') });
         // Kick a refresh if list is empty to ensure we can resolve by name
         if (!allMods || (Array.isArray(allMods) && allMods.length === 0)) setModsRefreshNonce((x) => x + 1);
@@ -949,9 +1036,12 @@ export default function LauncherUI() {
     const doInstall = async () => {
       try {
         if (downloadUrl) {
-          const folder = sanitizeFolderName(name || 'mod');
-          setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
-          await installMod({ name: folder, versions: [{ name: name || 'mod', version_number: version || undefined, download_url: downloadUrl }] });
+          const inferred = deriveFolderFromDownloadUrl(downloadUrl);
+          const folder = sanitizeFolderName(inferred || name || 'mod');
+          if (!installingMods[folder]) setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
+          // ensure Installed list is visible for progress
+          setModsSubtab('installed');
+          await installMod({ name: folder, versions: [{ name: name || inferred || 'mod', version_number: version || undefined, download_url: downloadUrl }] });
           setPendingDeepLink(null);
           return;
         }
@@ -1130,6 +1220,36 @@ export default function LauncherUI() {
               </label>
             </div>
 
+            <div className="glass rounded-xl p-4 grid gap-3">
+              <div className="text-sm opacity-80">Mods</div>
+              <label className="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle-switch"
+                  checked={modsShowDeprecated}
+                  onChange={async (e) => {
+                    const v = e.target.checked;
+                    setModsShowDeprecated(v);
+                    await window.electronAPI?.setSetting('modsShowDeprecated', v);
+                  }}
+                />
+                <span className="label-text">Show deprecated mods</span>
+              </label>
+              <label className="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle-switch"
+                  checked={modsShowNsfw}
+                  onChange={async (e) => {
+                    const v = e.target.checked;
+                    setModsShowNsfw(v);
+                    await window.electronAPI?.setSetting('modsShowNsfw', v);
+                  }}
+                />
+                <span className="label-text">Show NSFW mods</span>
+              </label>
+            </div>
+
             <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2 mb-4">
               <div className="mb-3 text-sm opacity-80">Repair installed channels</div>
               <div className="grid gap-2">
@@ -1295,6 +1415,34 @@ export default function LauncherUI() {
               </div>
             )}
             <div className="space-y-3 xl:col-span-2">
+              {activeTab === 'general' && (outdatedMods.length > 0) && (
+                <div className="glass rounded-xl overflow-hidden">
+                  <div className="flex items-stretch">
+                    <div className="px-4 py-3 text-sm">
+                      {outdatedMods.length === 1 ? '1 mod has an update:' : `${outdatedMods.length} mods have updates:`}
+                      <div className="mt-2 text-xs opacity-80 space-y-1">
+                        {outdatedMods.slice(0,6).map((m, idx) => (
+                          <div key={String(m?.name||'')+idx} className="flex items-center gap-2">
+                            <span className="font-medium truncate max-w-[40vw]">{m?.name}</span>
+                            <span className="opacity-70">—</span>
+                            <span className="font-mono">{m?.current || '—'}</span>
+                            <span className="opacity-70">→</span>
+                            <span className="font-mono text-warning">{m?.latest || '—'}</span>
+                          </div>
+                        ))}
+                        {outdatedMods.length > 6 && (
+                          <div className="opacity-60">and {outdatedMods.length - 6} more…</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="ml-auto p-2">
+                      <button className="btn btn-primary" onClick={() => { setActiveTab('mods'); setModsSubtab('installed'); }}>
+                        Manage
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {activeTab === 'mods' && (
                 <div className="glass rounded-xl p-4">
                   <div className="flex items-center justify-between gap-3">
@@ -1315,8 +1463,19 @@ export default function LauncherUI() {
                   {modsSubtab === 'installed' && (
                     <div className="mt-3 grid grid-cols-1 gap-3">
                       {installedModsLoading && <div className="text-xs opacity-70">Loading…</div>}
-                      {!installedModsLoading && (installedMods||[]).map((m) => (
-                        <div key={m.name} className="glass-soft rounded-lg border border-white/10 relative">
+                      {!installedModsLoading && (installedModsAugmented||[]).filter(isInstalledModVisible).map((m) => (
+                        <div
+                          key={m.name}
+                          className={`glass-soft rounded-lg border border-white/10 relative transition-transform duration-150 ${dragOverModName===m.name?'ring-1 ring-primary scale-[1.01]':''} ${draggingModName===m.name?'opacity-60':''}`}
+                          draggable
+                          onDragStart={(e)=>{ setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed='move'; }}
+                          onDragEnd={()=>{ setDraggingModName(null); setDragOverModName(null); }}
+                          onDragEnter={()=> setDragOverModName(m.name)}
+                          onDragLeave={(e)=>{ if ((e.target as HTMLElement).closest('[data-mod-card]')) return; setDragOverModName(null); }}
+                          onDragOver={(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; }}
+                          onDrop={(e)=>{ e.preventDefault(); const name=e.dataTransfer.getData('text/mod-name'); setDragOverModName(null); if(!name||name===m.name) return; setInstalledMods((prev)=>{ const list=(prev||[]).slice(); const fromIdx=list.findIndex(x=>x.name===name); const toIdx=list.findIndex(x=>x.name===m.name); if(fromIdx<0||toIdx<0||fromIdx===toIdx) return prev||[]; const [item]=list.splice(fromIdx,1); list.splice(toIdx,0,item); (async()=>{ try { const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir; if (dir) await window.electronAPI?.reorderMods?.(dir, list.map(x=>String(x.id||''))); } catch{} })(); return list; }); }}
+                          data-mod-card
+                        >
                           <div className="flex items-stretch min-h-[96px]">
                             <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
                               {m as any && (m as any).iconDataUrl ? (
@@ -1349,6 +1508,7 @@ export default function LauncherUI() {
                                       </button>
                                     </div>
                                   ); })()}
+                                  <div className="cursor-grab active:cursor-grabbing select-none opacity-70 text-2xl ml-1" title="Drag to reorder">≡</div>
                                 </div>
                               </div>
                               {m.description && <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.description}</div>}
@@ -1369,7 +1529,7 @@ export default function LauncherUI() {
                           ); return null; })()}
                         </div>
                       ))}
-                      {!installedModsLoading && (installedMods||[]).length===0 && (
+                      {!installedModsLoading && (installedModsAugmented||[]).length===0 && (
                         <div className="text-xs opacity-70">No mods installed.</div>
                       )}
                     </div>
@@ -1379,7 +1539,9 @@ export default function LauncherUI() {
                     <div className="mt-3 grid grid-cols-1 gap-3">
                       {allModsLoading && <div className="text-xs opacity-70">Loading…</div>}
                       {(!allModsLoading && modsError) && <div className="text-xs opacity-80 text-warning">{modsError}</div>}
-                      {!allModsLoading && (allMods||[]).slice(0, 60).map((m:any) => {
+                      {!allModsLoading && (allMods||[])
+                        .filter((m:any)=> (modsShowDeprecated || !m?.is_deprecated) && (modsShowNsfw || !m?.has_nsfw_content))
+                        .slice(0, 60).map((m:any) => {
                         const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
                         const title = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
                         const ver = latest?.version_number || '';
@@ -1455,7 +1617,10 @@ export default function LauncherUI() {
                       )}
                     </div>
                   )}
-                  <div className="text-[10px] opacity-60 mt-3">Mods powered by <a className="link" href="https://thunderstore.io/c/r5valkyrie" target="_blank" rel="noreferrer">Thunderstore</a></div>
+                  <div className="text-[10px] opacity-60 mt-3 flex items-center">
+                    <div>Mods powered by <a className="link" href="https://thunderstore.io/c/r5valkyrie" target="_blank" rel="noreferrer">Thunderstore</a></div>
+                    <div className="ml-auto opacity-70">Tip: Drag installed mods to change load order.</div>
+                  </div>
                 </div>
               )}
               {activeTab === 'general' && (busy && (hasStarted || overall)) && (
