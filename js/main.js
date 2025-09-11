@@ -490,7 +490,8 @@ ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
     installingModsInFlight.add(folderKey);
     const modsDir = path.join(installDir, 'mods');
     fs.mkdirSync(modsDir, { recursive: true });
-    const tempZip = path.join(os.tmpdir(), `mod_${Date.now()}.zip`);
+    // Place temp zip alongside destination to avoid using C: drive temp
+    const tempZip = path.join(modsDir, `.__mod_${Date.now()}.zip`);
     // Download zip with redirect support
     const downloadWithRedirects = (url, depth = 0) => new Promise((resolve, reject) => {
       if (depth > 5) return reject(new Error('Too many redirects'));

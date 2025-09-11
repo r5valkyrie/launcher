@@ -267,6 +267,8 @@ export default function LauncherUI() {
   const [eulaContent, setEulaContent] = useState<string>('');
   const eulaKeyRef = useRef<string>('');
   const eulaResolveRef = useRef<null | ((ok: boolean) => void)>(null);
+  const [playCooldown, setPlayCooldown] = useState<boolean>(false);
+  const launchClickGuardRef = useRef<boolean>(false);
 
   
 
@@ -1162,10 +1164,12 @@ export default function LauncherUI() {
                     <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
                   )}
                   {primaryAction === 'play' && (
-                    <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw]" disabled={busy} onClick={async ()=>{
-                      if (busy) return;
+                    <button className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] ${playCooldown?'btn-disabled opacity-70':''}`} disabled={busy || playCooldown} onClick={async ()=>{
+                      if (busy || launchClickGuardRef.current) return;
+                      launchClickGuardRef.current = true;
+                      setPlayCooldown(true);
                       const ok = await requireEula();
-                      if (!ok) return;
+                      if (!ok) { setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 300); return; }
                       const s: any = await window.electronAPI?.getSettings();
                       const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
                       const lo = s?.launchOptions?.[selectedChannel] || {};
@@ -1174,6 +1178,7 @@ export default function LauncherUI() {
                       if (res && !res.ok) {
                         console.error('Failed to launch', res.error);
                       }
+                      setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
                     }}>{busy ? 'Working…' : 'Play'}</button>
                   )}
                   <button className="btn btn-lg rounded-[1.5vw]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
@@ -1534,7 +1539,7 @@ export default function LauncherUI() {
                             <div className="flex-1 p-3 flex flex-col">
                               <div className="flex items-start gap-3">
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium truncate">{m.name || m.id}</div>
+                                  <div className="text-sm font-medium truncate">{String(m.name || m.id || '').replace(/_/g, ' ')}</div>
                                   <div className="text-[11px] opacity-60 truncate">Installed: {m.version || '—'}{(() => { const lv = getLatestVersionForName(m.name); return lv && m.version && compareVersions(m.version, lv) < 0 ? ` • Latest: ${lv}` : ''; })()}</div>
                                 </div>
                                 <div className="ml-auto flex items-center gap-2">
@@ -1588,7 +1593,8 @@ export default function LauncherUI() {
                         .filter((m:any)=> (modsShowDeprecated || !m?.is_deprecated) && (modsShowNsfw || !m?.has_nsfw_content))
                         .slice(0, 60).map((m:any) => {
                         const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
-                        const title = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
+                        const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
+                        const title = String(rawTitle).replace(/_/g, ' ');
                         const ver = latest?.version_number || '';
                         const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
                         const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
@@ -1990,7 +1996,7 @@ export default function LauncherUI() {
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-base font-semibold truncate">{modDetailsPack?.name || modDetailsPack?.full_name || 'Mod'}</div>
+                  <div className="text-base font-semibold truncate">{String(modDetailsPack?.name || modDetailsPack?.full_name || 'Mod').replace(/_/g, ' ')}</div>
                   <div className="text-xs opacity-70 truncate">Author: {modDetailsPack?.owner || (modDetailsPack?.full_name||'').split('-')[0] || 'Unknown'}</div>
                   {(() => { const latest = (Array.isArray(modDetailsPack?.versions) && modDetailsPack.versions[0]) ? modDetailsPack.versions[0] : null; if (!latest) return null; return (
                     <div className="text-xs opacity-80 mt-1 line-clamp-3">{latest.description || ''}</div>
