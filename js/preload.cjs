@@ -23,6 +23,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => ipcRenderer.invoke('app:getVersion'),
   getBaseDir: () => ipcRenderer.invoke('app:getBaseDir'),
   getLauncherInstallRoot: () => ipcRenderer.invoke('app:getLauncherInstallRoot'),
+  fetchEula: () => ipcRenderer.invoke('eula:get'),
   onUpdate: (channel, listener) => ipcRenderer.on(channel, (_e, payload) => listener(payload)),
   minimize: () => ipcRenderer.send('window:minimize'),
   maximize: () => ipcRenderer.send('window:maximize'),

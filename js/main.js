@@ -697,6 +697,26 @@ ipcMain.handle('launcher:config', async (_e, { url }) => {
   return fetchJson(url);
 });
 
+ipcMain.handle('eula:get', async () => {
+  const targetUrl = 'https://playvalkyrie.org/api/eula';
+  const fetchJson = (url) => new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      if (res.statusCode !== 200) { reject(new Error(`HTTP ${res.statusCode}`)); res.resume(); return; }
+      const chunks = [];
+      res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+      res.on('end', () => {
+        try { const txt = Buffer.concat(chunks).toString('utf8'); resolve(JSON.parse(txt)); } catch (e) { reject(e); }
+      });
+    }).on('error', reject);
+  });
+  try {
+    const json = await fetchJson(targetUrl);
+    return { ok: true, json };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err) };
+  }
+});
+
 ipcMain.handle('video:cache', async (_e, { filename }) => {
   const base = 'https://blaze.playvalkyrie.org/video_backgrounds';
   const url = `${base}/${filename}`;

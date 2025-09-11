@@ -48,6 +48,7 @@ declare global {
       getAppVersion?: () => Promise<string>;
       getBaseDir?: () => Promise<string>;
       getLauncherInstallRoot?: () => Promise<string>;
+      fetchEula?: () => Promise<{ok:boolean; json?: any; error?: string}>;
       // Mods
       listInstalledMods?: (installDir: string) => Promise<{ok:boolean; mods?: any[]; error?: string}>;
       setModEnabled?: (installDir: string, name: string, enabled: boolean) => Promise<{ok:boolean; error?: string}>;
@@ -260,6 +261,12 @@ export default function LauncherUI() {
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
   const [pendingDeepLink, setPendingDeepLink] = useState<{ name?: string; version?: string; downloadUrl?: string } | null>(null);
+  // EULA state
+  const [eulaOpen, setEulaOpen] = useState<boolean>(false);
+  const [eulaLoading, setEulaLoading] = useState<boolean>(false);
+  const [eulaContent, setEulaContent] = useState<string>('');
+  const eulaKeyRef = useRef<string>('');
+  const eulaResolveRef = useRef<null | ((ok: boolean) => void)>(null);
 
   
 
@@ -316,6 +323,9 @@ export default function LauncherUI() {
 
   async function startInstall() {
     if (!channel || !installDir) return;
+    // Require EULA
+    const ok = await requireEula();
+    if (!ok) return;
     setBusy(true);
     setFinished(false);
     setProgressItems({});
@@ -639,6 +649,39 @@ export default function LauncherUI() {
     const needle = String(name || '').toLowerCase();
     const pack = (allMods || []).find((p: any) => String(p?.name||'').toLowerCase() === needle);
     return getPackageUrlFromPack(pack) || 'https://thunderstore.io/c/r5valkyrie';
+  }
+
+  async function requireEula(): Promise<boolean> {
+    try {
+      const s: any = await window.electronAPI?.getSettings?.();
+      const acceptedVersion = s?.eulaAcceptedVersion || null;
+      setEulaLoading(true);
+      let json: any = null;
+      try {
+        const r = await window.electronAPI?.fetchEula?.();
+        json = r?.ok ? r?.json : null;
+      } catch {}
+      if (!json) {
+        try {
+          const res = await fetch('https://playvalkyrie.org/api/eula');
+          json = await res.json().catch(() => ({}));
+        } catch {}
+      }
+      setEulaLoading(false);
+      const ok = json && json.success && json.data && typeof json.data.contents === 'string';
+      if (!ok) return true; // fail-open
+      const version = json.data.version || json.data.modified || 'latest';
+      eulaKeyRef.current = String(version);
+      if (acceptedVersion && String(acceptedVersion) === String(version)) return true;
+      setEulaContent(String(json.data.contents || ''));
+      return await new Promise<boolean>((resolve) => {
+        eulaResolveRef.current = resolve;
+        setEulaOpen(true);
+      });
+    } catch {
+      setEulaLoading(false);
+      return true;
+    }
   }
 
   function getLatestVersionForName(name?: string): string | null {
@@ -1121,6 +1164,8 @@ export default function LauncherUI() {
                   {primaryAction === 'play' && (
                     <button className="btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw]" disabled={busy} onClick={async ()=>{
                       if (busy) return;
+                      const ok = await requireEula();
+                      if (!ok) return;
                       const s: any = await window.electronAPI?.getSettings();
                       const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
                       const lo = s?.launchOptions?.[selectedChannel] || {};
@@ -1977,6 +2022,29 @@ export default function LauncherUI() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {eulaOpen && (
+        <div className="fixed inset-0 z-[60]">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 grid place-items-center p-4">
+            <div className="glass rounded-xl w-[900px] max-w-[95vw] max-h-[85vh] overflow-hidden">
+              <div className="px-5 py-4 flex items-center gap-3 border-b border-white/10">
+                <div className="text-base font-semibold">End User License Agreement</div>
+                <div className="ml-auto text-xs opacity-70">{eulaLoading ? 'Loading…' : ''}</div>
+              </div>
+              <div className="p-4">
+                <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-[55vh] pr-2">
+                  {eulaContent || 'Failed to load EULA.'}
+                </div>
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  <button className="btn btn-ghost" onClick={()=>{ setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(false); }}>Decline</button>
+                  <button className="btn btn-primary" onClick={async ()=>{ try { const ver = eulaKeyRef.current || 'latest'; const s:any = await window.electronAPI?.getSettings?.(); const next = { ...(s||{}) }; next.eulaAcceptedVersion = ver; await window.electronAPI?.setSetting?.('eulaAcceptedVersion', ver); } catch {} finally { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(true); } }}>I Agree</button>
                 </div>
               </div>
             </div>
