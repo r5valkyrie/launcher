@@ -238,7 +238,7 @@ export default function LauncherUI() {
   const [visibility, setVisibility] = useState<number>(0);
   const [windowed, setWindowed] = useState<boolean>(false);
   const [borderless, setBorderless] = useState<boolean>(false);
-  const [maxFps, setMaxFps] = useState<string>('0');
+  const [maxFps, setMaxFps] = useState<string>('');
   const [resW, setResW] = useState<string>('');
   const [resH, setResH] = useState<string>('');
   const [reservedCores, setReservedCores] = useState<string>('-1');
@@ -260,7 +260,7 @@ export default function LauncherUI() {
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
-  const [pendingDeepLink, setPendingDeepLink] = useState<{ name?: string; version?: string; downloadUrl?: string } | null>(null);
+  const [pendingDeepLink, setPendingDeepLink] = useState<{ name?: string; version?: string; downloadUrls?: string[] } | null>(null);
   // EULA state
   const [eulaOpen, setEulaOpen] = useState<boolean>(false);
   const [eulaLoading, setEulaLoading] = useState<boolean>(false);
@@ -823,7 +823,7 @@ export default function LauncherUI() {
           setVisibility(Number(lo.visibility || 0));
           setWindowed(Boolean(lo.windowed));
           setBorderless(lo.borderless !== false);
-          setMaxFps(String(lo.maxFps ?? '0'));
+          setMaxFps(String(lo.maxFps ?? ''));
           setResW(String(lo.resW || ''));
           setResH(String(lo.resH || ''));
           setReservedCores(String(lo.reservedCores || ''));
@@ -909,7 +909,7 @@ export default function LauncherUI() {
     // Video
     params.push(windowed ? '-windowed' : '-fullscreen');
     params.push(borderless ? '-noborder' : '-forceborder');
-    params.push(`+fps_max ${/^-?\d+$/.test(maxFps) ? maxFps : '0'}`);
+    if (maxFps && /^-?\d+$/.test(maxFps)) params.push(`+fps_max ${maxFps}`);
     if (/^\d+$/.test(resW)) params.push(`-w ${resW}`);
     if (/^\d+$/.test(resH)) params.push(`-h ${resH}`);
     // Mode specifics
@@ -1066,7 +1066,8 @@ export default function LauncherUI() {
         const payload = typeof p === 'object' && p ? p : {};
         setActiveTab('mods');
         setModsSubtab('installed');
-        setPendingDeepLink({ name: String(payload.name || ''), version: String(payload.version || ''), downloadUrl: String(payload.downloadUrl || '') });
+        
+        setPendingDeepLink({ name: String(payload.name || ''), version: String(payload.version || ''), downloadUrls: payload.downloadUrls });
         // Kick a refresh if list is empty to ensure we can resolve by name
         if (!allMods || (Array.isArray(allMods) && allMods.length === 0)) setModsRefreshNonce((x) => x + 1);
       });
@@ -1077,16 +1078,19 @@ export default function LauncherUI() {
   // Once Mods list is available and we're on Mods tab, process the pending deep link
   useEffect(() => {
     if (activeTab !== 'mods' || !pendingDeepLink) return;
-    const { name, version, downloadUrl } = pendingDeepLink;
+    const { name, version, downloadUrls } = pendingDeepLink;
     const doInstall = async () => {
       try {
-        if (downloadUrl) {
-          const inferred = deriveFolderFromDownloadUrl(downloadUrl);
-          const folder = sanitizeFolderName(inferred || name || 'mod');
-          if (!installingMods[folder]) setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
-          // ensure Installed list is visible for progress
-          setModsSubtab('installed');
-          await installMod({ name: folder, versions: [{ name: name || inferred || 'mod', version_number: version || undefined, download_url: downloadUrl }] });
+        if (downloadUrls && downloadUrls?.length > 0) {
+          for (let i = 0; i < downloadUrls.length; i++) {
+            const downloadUrl = downloadUrls[i];
+            const inferred = deriveFolderFromDownloadUrl(downloadUrl);
+            const folder = sanitizeFolderName(inferred || name || 'mod');
+            if (!installingMods[folder]) setInstallingMods((s)=>({ ...s, [folder]: 'install' }));
+            // ensure Installed list is visible for progress
+            setModsSubtab('installed');
+            await installMod({ name: folder, versions: [{ name: name || inferred || 'mod', version_number: version || undefined, download_url: downloadUrl }] });
+          }
           setPendingDeepLink(null);
           return;
         }
@@ -1567,7 +1571,7 @@ export default function LauncherUI() {
                           <div className="flex items-stretch min-h-[96px]">
                             <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
                               {m as any && (m as any).iconDataUrl ? (
-                                <img src={(m as any).iconDataUrl} alt="" className="w-full h-full object-cover" />
+                                <img src={(m as any).iconDataUrl} alt="" className="w-full h-full object-cover rounded-l-[var(--panel-radius)]" />
                               ) : getModIconUrl(m.name || m.id) ? (
                                 <img src={getModIconUrl(m.name || m.id)} alt="" className="w-full h-full object-cover" />
                               ) : (

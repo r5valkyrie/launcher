@@ -49,9 +49,9 @@ function handleDeeplink(url) {
     if (u.hostname === 'mod' && u.pathname === '/install') {
       const name = u.searchParams.get('name') || '';
       const version = u.searchParams.get('version') || '';
-      const downloadUrl = u.searchParams.get('downloadUrl') || '';
+      const downloadUrls = u.searchParams.get('downloadUrl')?.split(",") || '';
       if (mainWindow && mainWindow.webContents && !mainWindow.webContents.isLoading()) {
-        try { mainWindow.webContents.send('deeplink:mod-install', { url, name, version, downloadUrl }); } catch {}
+        try { mainWindow.webContents.send('deeplink:mod-install', { url, name, version, downloadUrls }); } catch {}
       } else {
         deeplinkQueue.push(url);
       }
