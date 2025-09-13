@@ -76,8 +76,8 @@ export default function LauncherUI() {
   const [overall, setOverall] = useState<{index:number,total:number,path:string, completed?: number}|null>(null);
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
   const [includeOptional, setIncludeOptional] = useState(false);
-  const [concurrency, setConcurrency] = useState<number>(4);
-  const [partConcurrency, setPartConcurrency] = useState<number>(4);
+  const [concurrency, setConcurrency] = useState<number>(8);
+  const [partConcurrency, setPartConcurrency] = useState<number>(6);
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
@@ -996,6 +996,33 @@ export default function LauncherUI() {
     else setPrimaryAction('play');
   }, [isInstalled, installedVersion, remoteVersion]);
 
+  async function fixChannelPermissions(name: string) {
+    const ch = channelsSettings?.[name];
+    const dir = ch?.installDir;
+    if (!dir) {
+      alert('Channel not installed or directory not found');
+      return;
+    }
+    
+    setBusy(true);
+    try {
+      const result = await window.electronAPI?.fixFolderPermissions?.({ folderPath: dir });
+      if (result?.ok) {
+        if (result.warnings && result.warnings.length > 0) {
+          alert(`Permissions fixed with warnings:\n${result.warnings.join('\n')}`);
+        } else {
+          alert('Permissions fixed successfully!');
+        }
+      } else {
+        alert(`Failed to fix permissions: ${result?.error || 'Unknown error'}`);
+      }
+    } catch (error: any) {
+      alert(`Failed to fix permissions: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function repairChannel(name: string) {
     const target = config?.channels.find((c) => c.name === name);
     if (!target) return;
@@ -1309,7 +1336,7 @@ export default function LauncherUI() {
                 await window.electronAPI?.setSetting('concurrency', n);
               }}
             >
-              {[1,2,3,4,6,8,12,16].map((n) => (
+              {[1,2,4,6,8,12,16,20,24].map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
@@ -1325,7 +1352,7 @@ export default function LauncherUI() {
                 await window.electronAPI?.setSetting('partConcurrency', n);
               }}
             >
-              {[1,2,3,4,6,8,12,16].map((n) => (
+              {[1,2,4,6,8,12,16,20,24].map((n) => (
                 <option key={n} value={n}>{n}</option>
               ))}
             </select>
@@ -1389,7 +1416,7 @@ export default function LauncherUI() {
             </div>
 
             <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2 mb-4">
-              <div className="mb-3 text-sm opacity-80">Repair installed channels</div>
+              <div className="mb-3 text-sm opacity-80">Manage installed channels</div>
               <div className="grid gap-2">
                 {enabledChannels.map((c) => {
                   const ch = channelsSettings?.[c.name];
@@ -1401,6 +1428,7 @@ export default function LauncherUI() {
                       <div className="text-xs opacity-80 truncate">{dir || 'Not installed'}</div>
                       {ver && <div className="ml-auto text-xs opacity-60">{ver}</div>}
                       <button className="btn btn-sm" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
+                      <button className="btn btn-sm btn-outline" disabled={!dir || busy} onClick={() => fixChannelPermissions(c.name)}>Fix Permissions</button>
                       {(() => {
                         const info = config?.channels.find((x) => x.name === c.name);
                         const dedi = info?.dedi_url;

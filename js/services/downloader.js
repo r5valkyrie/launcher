@@ -18,8 +18,14 @@ function pathKey(p) {
 // Track in-flight downloads across concurrent downloadAll invocations
 const activePromises = new Map();
 
-// Reuse connections to reduce server-side churn and stalls
-const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 32, maxFreeSockets: 16, keepAliveMsecs: 30000 });
+// Optimized HTTP agent for better download performance
+const keepAliveAgent = new https.Agent({ 
+  keepAlive: true, 
+  maxSockets: 64,        // Increased from 32 for more parallel connections
+  maxFreeSockets: 32,    // Increased from 16 
+  keepAliveMsecs: 60000, // Increased from 30s for longer connection reuse
+  scheduling: 'fifo'     // Better connection reuse strategy
+});
 
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
@@ -37,21 +43,24 @@ function ensureDir(dir) {
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    https
-      .get(url, (res) => {
-        if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-          res.resume();
-          return;
-        }
-        let data = '';
-        res.setEncoding('utf8');
-        res.on('data', (c) => (data += c));
-        res.on('end', () => {
-          try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
-        });
-      })
-      .on('error', reject);
+    const req = https.get(url, { agent: keepAliveAgent }, (res) => {
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+        res.resume();
+        return;
+      }
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (c) => (data += c));
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.setTimeout(30000, () => {
+      req.destroy();
+      reject(new Error('JSON fetch timeout'));
+    });
   });
 }
 
@@ -70,6 +79,7 @@ export function cancelToken(token) {
 
 const RETRYABLE_ERROR_CODES = new Set([
   'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNABORTED', 'ENETRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE',
+  'ENOTFOUND', 'ECONNREFUSED', 'EHOSTDOWN', 'ENETDOWN', // Additional network error codes
 ]);
 
 async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeFrom = 0, expectedTotal = 0) {
@@ -112,8 +122,8 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         : (resumeFrom > 0 ? (resumeFrom + contentLen) : contentLen);
       let received = 0;
       let lastProgressAt = Date.now();
-      // Adaptive stall timeout: longer on later attempts
-      const stallMs = attempt <= 2 ? 60000 : 90000;
+      // More aggressive stall timeout to detect and recover from slow connections faster
+      const stallMs = attempt <= 2 ? 30000 : 45000;
       const watchdog = setInterval(() => {
         if (token?.cancelled) return;
         if (Date.now() - lastProgressAt > stallMs) {
@@ -140,17 +150,28 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         .catch((e) => { try { clearInterval(watchdog); } catch {}; reject(e); });
     });
     token?.requests.add(req);
-    req.on('socket', (s) => { try { s.setKeepAlive(true, 60000); s.setNoDelay(true); } catch {} });
+    req.on('socket', (s) => { 
+      try { 
+        s.setKeepAlive(true, 60000); 
+        s.setNoDelay(true);
+        // Optimize socket buffer sizes for better throughput
+        s.setRecvBufferSize && s.setRecvBufferSize(64 * 1024);
+        s.setSendBufferSize && s.setSendBufferSize(64 * 1024);
+      } catch {} 
+    });
     req.on('close', () => token?.requests.delete(req));
-    req.setTimeout(45000, () => { try { const err = new Error('Request timeout'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {} });
+    req.setTimeout(90000, () => { try { const err = new Error('Request timeout'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {} });
     if (token?.cancelled) { try { req.destroy(new Error('cancelled')); } catch {} }
     req.on('error', async (err) => {
       const code = err?.code;
-      const canRetry = attempt < 5 && (code && RETRYABLE_ERROR_CODES.has(String(code)));
+      const canRetry = attempt < 8 && (code && RETRYABLE_ERROR_CODES.has(String(code))); // Increased from 5 to 8 attempts
       const fileClosed = new Promise((r) => { try { file.close(() => r()); } catch { r(); } });
       try { await fileClosed; } catch {}
       if (canRetry) {
-        const backoff = Math.min(2000 * attempt, 10000);
+        // Improved exponential backoff with jitter to avoid thundering herd
+        const baseBackoff = Math.min(1000 * Math.pow(1.5, attempt), 15000);
+        const jitter = Math.random() * 1000;
+        const backoff = baseBackoff + jitter;
         let newResume = resumeFrom;
         try { const st = fs.statSync(dest); newResume = st.size; } catch {}
         return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, newResume, expectedTotal)));
