@@ -206,7 +206,7 @@ export default function LauncherUI() {
   const [channelsSettings, setChannelsSettings] = useState<Record<string, any>>({});
   // Mods state
   type InstalledMod = { id?: string; name: string; folder: string; version?: string|null; description?: string; enabled: boolean; hasManifest?: boolean };
-  const [modsSubtab, setModsSubtab] = useState<'installed'|'all'>('installed');
+  const [modsSubtab, setModsSubtab] = useState<'installed'|'all'>('all');
   const [installedMods, setInstalledMods] = useState<InstalledMod[] | null>(null);
   const [installedModsLoading, setInstalledModsLoading] = useState(false);
   const [allMods, setAllMods] = useState<any[] | null>(null);
