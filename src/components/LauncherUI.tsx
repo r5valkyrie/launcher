@@ -216,6 +216,11 @@ export default function LauncherUI() {
   const [modProgress, setModProgress] = useState<Record<string, { received: number; total: number; phase: string }>>({});
   const [modsShowDeprecated, setModsShowDeprecated] = useState<boolean>(false);
   const [modsShowNsfw, setModsShowNsfw] = useState<boolean>(false);
+  const [modsView, setModsView] = useState<'grid' | 'list'>('grid');
+  const [modsCategory, setModsCategory] = useState<'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio'>('all');
+  const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('name');
+  const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates'>('all');
+  const [favoriteMods, setFavoriteMods] = useState<Set<string>>(new Set());
   const [draggingModName, setDraggingModName] = useState<string | null>(null);
   const [dragOverModName, setDragOverModName] = useState<string | null>(null);
   const outdatedMods = useMemo(() => {
@@ -1046,6 +1051,80 @@ export default function LauncherUI() {
     return 'patch-notes';
   };
 
+  // Enhanced mods helper functions
+  const toggleFavoriteMod = (modId: string) => {
+    setFavoriteMods(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(modId)) {
+        newSet.delete(modId);
+      } else {
+        newSet.add(modId);
+      }
+      return newSet;
+    });
+  };
+
+  const getModCategory = (mod: any): string => {
+    const name = (mod?.name || mod?.full_name || '').toLowerCase();
+    const desc = (mod?.versions?.[0]?.description || '').toLowerCase();
+    
+    if (name.includes('weapon') || name.includes('gun') || desc.includes('weapon')) return 'weapons';
+    if (name.includes('map') || name.includes('level') || desc.includes('map')) return 'maps';
+    if (name.includes('ui') || name.includes('hud') || desc.includes('interface')) return 'ui';
+    if (name.includes('audio') || name.includes('sound') || desc.includes('audio')) return 'audio';
+    if (name.includes('gameplay') || desc.includes('gameplay')) return 'gameplay';
+    return 'all';
+  };
+
+  const filteredAndSortedMods = useMemo(() => {
+    if (!allMods) return [];
+    
+    let filtered = allMods.filter((m: any) => {
+      // Basic filters
+      if (!modsShowDeprecated && m?.is_deprecated) return false;
+      if (!modsShowNsfw && m?.has_nsfw_content) return false;
+      
+      // Category filter
+      if (modsCategory !== 'all' && getModCategory(m) !== modsCategory) return false;
+      
+      // Status filter
+      const installed = (installedMods || []).find((im) => 
+        String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase()
+      );
+      
+      if (modsFilter === 'installed' && !installed) return false;
+      if (modsFilter === 'available' && installed) return false;
+      if (modsFilter === 'updates') {
+        if (!installed) return false;
+        const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
+        const ver = latest?.version_number || '';
+        if (!ver || compareVersions(installed?.version || null, ver) >= 0) return false;
+      }
+      
+      return true;
+    });
+    
+    // Sort
+    filtered.sort((a: any, b: any) => {
+      switch (modsSortBy) {
+        case 'name':
+          return (a?.name || '').localeCompare(b?.name || '');
+        case 'date':
+          const aDate = new Date(a?.date_created || 0).getTime();
+          const bDate = new Date(b?.date_created || 0).getTime();
+          return bDate - aDate;
+        case 'downloads':
+          return (b?.download_count || 0) - (a?.download_count || 0);
+        case 'rating':
+          return (b?.rating_score || 0) - (a?.rating_score || 0);
+        default:
+          return 0;
+      }
+    });
+    
+    return filtered;
+  }, [allMods, modsCategory, modsFilter, modsSortBy, modsShowDeprecated, modsShowNsfw, installedMods]);
+
   function buildLaunchParameters(): string {
     const params: string[] = [];
     // Common
@@ -1800,20 +1879,133 @@ export default function LauncherUI() {
                 </div>
               )}
               {activeTab === 'mods' && (
-                <div className="glass rounded-xl p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="btn-group">
-                      <button className={`btn btn-md ${modsSubtab==='installed'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('installed')}>Installed</button>
-                      <button className={`btn btn-md ${modsSubtab==='all'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('all')}>All</button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {modsSubtab === 'all' && (
-                        <input className="input input-bordered input-sm w-64" placeholder="Search mods" value={modsQuery} onChange={(e)=>setModsQuery(e.target.value)} />
-                      )}
-                      <div className="tooltip tooltip-primary tooltip-bottom z-20" data-tip="Refresh">
-                        <button className="btn btn-sm btn-primary text-xl" onClick={()=> setModsRefreshNonce((x)=>x+1)}>↻</button>
+                <div className="space-y-4">
+                  {/* Enhanced Header with Controls */}
+                  <div className="glass rounded-xl p-4">
+                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
+                      <div className="flex items-center gap-3">
+                        <h3 className="text-lg font-bold">Mod Manager</h3>
+                        <div className="btn-group">
+                          <button className={`btn btn-sm ${modsSubtab==='installed'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('installed')}>
+                            Installed ({(installedMods || []).length})
+                          </button>
+                          <button className={`btn btn-sm ${modsSubtab==='all'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('all')}>
+                            Browse ({filteredAndSortedMods.length})
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {/* View Toggle */}
+                        <div className="btn-group">
+                          <button 
+                            className={`btn btn-sm ${modsView === 'grid' ? 'btn-active' : ''}`}
+                            onClick={() => setModsView('grid')}
+                            title="Grid View"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="3" y="3" width="7" height="7"/>
+                              <rect x="14" y="3" width="7" height="7"/>
+                              <rect x="3" y="14" width="7" height="7"/>
+                              <rect x="14" y="14" width="7" height="7"/>
+                            </svg>
+                          </button>
+                          <button 
+                            className={`btn btn-sm ${modsView === 'list' ? 'btn-active' : ''}`}
+                            onClick={() => setModsView('list')}
+                            title="List View"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="8" y1="6" x2="21" y2="6"/>
+                              <line x1="8" y1="12" x2="21" y2="12"/>
+                              <line x1="8" y1="18" x2="21" y2="18"/>
+                              <line x1="3" y1="6" x2="3.01" y2="6"/>
+                              <line x1="3" y1="12" x2="3.01" y2="12"/>
+                              <line x1="3" y1="18" x2="3.01" y2="18"/>
+                            </svg>
+                          </button>
+                        </div>
+                        
+                        <div className="tooltip tooltip-primary tooltip-bottom z-20" data-tip="Refresh">
+                          <button className="btn btn-sm btn-primary" onClick={()=> setModsRefreshNonce((x)=>x+1)}>
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="23 4 23 10 17 10"/>
+                              <polyline points="1 20 1 14 7 14"/>
+                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                            </svg>
+                          </button>
+                        </div>
                       </div>
                     </div>
+
+                    {modsSubtab === 'all' && (
+                      <>
+                        {/* Advanced Filters */}
+                        <div className="flex flex-wrap items-center gap-2 mb-4">
+                          {/* Category Filter */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm opacity-70">Category:</span>
+                            <select 
+                              className="select select-bordered select-sm"
+                              value={modsCategory}
+                              onChange={(e) => setModsCategory(e.target.value as any)}
+                            >
+                              <option value="all">All Categories</option>
+                              <option value="weapons">🔫 Weapons</option>
+                              <option value="maps">🗺️ Maps</option>
+                              <option value="ui">🖥️ UI/HUD</option>
+                              <option value="gameplay">🎮 Gameplay</option>
+                              <option value="audio">🔊 Audio</option>
+                            </select>
+                          </div>
+
+                          {/* Status Filter */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm opacity-70">Status:</span>
+                            <select 
+                              className="select select-bordered select-sm"
+                              value={modsFilter}
+                              onChange={(e) => setModsFilter(e.target.value as any)}
+                            >
+                              <option value="all">All Mods</option>
+                              <option value="available">Available</option>
+                              <option value="installed">Installed</option>
+                              <option value="updates">Need Updates</option>
+                            </select>
+                          </div>
+
+                          {/* Sort By */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm opacity-70">Sort:</span>
+                            <select 
+                              className="select select-bordered select-sm"
+                              value={modsSortBy}
+                              onChange={(e) => setModsSortBy(e.target.value as any)}
+                            >
+                              <option value="name">Name</option>
+                              <option value="date">Date Added</option>
+                              <option value="downloads">Downloads</option>
+                              <option value="rating">Rating</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Search Bar */}
+                        <div className="relative">
+                          <input 
+                            type="text" 
+                            placeholder="Search mods by name, author, or description..." 
+                            className="input input-bordered w-full pr-10"
+                            value={modsQuery}
+                            onChange={(e) => setModsQuery(e.target.value)}
+                          />
+                          <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                          </svg>
+                        </div>
+                      </>
+                    )}
                   </div>
 
                   {modsSubtab === 'installed' && (
@@ -1892,94 +2084,353 @@ export default function LauncherUI() {
                   )}
 
                   {modsSubtab === 'all' && (
-                    <div className="mt-3 grid grid-cols-1 gap-3">
-                      {allModsLoading && <div className="text-xs opacity-70">Loading…</div>}
-                      {(!allModsLoading && modsError) && <div className="text-xs opacity-80 text-warning">{modsError}</div>}
-                      {!isInstalled && !allModsLoading && (
-                        <div className="text-xs opacity-80 text-warning">Install the selected channel before installing mods.</div>
-                      )}
-                      {!allModsLoading && (allMods||[])
-                        .filter((m:any)=> (modsShowDeprecated || !m?.is_deprecated) && (modsShowNsfw || !m?.has_nsfw_content))
-                        .slice(0, 60).map((m:any) => {
-                        const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
-                        const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
-                        const title = String(rawTitle).replace(/_/g, ' ');
-                        const ver = latest?.version_number || '';
-                        const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
-                        const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
-                        const key = sanitizeFolderName(m?.full_name || m?.name || title);
-                        return (
-                          <div key={m?.uuid4 || m?.full_name || title} className="glass-soft rounded-lg border border-white/10 relative">
-                            <div className="flex items-stretch min-h-[96px]">
-                              <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
-                                {m?.versions?.[0]?.icon && (
-                                  <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
-                                )}
-                              </div>
-                              <div className="flex-1 p-3 pb-5 flex items-start">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium truncate flex items-center gap-2">
-                                    <span className="truncate">{title}</span>
-                                    {(state === 'installed' || state === 'update') && (<span className="badge badge-success">Installed</span>)}
-                                  </div>
-                                  <div className="text-[11px] opacity-60 truncate">{ver}</div>
-                                  {m?.versions?.[0]?.description && (
-                                    <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.versions[0].description}</div>
-                                  )}
-                                </div>
-                                <div className="ml-auto flex items-center gap-2">
-                                  {state === 'not' && (
-                                    <button className={`btn btn-md btn-success ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installFromAll(m)} disabled={!isInstalled || !!installingMods[key]}> 
-                                      {installingMods[key]==='install' ? 'Installing…' : 'Install'}
-                                    </button>
-                                  )}
-                                  {state === 'installed' && (
-                                    <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
-                                      <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                        <span className="text-xl leading-none">🗑</span>
-                                      </button>
-                                    </div>
-                                  )}
-                                  {state === 'update' && (
-                                    <>
-                                      <button className={`btn btn-md btn-warning ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>updateFromAll(m)} disabled={!isInstalled}>
-                                        {installingMods[key]==='install' ? 'Updating…' : 'Update'}
-                                      </button>
-                                      <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
-                                        <button className={`btn btn-md btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallFromAll(m)}>
-                                          <span className="text-xl leading-none">🗑</span>
-                                        </button>
-                                      </div>
-                                    </>
-                                  )}
-                                  <button className="btn btn-md btn-ghost" title="View details" onClick={()=>openModDetails(m)}>Details</button>
-                                </div>
+                    <div className="glass rounded-xl p-4">
+                      {allModsLoading && (
+                        <div className={modsView === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
+                          {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={`loading-${i}`} className="glass-soft rounded-lg border border-white/10 animate-pulse">
+                              {modsView === 'grid' && <div className="w-full pb-[40%] bg-base-300/50" />}
+                              <div className="p-4 space-y-3">
+                                <div className="h-4 bg-base-300/60 rounded w-3/4" />
+                                <div className="h-3 bg-base-300/40 rounded w-full" />
+                                <div className="h-3 bg-base-300/40 rounded w-2/3" />
                               </div>
                             </div>
-                            {installingMods[key]==='install' && (
-                              <div className="absolute bottom-0 right-2 left-30 m-0 p-0">
-                                {(() => { const mp = modProgress[key]; const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; return (
-                                  <>
-                                    <div className="flex items-center justify-between text-[10px] opacity-80 leading-none mb-0">
-                                      <span>{phaseLabel}</span>
-                                      <span>{pct}%</span>
+                          ))}
+                        </div>
+                      )}
+                      
+                      {(!allModsLoading && modsError) && (
+                        <div className="text-center py-8">
+                          <div className="text-4xl mb-4">⚠️</div>
+                          <div className="text-sm opacity-80 text-warning">{modsError}</div>
+                        </div>
+                      )}
+                      
+                      {!isInstalled && !allModsLoading && (
+                        <div className="text-center py-8">
+                          <div className="text-4xl mb-4">🎮</div>
+                          <div className="text-sm opacity-80 text-warning">Install the selected channel before installing mods.</div>
+                        </div>
+                      )}
+                      
+                      {!allModsLoading && isInstalled && (
+                        <>
+                          {modsView === 'grid' ? (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                              {filteredAndSortedMods.slice(0, 60).map((m: any) => {
+                                const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
+                                const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
+                                const title = String(rawTitle).replace(/_/g, ' ');
+                                const ver = latest?.version_number || '';
+                                const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
+                                const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
+                                const key = sanitizeFolderName(m?.full_name || m?.name || title);
+                                const modId = m?.uuid4 || m?.full_name || title;
+                                const isFavorite = favoriteMods.has(modId);
+                                const category = getModCategory(m);
+                                
+                                return (
+                                  <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg">
+                                    {/* Mod Image */}
+                                    <div className="relative w-full pb-[50%] bg-base-300/40 overflow-hidden rounded-t-lg">
+                                      {m?.versions?.[0]?.icon ? (
+                                        <img src={m.versions[0].icon} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="absolute inset-0 flex items-center justify-center text-4xl opacity-30">
+                                          {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
+                                        </div>
+                                      )}
+                                      
+                                      {/* Category Badge */}
+                                      <div className="absolute top-2 left-2">
+                                        <span className={`badge badge-sm ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
+                                          {category === 'weapons' ? '🔫 Weapons' : category === 'maps' ? '🗺️ Maps' : category === 'ui' ? '🖥️ UI' : category === 'gameplay' ? '🎮 Gameplay' : category === 'audio' ? '🔊 Audio' : '📦 Other'}
+                                        </span>
+                                      </div>
+
+                                      {/* Status Badge */}
+                                      {(state === 'installed' || state === 'update') && (
+                                        <div className="absolute top-2 right-2">
+                                          <span className={`badge badge-sm ${state === 'update' ? 'badge-warning' : 'badge-success'}`}>
+                                            {state === 'update' ? 'Update Available' : 'Installed'}
+                                          </span>
+                                        </div>
+                                      )}
+
+                                      {/* Favorite Button */}
+                                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button 
+                                          className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
+                                          onClick={() => toggleFavoriteMod(modId)}
+                                          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                        >
+                                          ⭐
+                                        </button>
+                                      </div>
                                     </div>
-                                    <progress className="progress progress-primary progress-xs w-full rounded-none m-0" value={pct} max={100}></progress>
-                                  </>
-                                ); })()}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {!allModsLoading && (allMods||[]).length===0 && (
-                        <div className="text-xs opacity-70">No mods found.</div>
+                                    
+                                    {/* Mod Info */}
+                                    <div className="p-4">
+                                      <h4 className="font-semibold text-sm mb-1 line-clamp-1">{title}</h4>
+                                      <div className="text-xs opacity-60 mb-2">v{ver}</div>
+                                      {m?.versions?.[0]?.description && (
+                                        <p className="text-xs opacity-80 line-clamp-3 mb-3">{m.versions[0].description}</p>
+                                      )}
+                                      
+                                      {/* Download/Rating Info */}
+                                      <div className="flex items-center gap-3 text-xs opacity-60 mb-3">
+                                        {m?.download_count && (
+                                          <span>📥 {m.download_count.toLocaleString()}</span>
+                                        )}
+                                        {m?.rating_score && (
+                                          <span>⭐ {m.rating_score.toFixed(1)}</span>
+                                        )}
+                                      </div>
+                                      
+                                      {/* Action Buttons */}
+                                      <div className="flex items-center gap-2">
+                                        {state === 'not' && (
+                                          <button 
+                                            className={`btn btn-sm btn-success flex-1 ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                            onClick={()=>installFromAll(m)} 
+                                            disabled={!isInstalled || !!installingMods[key]}
+                                          > 
+                                            {installingMods[key]==='install' ? 'Installing…' : 'Install'}
+                                          </button>
+                                        )}
+                                        {state === 'installed' && (
+                                          <button 
+                                            className={`btn btn-sm btn-error flex-1 ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                            onClick={()=>uninstallFromAll(m)}
+                                          >
+                                            🗑 Uninstall
+                                          </button>
+                                        )}
+                                        {state === 'update' && (
+                                          <>
+                                            <button 
+                                              className={`btn btn-sm btn-warning flex-1 ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                              onClick={()=>updateFromAll(m)} 
+                                              disabled={!isInstalled}
+                                            >
+                                              {installingMods[key]==='install' ? 'Updating…' : 'Update'}
+                                            </button>
+                                            <button 
+                                              className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                              onClick={()=>uninstallFromAll(m)}
+                                              title="Uninstall"
+                                            >
+                                              🗑
+                                            </button>
+                                          </>
+                                        )}
+                                        <button 
+                                          className="btn btn-sm btn-ghost" 
+                                          onClick={()=>openModDetails(m)}
+                                          title="View details"
+                                        >
+                                          ℹ️
+                                        </button>
+                                      </div>
+                                      
+                                      {isFavorite && (
+                                        <div className="mt-2 text-xs opacity-50 flex items-center gap-1">
+                                          ⭐ Favorited
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Progress Bar */}
+                                    {installingMods[key]==='install' && (
+                                      <div className="absolute bottom-0 left-0 right-0 p-2">
+                                        {(() => { 
+                                          const mp = modProgress[key]; 
+                                          const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); 
+                                          const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; 
+                                          return (
+                                            <div className="bg-base-100/90 rounded p-2">
+                                              <div className="flex items-center justify-between text-xs opacity-80 mb-1">
+                                                <span>{phaseLabel}</span>
+                                                <span>{pct}%</span>
+                                              </div>
+                                              <progress className="progress progress-primary progress-xs w-full" value={pct} max={100}></progress>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <div className="space-y-3">
+                              {filteredAndSortedMods.slice(0, 60).map((m: any) => {
+                                const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
+                                const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
+                                const title = String(rawTitle).replace(/_/g, ' ');
+                                const ver = latest?.version_number || '';
+                                const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
+                                const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
+                                const key = sanitizeFolderName(m?.full_name || m?.name || title);
+                                const modId = m?.uuid4 || m?.full_name || title;
+                                const isFavorite = favoriteMods.has(modId);
+                                const category = getModCategory(m);
+                                
+                                return (
+                                  <div key={modId} className="flex gap-4 p-4 glass-soft rounded-lg border border-white/10 hover:border-primary/30 transition-all hover:shadow-md relative">
+                                    {/* Mod Icon */}
+                                    <div className="w-16 h-16 bg-base-300/40 rounded-lg overflow-hidden flex-shrink-0">
+                                      {m?.versions?.[0]?.icon ? (
+                                        <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">
+                                          {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
+                                        </div>
+                                      )}
+                                    </div>
+                                    
+                                    {/* Mod Info */}
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-start justify-between gap-3 mb-2">
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-2 flex-wrap">
+                                            <h4 className="font-semibold text-sm">{title}</h4>
+                                            <span className={`badge badge-xs ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
+                                              {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
+                                            </span>
+                                            {(state === 'installed' || state === 'update') && (
+                                              <span className={`badge badge-xs ${state === 'update' ? 'badge-warning' : 'badge-success'}`}>
+                                                {state === 'update' ? 'Update' : 'Installed'}
+                                              </span>
+                                            )}
+                                            {isFavorite && <span className="text-xs">⭐</span>}
+                                          </div>
+                                          <div className="text-xs opacity-60 mb-1">v{ver}</div>
+                                          {m?.versions?.[0]?.description && (
+                                            <p className="text-xs opacity-80 line-clamp-2 mb-2">{m.versions[0].description}</p>
+                                          )}
+                                          <div className="flex items-center gap-3 text-xs opacity-60">
+                                            {m?.download_count && (
+                                              <span>📥 {m.download_count.toLocaleString()}</span>
+                                            )}
+                                            {m?.rating_score && (
+                                              <span>⭐ {m.rating_score.toFixed(1)}</span>
+                                            )}
+                                          </div>
+                                        </div>
+                                        
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center gap-2 flex-shrink-0">
+                                          <button 
+                                            className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
+                                            onClick={() => toggleFavoriteMod(modId)}
+                                            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                          >
+                                            ⭐
+                                          </button>
+                                          
+                                          {state === 'not' && (
+                                            <button 
+                                              className={`btn btn-sm btn-success ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                              onClick={()=>installFromAll(m)} 
+                                              disabled={!isInstalled || !!installingMods[key]}
+                                            > 
+                                              {installingMods[key]==='install' ? 'Installing…' : 'Install'}
+                                            </button>
+                                          )}
+                                          {state === 'installed' && (
+                                            <button 
+                                              className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                              onClick={()=>uninstallFromAll(m)}
+                                            >
+                                              🗑 Uninstall
+                                            </button>
+                                          )}
+                                          {state === 'update' && (
+                                            <>
+                                              <button 
+                                                className={`btn btn-sm btn-warning ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                                onClick={()=>updateFromAll(m)} 
+                                                disabled={!isInstalled}
+                                              >
+                                                {installingMods[key]==='install' ? 'Updating…' : 'Update'}
+                                              </button>
+                                              <button 
+                                                className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
+                                                onClick={()=>uninstallFromAll(m)}
+                                                title="Uninstall"
+                                              >
+                                                🗑
+                                              </button>
+                                            </>
+                                          )}
+                                          <button 
+                                            className="btn btn-sm btn-ghost" 
+                                            onClick={()=>openModDetails(m)}
+                                            title="View details"
+                                          >
+                                            ℹ️
+                                          </button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    
+                                    {/* Progress Bar */}
+                                    {installingMods[key]==='install' && (
+                                      <div className="absolute bottom-2 left-20 right-2">
+                                        {(() => { 
+                                          const mp = modProgress[key]; 
+                                          const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); 
+                                          const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; 
+                                          return (
+                                            <div className="bg-base-100/90 rounded p-2">
+                                              <div className="flex items-center justify-between text-xs opacity-80 mb-1">
+                                                <span>{phaseLabel}</span>
+                                                <span>{pct}%</span>
+                                              </div>
+                                              <progress className="progress progress-primary progress-xs w-full" value={pct} max={100}></progress>
+                                            </div>
+                                          );
+                                        })()}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                          {filteredAndSortedMods.length === 0 && !allModsLoading && (
+                            <div className="text-center py-12">
+                              <div className="text-4xl mb-4">🔍</div>
+                              <h4 className="text-lg font-semibold mb-2">No mods found</h4>
+                              <p className="text-sm opacity-70 mb-4">
+                                {modsQuery.trim() 
+                                  ? `No mods match "${modsQuery}"`
+                                  : `No mods available for the selected filters`
+                                }
+                              </p>
+                              {modsQuery.trim() && (
+                                <button 
+                                  className="btn btn-sm btn-outline"
+                                  onClick={() => setModsQuery('')}
+                                >
+                                  Clear Search
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
-                  <div className="text-[10px] opacity-60 mt-3 flex items-center">
+                  
+                  {/* Footer */}
+                  <div className="text-xs opacity-60 mt-4 flex items-center justify-between">
                     <div>Mods powered by <a className="link" href="https://thunderstore.io/c/r5valkyrie" target="_blank" rel="noreferrer">Thunderstore</a></div>
-                    <div className="ml-auto opacity-70">Tip: Drag installed mods to change load order.</div>
+                    <div className="opacity-70">Tip: Drag installed mods to change load order.</div>
                   </div>
                 </div>
               )}
