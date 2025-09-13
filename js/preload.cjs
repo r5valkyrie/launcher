@@ -40,6 +40,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   watchMods: (installDir) => ipcRenderer.invoke('mods:watch', { installDir }),
   unwatchMods: (installDir) => ipcRenderer.invoke('mods:unwatch', { installDir }),
   onModsChanged: (listener) => ipcRenderer.on('mods:changed', (_e, payload) => listener(payload)),
+  // Permissions
+  fixFolderPermissions: (payload) => ipcRenderer.invoke('fix-folder-permissions', payload),
 });
 
 

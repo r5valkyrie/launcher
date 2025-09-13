@@ -60,6 +60,8 @@ declare global {
       watchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
       unwatchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
       onModsChanged?: (listener: (payload: any) => void) => void;
+      // Permissions
+      fixFolderPermissions?: (payload: { folderPath: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
     };
   }
 }
@@ -105,6 +107,9 @@ export default function LauncherUI() {
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
   const [launcherRoot, setLauncherRoot] = useState<string>('');
+  // Permission prompt modal state
+  const [permissionPromptOpen, setPermissionPromptOpen] = useState<boolean>(false);
+  const [isFixingPermissions, setIsFixingPermissions] = useState<boolean>(false);
   // Auto-hide toast when finished
   useEffect(() => {
     if (!finished) return;
@@ -320,11 +325,51 @@ export default function LauncherUI() {
       [selectedChannel]: { ...(prev?.[selectedChannel] || {}), installDir: finalPath }
     }));
     setInstallPromptOpen(false);
+    // Show permission prompt before starting installation
+    setPermissionPromptOpen(true);
+  }
+
+  async function confirmPermissionsAndInstall() {
+    const actualInstallDir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+    
+    if (!actualInstallDir) {
+      alert('No installation directory specified');
+      return;
+    }
+    
+    if (!window.electronAPI?.fixFolderPermissions) {
+      alert('Permission fix functionality not available. Please restart the launcher.');
+      return;
+    }
+    
+    setIsFixingPermissions(true);
+    try {
+      // Fix folder permissions using admin privileges
+      const result = await window.electronAPI.fixFolderPermissions({ folderPath: actualInstallDir });
+      
+      if (!result?.ok) {
+        const errorDetails = result?.details ? `\n\nDetails:\n${result.details.join('\n')}` : '';
+        const errorMessage = `Failed to set folder permissions: ${result?.error || 'Unknown error'}${errorDetails}`;
+        alert(errorMessage);
+        setIsFixingPermissions(false);
+        return;
+      }
+      
+    } catch (error) {
+      const errorMessage = `Failed to set folder permissions: ${String(error)}`;
+      alert(errorMessage);
+      setIsFixingPermissions(false);
+      return;
+    }
+    
+    setIsFixingPermissions(false);
+    setPermissionPromptOpen(false);
     await startInstall();
   }
 
   async function startInstall() {
-    if (!channel || !installDir) return;
+    const actualInstallDir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+    if (!channel || !actualInstallDir) return;
     // Require EULA
     const ok = await requireEula();
     if (!ok) return;
@@ -441,7 +486,7 @@ export default function LauncherUI() {
           setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
         }, 240);
       }));
-      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir, includeOptional, concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
+      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional, concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
       setFinished(true);
       // Update local install state so primary button flips to Play
@@ -451,7 +496,7 @@ export default function LauncherUI() {
         ...prev,
         [channel.name]: {
           ...(prev?.[channel.name] || {}),
-          installDir,
+          installDir: actualInstallDir,
           gameVersion: checksums?.game_version || null,
           gameBaseUrl: channel.game_url,
           lastUpdatedAt: Date.now(),
@@ -508,11 +553,12 @@ export default function LauncherUI() {
     (async () => {
       try {
         setInstalledModsLoading(true);
-        const res = await window.electronAPI?.listInstalledMods?.(installDir || '');
+        const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+        const res = await window.electronAPI?.listInstalledMods?.(dir || '');
         setInstalledMods(res?.ok ? (res?.mods || []) : []);
       } catch { setInstalledMods([]); } finally { setInstalledModsLoading(false); }
     })();
-  }, [activeTab, installDir]);
+  }, [activeTab, channelsSettings?.[selectedChannel]?.installDir, installDir]);
 
   useEffect(() => {
     try {
@@ -2097,6 +2143,56 @@ export default function LauncherUI() {
                   <button className="btn btn-ghost" onClick={()=>{ setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(false); }}>Decline</button>
                   <button className="btn btn-primary" onClick={async ()=>{ try { const ver = eulaKeyRef.current || 'latest'; const s:any = await window.electronAPI?.getSettings?.(); const next = { ...(s||{}) }; next.eulaAcceptedVersion = ver; await window.electronAPI?.setSetting?.('eulaAcceptedVersion', ver); } catch {} finally { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(true); } }}>I Agree</button>
                 </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permission prompt modal */}
+      {permissionPromptOpen && (
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="absolute inset-0 grid place-items-center p-4">
+            <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
+              <div className="text-sm font-semibold mb-2">Folder Permissions Required</div>
+              <div className="text-xs opacity-80 mb-4">
+                To ensure the game runs properly, we need to set the correct folder permissions. 
+                This requires administrator privileges and will be done automatically.
+              </div>
+              
+              <div className="alert alert-info text-xs mb-4">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                <span>
+                  <strong>What we'll do:</strong><br />
+                  • Create the installation folder if it doesn't exist<br />
+                  • Set proper read/write permissions for your user account<br />
+                  • Remove admin requirements for the game folder
+                </span>
+              </div>
+
+              <div className="mt-3 text-xs opacity-70">Installation path</div>
+              <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">
+                {(channelsSettings?.[selectedChannel]?.installDir) || installDir}
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button 
+                  className="btn btn-sm btn-ghost" 
+                  onClick={() => setPermissionPromptOpen(false)}
+                  disabled={isFixingPermissions}
+                >
+                  Cancel
+                </button>
+                <button 
+                  className={`btn btn-sm btn-primary ${isFixingPermissions ? 'loading' : ''}`}
+                  onClick={confirmPermissionsAndInstall}
+                  disabled={isFixingPermissions}
+                >
+                  {isFixingPermissions ? 'Setting Permissions...' : 'Continue & Fix Permissions'}
+                </button>
               </div>
             </div>
           </div>
