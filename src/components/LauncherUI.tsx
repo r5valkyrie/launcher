@@ -2131,7 +2131,7 @@ export default function LauncherUI() {
                                 const category = getModCategory(m);
                                 
                                 return (
-                                  <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg">
+                                  <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg flex flex-col h-full">
                                     {/* Mod Image */}
                                     <div className="relative w-full pb-[50%] bg-base-300/40 overflow-hidden rounded-t-lg">
                                       {m?.versions?.[0]?.icon ? (
@@ -2171,25 +2171,33 @@ export default function LauncherUI() {
                                     </div>
                                     
                                     {/* Mod Info */}
-                                    <div className="p-4">
-                                      <h4 className="font-semibold text-sm mb-1 line-clamp-1">{title}</h4>
-                                      <div className="text-xs opacity-60 mb-2">v{ver}</div>
-                                      {m?.versions?.[0]?.description && (
-                                        <p className="text-xs opacity-80 line-clamp-3 mb-3">{m.versions[0].description}</p>
-                                      )}
-                                      
-                                      {/* Download/Rating Info */}
-                                      <div className="flex items-center gap-3 text-xs opacity-60 mb-3">
-                                        {m?.download_count && (
-                                          <span>📥 {m.download_count.toLocaleString()}</span>
+                                    <div className="p-4 flex flex-col h-full">
+                                      <div className="flex-1">
+                                        <h4 className="font-semibold text-sm mb-1 line-clamp-1">{title}</h4>
+                                        <div className="text-xs opacity-60 mb-2">v{ver}</div>
+                                        {m?.versions?.[0]?.description && (
+                                          <p className="text-xs opacity-80 line-clamp-3 mb-3">{m.versions[0].description}</p>
                                         )}
-                                        {m?.rating_score && (
-                                          <span>⭐ {m.rating_score.toFixed(1)}</span>
+                                        
+                                        {/* Download/Rating Info */}
+                                        <div className="flex items-center gap-3 text-xs opacity-60 mb-3">
+                                          {m?.download_count && (
+                                            <span>📥 {m.download_count.toLocaleString()}</span>
+                                          )}
+                                          {m?.rating_score && (
+                                            <span>⭐ {m.rating_score.toFixed(1)}</span>
+                                          )}
+                                        </div>
+                                        
+                                        {isFavorite && (
+                                          <div className="text-xs opacity-50 flex items-center gap-1 mb-2">
+                                            ⭐ Favorited
+                                          </div>
                                         )}
                                       </div>
                                       
-                                      {/* Action Buttons */}
-                                      <div className="flex items-center gap-2">
+                                      {/* Action Buttons - Pinned to Bottom */}
+                                      <div className="flex items-center gap-2 mt-auto">
                                         {state === 'not' && (
                                           <button 
                                             className={`btn btn-sm btn-success flex-1 ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
@@ -2233,12 +2241,6 @@ export default function LauncherUI() {
                                           ℹ️
                                         </button>
                                       </div>
-                                      
-                                      {isFavorite && (
-                                        <div className="mt-2 text-xs opacity-50 flex items-center gap-1">
-                                          ⭐ Favorited
-                                        </div>
-                                      )}
                                     </div>
                                     
                                     {/* Progress Bar */}
