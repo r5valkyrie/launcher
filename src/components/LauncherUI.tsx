@@ -33,6 +33,8 @@ declare global {
       cacheBackgroundVideo: (filename: string) => Promise<string>;
       exists: (path: string) => Promise<boolean>;
       openPath: (path: string) => Promise<boolean>;
+      pauseDownload?: () => Promise<boolean>;
+      resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
       selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
       launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string }) => Promise<{ok:boolean; error?:string}>;
@@ -75,11 +77,13 @@ export default function LauncherUI() {
   const [busy, setBusy] = useState(false);
   const [overall, setOverall] = useState<{index:number,total:number,path:string, completed?: number}|null>(null);
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
+  const [currentOperation, setCurrentOperation] = useState<string>('');
+  const [appVersion, setAppVersion] = useState<string>('');
   const [includeOptional, setIncludeOptional] = useState(false);
   const [concurrency, setConcurrency] = useState<number>(8);
   const [partConcurrency, setPartConcurrency] = useState<number>(6);
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'patchnotes'|'mods'|'settings'>('general');
+  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
   const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
@@ -125,6 +129,16 @@ export default function LauncherUI() {
   useEffect(() => { bytesReceivedRef.current = bytesReceived; }, [bytesReceived]);
   useEffect(() => { busyRef.current = busy; }, [busy]);
   useEffect(() => { pausedRef.current = isPaused; }, [isPaused]);
+
+  // Load app version
+  useEffect(() => {
+    (async () => {
+      try {
+        const version = await window.electronAPI?.getAppVersion?.();
+        if (version) setAppVersion(version);
+      } catch {}
+    })();
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -236,6 +250,11 @@ export default function LauncherUI() {
   const [newsLoading, setNewsLoading] = useState<boolean>(false);
   const [patchPosts, setPatchPosts] = useState<NewsPost[] | null>(null);
   const [patchLoading, setPatchLoading] = useState<boolean>(false);
+  const [patchNotesView, setPatchNotesView] = useState<'grid' | 'timeline'>('grid');
+  const [patchNotesFilter, setPatchNotesFilter] = useState<'all' | 'patch-notes' | 'community' | 'dev-blog'>('all');
+  const [patchNotesSearch, setPatchNotesSearch] = useState<string>('');
+  const [readPosts, setReadPosts] = useState<Set<string>>(new Set());
+  const [favoritePosts, setFavoritePosts] = useState<Set<string>>(new Set());
   // Launch options state
   type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
   const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
@@ -378,6 +397,7 @@ export default function LauncherUI() {
     setProgressItems({});
     setDoneCount(0);
     setTotalCount(0);
+    setCurrentOperation('Installing files');
     const runId = Date.now();
     runIdRef.current = runId;
     try {
@@ -386,7 +406,11 @@ export default function LauncherUI() {
       setTotalCount(filtered.length);
       setDoneCount(0);
       const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
-      window.electronAPI!.onProgress('progress:start', guard((p: any) => { setOverall(p); setHasStarted(true); }));
+      window.electronAPI!.onProgress('progress:start', guard((p: any) => { 
+        setOverall(p); 
+        setHasStarted(true); 
+        setCurrentOperation('Installing files'); 
+      }));
       window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); bytesTotalRef.current = tot; setBytesReceived(0); bytesReceivedRef.current = 0; setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); setReceivedAnyBytes(false); }));
       {
         let windowBytes = 0;
@@ -454,6 +478,7 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => {
         setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
+        setCurrentOperation('Merging file parts');
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 }
@@ -473,7 +498,7 @@ export default function LauncherUI() {
           [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 }
         }));
       }));
-      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setCurrentOperation('Verifying files'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); }));
       window.electronAPI!.onProgress('progress:error', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => {
@@ -486,6 +511,9 @@ export default function LauncherUI() {
           setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
         }, 240);
       }));
+      window.electronAPI!.onProgress('progress:paused', guard(() => { setIsPaused(true); }));
+      window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
+      window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional, concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
       setFinished(true);
@@ -915,11 +943,49 @@ export default function LauncherUI() {
     const loadPatch = async () => {
       setPatchLoading(true);
       try {
-        const tag = `${(selectedChannel || '').toLowerCase()}-patch-notes`;
-        const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:${encodeURIComponent(tag)}&limit=10&fields=title,excerpt,published_at,url,feature_image`;
+        // Fetch multiple types of content
+        const channelTag = `${(selectedChannel || '').toLowerCase()}-patch-notes`;
+        const communityTag = 'community';
+        const devBlogTag = 'dev-blog';
+        
+        let filterQuery = '';
+        if (patchNotesFilter === 'all') {
+          // For "all", we want posts with ANY of these tags (OR logic)
+          filterQuery = `filter=tag:${encodeURIComponent(channelTag)},tag:${encodeURIComponent(communityTag)},tag:${encodeURIComponent(devBlogTag)}`;
+        } else if (patchNotesFilter === 'patch-notes') {
+          filterQuery = `filter=tag:${encodeURIComponent(channelTag)}`;
+        } else if (patchNotesFilter === 'community') {
+          filterQuery = `filter=tag:${encodeURIComponent(communityTag)}`;
+        } else if (patchNotesFilter === 'dev-blog') {
+          filterQuery = `filter=tag:${encodeURIComponent(devBlogTag)}`;
+        }
+        
+        const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&${filterQuery}&limit=20&fields=title,excerpt,published_at,url,feature_image&order=published_at%20desc`;
+        
         const resp = await fetch(url);
         const json = await resp.json();
-        const posts = Array.isArray(json?.posts) ? json.posts : [];
+        let posts = Array.isArray(json?.posts) ? json.posts : [];
+        
+        // For "All" tab, prioritize community content first
+        if (patchNotesFilter === 'all') {
+          posts = posts.sort((a, b) => {
+            const aCategory = getPostCategoryFromTags(a.tags);
+            const bCategory = getPostCategoryFromTags(b.tags);
+            
+            // Community posts first, then dev-blog, then patch-notes
+            const categoryOrder = { 'community': 0, 'dev-blog': 1, 'patch-notes': 2 };
+            const aOrder = categoryOrder[aCategory] ?? 3;
+            const bOrder = categoryOrder[bCategory] ?? 3;
+            
+            if (aOrder !== bOrder) {
+              return aOrder - bOrder;
+            }
+            
+            // Within same category, sort by date (newest first)
+            return new Date(b.published_at || 0).getTime() - new Date(a.published_at || 0).getTime();
+          });
+        }
+        
         setPatchPosts(posts);
       } catch {
         setPatchPosts([]);
@@ -927,8 +993,59 @@ export default function LauncherUI() {
         setPatchLoading(false);
       }
     };
-    if (activeTab === 'patchnotes' && selectedChannel) loadPatch();
-  }, [activeTab, selectedChannel]);
+    if (activeTab === 'general' && selectedChannel) loadPatch();
+  }, [activeTab, selectedChannel, patchNotesFilter]);
+
+  // Helper functions for patch notes
+  const filteredPatchPosts = useMemo(() => {
+    if (!patchPosts) return [];
+    
+    let filtered = patchPosts;
+    
+    // Apply search filter
+    if (patchNotesSearch.trim()) {
+      const searchTerm = patchNotesSearch.toLowerCase();
+      filtered = filtered.filter(post => 
+        post.title.toLowerCase().includes(searchTerm) ||
+        (post.excerpt && post.excerpt.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    return filtered;
+  }, [patchPosts, patchNotesSearch]);
+
+  const toggleFavoritePost = (postUrl: string) => {
+    setFavoritePosts(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(postUrl)) {
+        newSet.delete(postUrl);
+      } else {
+        newSet.add(postUrl);
+      }
+      return newSet;
+    });
+  };
+
+  const markPostAsRead = (postUrl: string) => {
+    setReadPosts(prev => new Set([...prev, postUrl]));
+  };
+
+  const getPostCategory = (post: NewsPost): string => {
+    if (!post.tags) return 'patch-notes';
+    const tags = Array.isArray(post.tags) ? post.tags : [];
+    if (tags.some((tag: any) => tag.name === 'community')) return 'community';
+    if (tags.some((tag: any) => tag.name === 'dev-blog')) return 'dev-blog';
+    return 'patch-notes';
+  };
+
+  const getPostCategoryFromTags = (tags: any): string => {
+    if (!tags) return 'patch-notes';
+    const tagArray = Array.isArray(tags) ? tags : [];
+    if (tagArray.some((tag: any) => tag.name === 'community')) return 'community';
+    if (tagArray.some((tag: any) => tag.name === 'dev-blog')) return 'dev-blog';
+    return 'patch-notes';
+  };
+
   function buildLaunchParameters(): string {
     const params: string[] = [];
     // Common
@@ -1036,6 +1153,7 @@ export default function LauncherUI() {
     setProgressItems({});
     setDoneCount(0);
     setTotalCount(0);
+    setCurrentOperation('Repairing files');
     setHasStarted(true);
     setActiveTab('general');
     setBytesTotal(0);
@@ -1047,7 +1165,11 @@ export default function LauncherUI() {
       const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
-      window.electronAPI!.onProgress('progress:start', (p: any) => { setOverall(p); setHasStarted(true); });
+      window.electronAPI!.onProgress('progress:start', (p: any) => { 
+        setOverall(p); 
+        setHasStarted(true); 
+        setCurrentOperation('Repairing files'); 
+      });
       window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
       {
         let windowBytes = 0;
@@ -1093,10 +1215,10 @@ export default function LauncherUI() {
           };
         });
       });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setCurrentOperation('Merging file parts'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:merge:done', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
+      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setCurrentOperation('Verifying files'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); });
       window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
       await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name, mode: 'repair' });
@@ -1194,8 +1316,12 @@ export default function LauncherUI() {
   return (
     <div className="h-full grid grid-cols-[88px_1fr] relative">
       <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30">
-        <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft">
-          <img src="logo.png" alt="R5 Valkyrie" className="w-12 h-12 object-contain" />
+        <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft hover:glass-bright transition-all duration-300 group cursor-pointer">
+          <img 
+            src="logo.png" 
+            alt="R5 Valkyrie" 
+            className="w-12 h-12 object-contain transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse-subtle" 
+          />
         </div>
         <div className="flex-1" />
         <div className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
@@ -1203,7 +1329,7 @@ export default function LauncherUI() {
             <button className="btn btn-circle btn-ghost btn-sm text-white" onClick={() => window.electronAPI?.openExternal?.('https://discord.gg/69V7aNPSzg')}>
             <svg className="w-4 h-4" viewBox="0 -28.5 256 256" preserveAspectRatio="xMidYMid">
                 <g>
-                    <path d="M216.856339,16.5966031 C200.285002,8.84328665 182.566144,3.2084988 164.041564,0 C161.766523,4.11318106 159.108624,9.64549908 157.276099,14.0464379 C137.583995,11.0849896 118.072967,11.0849896 98.7430163,14.0464379 C96.9108417,9.64549908 94.1925838,4.11318106 91.8971895,0 C73.3526068,3.2084988 55.6133949,8.86399117 39.0420583,16.6376612 C5.61752293,67.146514 -3.4433191,116.400813 1.08711069,164.955721 C23.2560196,181.510915 44.7403634,191.567697 65.8621325,198.148576 C71.0772151,190.971126 75.7283628,183.341335 79.7352139,175.300261 C72.104019,172.400575 64.7949724,168.822202 57.8887866,164.667963 C59.7209612,163.310589 61.5131304,161.891452 63.2445898,160.431257 C105.36741,180.133187 151.134928,180.133187 192.754523,160.431257 C194.506336,161.891452 196.298154,163.310589 198.110326,164.667963 C191.183787,168.842556 183.854737,172.420929 176.223542,175.320965 C180.230393,183.341335 184.861538,190.991831 190.096624,198.16893 C211.238746,191.588051 232.743023,181.531619 254.911949,164.955721 C260.227747,108.668201 245.831087,59.8662432 216.856339,16.5966031 Z M85.4738752,135.09489 C72.8290281,135.09489 62.4592217,123.290155 62.4592217,108.914901 C62.4592217,94.5396472 72.607595,82.7145587 85.4738752,82.7145587 C98.3405064,82.7145587 108.709962,94.5189427 108.488529,108.914901 C108.508531,123.290155 98.3405064,135.09489 85.4738752,135.09489 Z M170.525237,135.09489 C157.88039,135.09489 147.510584,123.290155 147.510584,108.914901 C147.510584,94.5396472 157.658606,82.7145587 170.525237,82.7145587 C183.391518,82.7145587 193.761324,94.5189427 193.539891,108.914901 C193.539891,123.290155 183.391518,135.09489 170.525237,135.09489 Z" fill="#FFF" fill-rule="nonzero">
+                    <path d="M216.856339,16.5966031 C200.285002,8.84328665 182.566144,3.2084988 164.041564,0 C161.766523,4.11318106 159.108624,9.64549908 157.276099,14.0464379 C137.583995,11.0849896 118.072967,11.0849896 98.7430163,14.0464379 C96.9108417,9.64549908 94.1925838,4.11318106 91.8971895,0 C73.3526068,3.2084988 55.6133949,8.86399117 39.0420583,16.6376612 C5.61752293,67.146514 -3.4433191,116.400813 1.08711069,164.955721 C23.2560196,181.510915 44.7403634,191.567697 65.8621325,198.148576 C71.0772151,190.971126 75.7283628,183.341335 79.7352139,175.300261 C72.104019,172.400575 64.7949724,168.822202 57.8887866,164.667963 C59.7209612,163.310589 61.5131304,161.891452 63.2445898,160.431257 C105.36741,180.133187 151.134928,180.133187 192.754523,160.431257 C194.506336,161.891452 196.298154,163.310589 198.110326,164.667963 C191.183787,168.842556 183.854737,172.420929 176.223542,175.320965 C180.230393,183.341335 184.861538,190.991831 190.096624,198.16893 C211.238746,191.588051 232.743023,181.531619 254.911949,164.955721 C260.227747,108.668201 245.831087,59.8662432 216.856339,16.5966031 Z M85.4738752,135.09489 C72.8290281,135.09489 62.4592217,123.290155 62.4592217,108.914901 C62.4592217,94.5396472 72.607595,82.7145587 85.4738752,82.7145587 C98.3405064,82.7145587 108.709962,94.5189427 108.488529,108.914901 C108.508531,123.290155 98.3405064,135.09489 85.4738752,135.09489 Z M170.525237,135.09489 C157.88039,135.09489 147.510584,123.290155 147.510584,108.914901 C147.510584,94.5396472 157.658606,82.7145587 170.525237,82.7145587 C183.391518,82.7145587 193.761324,94.5189427 193.539891,108.914901 C193.539891,123.290155 183.391518,135.09489 170.525237,135.09489 Z" fill="#FFF">
 
             </path>
                 </g>
@@ -1234,22 +1360,86 @@ export default function LauncherUI() {
               </svg>
             </button>
           </div>
+          {appVersion && (
+            <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip={`Version ${appVersion}`}>
+              <button className="btn btn-circle btn-ghost btn-sm text-white/50 hover:text-white">
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 16v-4"/>
+                  <path d="M12 8h.01"/>
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <div className="mx-6 mt-4 mb-8 flex justify-center">
-          <div className="tabs tabs-boxed glass-soft rounded-[2.3vw]">
-                <a className={`tab ${activeTab==='general'?'tab-active':''}`} onClick={() => setActiveTab('general')}>General</a>
-            <a className={`tab ${activeTab==='downloads'?'tab-active':''}`} onClick={() => setActiveTab('downloads')}>Downloads</a>
-            <a className={`tab ${activeTab==='launch'?'tab-active':''}`} onClick={() => setActiveTab('launch')}>Launch Options</a>
-                <a className={`tab ${activeTab==='patchnotes'?'tab-active':''}`} onClick={() => setActiveTab('patchnotes')}>Patch Notes</a>
-            <a className={`tab ${activeTab==='mods'?'tab-active':''}`} onClick={() => setActiveTab('mods')}>Mods</a>
-            <a className={`tab ${activeTab==='settings'?'tab-active':''}`} onClick={() => setActiveTab('settings')}>Settings</a>
-              </div>
+          <nav className="glass-soft rounded-[2.3vw] p-2 backdrop-blur-sm min-w-fit">
+            <div className="flex items-center">
+              <button 
+                className={`nav-tab ${activeTab==='general'?'nav-tab-active':''}`} 
+                onClick={() => setActiveTab('general')}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                  <polyline points="9,22 9,12 15,12 15,22"/>
+                </svg>
+                <span className="whitespace-nowrap">Home</span>
+              </button>
+              <div className="nav-separator"></div>
+              <button 
+                className={`nav-tab ${activeTab==='mods'?'nav-tab-active':''}`} 
+                onClick={() => setActiveTab('mods')}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="9" cy="9" r="2"/>
+                  <path d="M21 15.5c-.621 0-1-.504-1-1.125V12"/>
+                  <path d="M3 8.5c.621 0 1 .504 1 1.125V12"/>
+                </svg>
+                <span className="whitespace-nowrap">Mods</span>
+              </button>
+              <div className="nav-separator"></div>
+              <button 
+                className={`nav-tab ${activeTab==='launch'?'nav-tab-active':''}`} 
+                onClick={() => setActiveTab('launch')}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 1v6m0 6v6m11-7h-6m-6 0H1"/>
+                </svg>
+                <span className="whitespace-nowrap">Launch Options</span>
+              </button>
+              <div className="nav-separator"></div>
+              <button 
+                className={`nav-tab ${activeTab==='downloads'?'nav-tab-active':''}`} 
+                onClick={() => setActiveTab('downloads')}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7,10 12,15 17,10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                <span className="whitespace-nowrap">Downloads</span>
+              </button>
+              <div className="nav-separator"></div>
+              <button 
+                className={`nav-tab ${activeTab==='settings'?'nav-tab-active':''}`} 
+                onClick={() => setActiveTab('settings')}
+              >
+                <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1 1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                </svg>
+                <span className="whitespace-nowrap">Settings</span>
+              </button>
             </div>
+          </nav>
+        </div>
         <div className="relative mx-6 mt-12 mb-6 overflow-visible">
-          <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden">
+          <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden will-change-auto">
             <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
             {bgVideo && (
               <video
@@ -1273,13 +1463,13 @@ export default function LauncherUI() {
           </div>
                 <div className="mt-auto flex items-center gap-3 pb-1">
                   {primaryAction === 'install' && (
-                    <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={openInstallPrompt}>Install</button>
+                    <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw] min-w-[6rem]" disabled={busy} onClick={openInstallPrompt}>Install</button>
                   )}
                   {primaryAction === 'update' && (
-                    <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
+                    <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw] min-w-[6rem]" disabled={busy} onClick={() => repairChannel(selectedChannel)}>Update</button>
                   )}
                   {primaryAction === 'play' && (
-                    <button className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] ${playCooldown?'btn-disabled opacity-70':''}`} disabled={busy || playCooldown} onClick={async ()=>{
+                    <button className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] min-w-[6rem] ${playCooldown?'btn-disabled opacity-70':''}`} disabled={busy || playCooldown} onClick={async ()=>{
                       if (busy || launchClickGuardRef.current) return;
                       launchClickGuardRef.current = true;
                       setPlayCooldown(true);
@@ -1296,7 +1486,7 @@ export default function LauncherUI() {
                       setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
                     }}>{busy ? 'Working…' : 'Play'}</button>
                   )}
-                  <button className="btn btn-lg rounded-[1.5vw]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
+                  <button className="btn btn-lg rounded-[1.5vw] min-w-[3rem]" title="Settings" onClick={() => setActiveTab('settings')}>⚙</button>
         </div>
         </div>
               {enabledChannels.length > 0 && (
@@ -1427,7 +1617,7 @@ export default function LauncherUI() {
                       <div className="min-w-24 badge badge-ghost">{c.name}</div>
                       <div className="text-xs opacity-80 truncate">{dir || 'Not installed'}</div>
                       {ver && <div className="ml-auto text-xs opacity-60">{ver}</div>}
-                      <button className="btn btn-sm" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
+                      <button className="btn btn-sm btn-outline" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
                       <button className="btn btn-sm btn-outline" disabled={!dir || busy} onClick={() => fixChannelPermissions(c.name)}>Fix Permissions</button>
                       {(() => {
                         const info = config?.channels.find((x) => x.name === c.name);
@@ -1814,6 +2004,12 @@ export default function LauncherUI() {
                       : totalCount;
                     return (
                       <>
+                        {currentOperation && (
+                          <div className="mb-2 text-sm opacity-70 flex items-center gap-2">
+                            <div className="loading loading-spinner loading-xs"></div>
+                            <span>{currentOperation}</span>
+                          </div>
+                        )}
                         <progress className="progress w-full" value={percent} max={100}></progress>
                         <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
                           {trackingByBytes ? (
@@ -1823,21 +2019,50 @@ export default function LauncherUI() {
                               <span>{(speedBps/1024/1024).toFixed(2)} MB/s</span>
                               <span>•</span>
                               <span>ETA {etaSeconds > 0 ? `${Math.floor(etaSeconds/60)}m ${etaSeconds%60}s` : '—'}</span>
+                              {fileProgress && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate max-w-[200px]" title={fileProgress.path}>
+                                    {(() => {
+                                      // Extract filename from path like "path/file.pak (part 17/20)" -> "file.pak (part 17/20)"
+                                      const pathParts = fileProgress.path.split('/');
+                                      const lastPart = pathParts[pathParts.length - 1] || fileProgress.path;
+                                      return lastPart;
+                                    })()}
+                                  </span>
+                                </>
+                              )}
                             </>
                           ) : (
                             <>
                               <span>
-                                Checking files… {checkedNumerator}/{checkedDenominator}
+                                {currentOperation || 'Checking files'} {checkedNumerator}/{checkedDenominator}
                               </span>
+                              {overall?.path && (
+                                <>
+                                  <span>•</span>
+                                  <span className="truncate max-w-[200px]" title={overall.path}>
+                                    {(() => {
+                                      // Extract filename from path, handling cases with parentheses
+                                      const pathParts = overall.path.split('/');
+                                      const lastPart = pathParts[pathParts.length - 1] || overall.path;
+                                      return lastPart;
+                                    })()}
+                                  </span>
+                                </>
+                              )}
                             </>
                           )}
                           <span className="ml-auto flex items-center gap-2">
+                            <button className="btn btn-outline btn-xs" onClick={() => setActiveTab('downloads')} title="View detailed progress">
+                              📊 Details
+                            </button>
                             {!isPaused ? (
-                              <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(true); }}>Pause</button>
+                              <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.pauseDownload?.(); setIsPaused(true); }}>Pause</button>
                             ) : (
-                              <button className="btn btn-outline btn-xs" onClick={async () => { setIsPaused(false); startInstall(); }}>Resume</button>
+                              <button className="btn btn-outline btn-xs" onClick={async () => { await window.electronAPI?.resumeDownload?.(); setIsPaused(false); }}>Resume</button>
                             )}
-                            <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); }}>Cancel</button>
+                            <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(false); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); setBusy(false); }}>Cancel</button>
                           </span>
                         </div>
                       </>
@@ -1906,119 +2131,291 @@ export default function LauncherUI() {
             
 
 
-            {activeTab === 'patchnotes' && (
-              <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold">Patch Notes — {selectedChannel}</h3>
-                    {!!(patchPosts && patchPosts.length) && (
-                      <span className="badge badge-ghost text-[10px]">{patchPosts.length}</span>
-                    )}
-                  </div>
-                  <a className="btn btn-xs btn-ghost" href={`https://blog.playvalkyrie.org/tag/${(selectedChannel || '').toLowerCase()}-patch-notes/`} target="_blank" rel="noreferrer">View all</a>
-                </div>
-                {patchLoading && (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {Array.from({ length: 4 }).map((_, i) => (
-                      <div key={`ps-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
-                        <div className="w-full pb-[40%] bg-base-300/50" />
-                        <div className="p-3 space-y-2">
-                          <div className="h-3 bg-base-300/60 rounded w-3/4" />
-                          <div className="h-3 bg-base-300/40 rounded w-11/12" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {!patchLoading && (
-                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
-                    {(patchPosts || []).slice(0, 8).map((p) => (
-                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group rounded-xl overflow-hidden glass border border-white/10 hover:border-primary/40 transition-all hover:shadow-lg">
-                        <div className="relative w-full pb-[40%] bg-base-300">
-                          {p.feature_image ? (
-                            <img loading="lazy" src={p.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                          ) : (
-                            <div className="absolute inset-0 grid place-items-center text-xs opacity-60">No image</div>
-                          )}
-                          <div className="absolute inset-0 bg-gradient-to-r from-black/40 via-transparent to-transparent" />
-                          <div className="absolute left-0 top-0 h-full w-1 bg-primary/60" />
-                        </div>
-                        <div className="p-3">
-                          <div className="text-sm font-semibold truncate">{p.title}</div>
-                          <div className="flex items-center gap-2 text-[10px] opacity-60 mt-0.5">
-                            {p.published_at && <span>{new Date(p.published_at).toLocaleDateString()}</span>}
-                          </div>
-                          {p.excerpt && (
-                            <div className="text-xs opacity-80 line-clamp-2 mt-1">{p.excerpt}</div>
-                          )}
-                          <div className="mt-2 flex justify-end">
-                            <span className="btn btn-xs btn-outline">Open notes</span>
-                          </div>
-                        </div>
-                      </a>
-                    ))}
-                    {patchPosts && patchPosts.length === 0 && (
-                      <div className="text-xs opacity-70">No patch notes found for {selectedChannel}.</div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
             {activeTab === 'general' && (
-              <div className="glass rounded-xl p-4 min-h-[220px] xl:col-span-2">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-semibold">Community News</h3>
-                    {!!(newsPosts && newsPosts.length) && (
-                      <span className="badge badge-ghost text-[10px]">{newsPosts.length}</span>
-                    )}
-                  </div>
-                  <a className="btn btn-xs btn-ghost" href="https://blog.playvalkyrie.org/tag/community/" target="_blank" rel="noreferrer">View all</a>
-                </div>
-                {newsLoading && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={`s-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
-                        <div className="w-full pb-[45%] bg-base-300/50" />
-                        <div className="p-2 space-y-2">
-                          <div className="h-3 bg-base-300/60 rounded w-3/4" />
-                          <div className="h-3 bg-base-300/40 rounded w-10/12" />
-                        </div>
+              <div className="xl:col-span-2 space-y-4">
+                {/* Enhanced Header with Controls */}
+                <div className="glass rounded-xl p-4">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-bold">News & Updates</h3>
+                      {!!(filteredPatchPosts && filteredPatchPosts.length) && (
+                        <span className="badge badge-primary">{filteredPatchPosts.length}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {/* View Toggle */}
+                      <div className="btn-group">
+                        <button 
+                          className={`btn btn-sm ${patchNotesView === 'grid' ? 'btn-active' : ''}`}
+                          onClick={() => setPatchNotesView('grid')}
+                          title="Grid View"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                          </svg>
+                        </button>
+                        <button 
+                          className={`btn btn-sm ${patchNotesView === 'timeline' ? 'btn-active' : ''}`}
+                          onClick={() => setPatchNotesView('timeline')}
+                          title="Timeline View"
+                        >
+                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <line x1="8" y1="6" x2="21" y2="6"/>
+                            <line x1="8" y1="12" x2="21" y2="12"/>
+                            <line x1="8" y1="18" x2="21" y2="18"/>
+                            <line x1="3" y1="6" x2="3.01" y2="6"/>
+                            <line x1="3" y1="12" x2="3.01" y2="12"/>
+                            <line x1="3" y1="18" x2="3.01" y2="18"/>
+                          </svg>
+                        </button>
                       </div>
-                    ))}
-                  </div>
-                )}
-                {!newsLoading && (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {(newsPosts || []).slice(0, 9).map((p) => (
-                      <a key={p.url} href={p.url} target="_blank" rel="noreferrer" className="group rounded-xl overflow-hidden glass-soft border border-white/10 hover:border-primary/30 transition-all hover:shadow-lg">
-                        <div className="relative w-full pb-[45%] bg-base-300">
-                          {p.feature_image ? (
-                            <img loading="lazy" src={p.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.02]" />
-                          ) : (
-                            <div className="absolute inset-0 grid place-items-center text-xs opacity-60">No image</div>
-                          )}
-                          <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/60 to-transparent" />
-                        </div>
-                        <div className="p-2">
-                          <div className="text-[13px] font-medium truncate group-hover:text-primary">{p.title}</div>
-                          <div className="flex items-center gap-2 text-[10px] opacity-60 mt-0.5">
-                            {p.published_at && <span>{new Date(p.published_at).toLocaleDateString()}</span>}
-                          </div>
-                          {p.excerpt && (
-                            <div className="text-xs opacity-80 line-clamp-2 mt-1">{p.excerpt}</div>
-                          )}
-                          <div className="mt-2 flex justify-end">
-                            <span className="link link-hover text-xs opacity-80">Read</span>
-                          </div>
-                        </div>
+                      <a className="btn btn-sm btn-ghost" href={`https://blog.playvalkyrie.org/`} target="_blank" rel="noreferrer">
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                          <polyline points="15,3 21,3 21,9"/>
+                          <line x1="10" y1="14" x2="21" y2="3"/>
+                        </svg>
+                        Blog
                       </a>
-                    ))}
-                    {newsPosts && newsPosts.length === 0 && (
-                      <div className="text-xs opacity-70">No posts found.</div>
-                    )}
+                    </div>
                   </div>
-                )}
+
+                  {/* Filter Tabs */}
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <div className="tabs tabs-boxed bg-base-200/50">
+                      <button 
+                        className={`tab tab-sm ${patchNotesFilter === 'all' ? 'tab-active' : ''}`}
+                        onClick={() => setPatchNotesFilter('all')}
+                      >
+                        All
+                      </button>
+                      <button 
+                        className={`tab tab-sm ${patchNotesFilter === 'community' ? 'tab-active' : ''}`}
+                        onClick={() => setPatchNotesFilter('community')}
+                      >
+                        👥 Community
+                      </button>
+                      <button 
+                        className={`tab tab-sm ${patchNotesFilter === 'patch-notes' ? 'tab-active' : ''}`}
+                        onClick={() => setPatchNotesFilter('patch-notes')}
+                      >
+                        📋 Patch Notes
+                      </button>
+                      <button 
+                        className={`tab tab-sm ${patchNotesFilter === 'dev-blog' ? 'tab-active' : ''}`}
+                        onClick={() => setPatchNotesFilter('dev-blog')}
+                      >
+                        🛠️ Dev Blog
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      placeholder="Search news and updates..." 
+                      className="input input-bordered w-full pr-10"
+                      value={patchNotesSearch}
+                      onChange={(e) => setPatchNotesSearch(e.target.value)}
+                    />
+                    <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="11" cy="11" r="8"/>
+                      <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                  </div>
+                </div>
+
+                {/* Content Area */}
+                <div className="glass rounded-xl p-4 min-h-[400px]">
+                  {patchLoading && (
+                    <div className={patchNotesView === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-4'}>
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`ps-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
+                          {patchNotesView === 'grid' && <div className="w-full pb-[40%] bg-base-300/50" />}
+                          <div className="p-4 space-y-3">
+                            <div className="h-4 bg-base-300/60 rounded w-3/4" />
+                            <div className="h-3 bg-base-300/40 rounded w-full" />
+                            <div className="h-3 bg-base-300/40 rounded w-2/3" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!patchLoading && (
+                    <>
+                      {patchNotesView === 'grid' ? (
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                          {filteredPatchPosts.map((post) => {
+                            const category = getPostCategory(post);
+                            const isRead = readPosts.has(post.url);
+                            const isFavorite = favoritePosts.has(post.url);
+                            
+                            return (
+                              <div key={post.url} className={`group rounded-xl overflow-hidden glass border transition-all hover:shadow-lg ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/40'}`}>
+                                <div className="relative w-full pb-[40%] bg-base-300">
+                                  {post.feature_image ? (
+                                    <img loading="lazy" src={post.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="absolute inset-0 grid place-items-center text-xs opacity-60">
+                                      {category === 'patch-notes' ? '📋' : category === 'community' ? '👥' : '🛠️'}
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+                                  
+                                  {/* Category Badge */}
+                                  <div className="absolute top-2 left-2">
+                                    <span className={`badge badge-sm ${category === 'patch-notes' ? 'badge-primary' : category === 'community' ? 'badge-secondary' : 'badge-accent'}`}>
+                                      {category === 'patch-notes' ? 'Patch' : category === 'community' ? 'Community' : 'Dev Blog'}
+                                    </span>
+                                  </div>
+
+                                  {/* Quick Actions */}
+                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <button 
+                                      className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
+                                      onClick={(e) => { e.preventDefault(); toggleFavoritePost(post.url); }}
+                                      title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                    >
+                                      ⭐
+                                    </button>
+                                  </div>
+
+                                  {!isRead && (
+                                    <div className="absolute bottom-2 left-2">
+                                      <span className="badge badge-xs badge-info">New</span>
+                                    </div>
+                                  )}
+                                </div>
+                                
+                                <div className="p-4">
+                                  <h4 className="font-semibold text-sm mb-2 line-clamp-2">{post.title}</h4>
+                                  <div className="flex items-center gap-2 text-xs opacity-60 mb-2">
+                                    {post.published_at && (
+                                      <span>{new Date(post.published_at).toLocaleDateString('en-US', { 
+                                        month: 'short', 
+                                        day: 'numeric',
+                                        year: 'numeric'
+                                      })}</span>
+                                    )}
+                                  </div>
+                                  {post.excerpt && (
+                                    <p className="text-xs opacity-80 line-clamp-3 mb-3">{post.excerpt}</p>
+                                  )}
+                                  <div className="flex items-center justify-between">
+                                    <a 
+                                      href={post.url} 
+                                      target="_blank" 
+                                      rel="noreferrer"
+                                      className="btn btn-xs btn-primary"
+                                      onClick={() => markPostAsRead(post.url)}
+                                    >
+                                      Read More
+                                    </a>
+                                    {isFavorite && <span className="text-xs opacity-50">⭐ Favorited</span>}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {filteredPatchPosts.map((post, index) => {
+                            const category = getPostCategory(post);
+                            const isRead = readPosts.has(post.url);
+                            const isFavorite = favoritePosts.has(post.url);
+                            
+                            return (
+                              <div key={post.url} className={`flex gap-4 p-4 rounded-xl glass border transition-all hover:shadow-md ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/30'}`}>
+                                {/* Timeline Indicator */}
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-3 h-3 rounded-full ${category === 'patch-notes' ? 'bg-primary' : category === 'community' ? 'bg-secondary' : 'bg-accent'}`}></div>
+                                  {index < filteredPatchPosts.length - 1 && <div className="w-px h-full bg-white/10 mt-2"></div>}
+                                </div>
+                                
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between gap-3 mb-2">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <h4 className="font-semibold text-sm">{post.title}</h4>
+                                      <span className={`badge badge-xs ${category === 'patch-notes' ? 'badge-primary' : category === 'community' ? 'badge-secondary' : 'badge-accent'}`}>
+                                        {category === 'patch-notes' ? 'Patch' : category === 'community' ? 'Community' : 'Dev Blog'}
+                                      </span>
+                                      {!isRead && <span className="badge badge-xs badge-info">New</span>}
+                                      {isFavorite && <span className="text-xs">⭐</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                      <button 
+                                        className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
+                                        onClick={() => toggleFavoritePost(post.url)}
+                                        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                                      >
+                                        ⭐
+                                      </button>
+                                    </div>
+                                  </div>
+                                  
+                                  {post.published_at && (
+                                    <div className="text-xs opacity-60 mb-2">
+                                      {new Date(post.published_at).toLocaleDateString('en-US', { 
+                                        weekday: 'short',
+                                        month: 'short', 
+                                        day: 'numeric',
+                                        year: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                      })}
+                                    </div>
+                                  )}
+                                  
+                                  {post.excerpt && (
+                                    <p className="text-xs opacity-80 mb-3 line-clamp-2">{post.excerpt}</p>
+                                  )}
+                                  
+                                  <a 
+                                    href={post.url} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="btn btn-xs btn-outline"
+                                    onClick={() => markPostAsRead(post.url)}
+                                  >
+                                    Read Full Article →
+                                  </a>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {filteredPatchPosts.length === 0 && !patchLoading && (
+                        <div className="text-center py-12">
+                          <div className="text-4xl mb-4">📰</div>
+                          <h4 className="text-lg font-semibold mb-2">No posts found</h4>
+                          <p className="text-sm opacity-70 mb-4">
+                            {patchNotesSearch.trim() 
+                              ? `No posts match "${patchNotesSearch}"`
+                              : `No ${patchNotesFilter === 'all' ? '' : patchNotesFilter + ' '}posts available`
+                            }
+                          </p>
+                          {patchNotesSearch.trim() && (
+                            <button 
+                              className="btn btn-sm btn-outline"
+                              onClick={() => setPatchNotesSearch('')}
+                            >
+                              Clear Search
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
             )}
         </div>

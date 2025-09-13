@@ -13,6 +13,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exists: (path) => ipcRenderer.invoke('fs:exists', { path }),
   openPath: (path) => ipcRenderer.invoke('path:open', { path }),
   openExternal: (url) => ipcRenderer.invoke('open-external', { url }),
+  pauseDownload: () => ipcRenderer.invoke('download:pause'),
+  resumeDownload: () => ipcRenderer.invoke('download:resume'),
   cancelDownload: () => ipcRenderer.invoke('download:cancel'),
   selectFile: (filters) => ipcRenderer.invoke('select-file', { filters }),
   launchGame: (payload) => ipcRenderer.invoke('game:launch', payload),

@@ -40,6 +40,15 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   100% { background-position: 0% 50%; }
 }
 
+@keyframes pulseSubtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
+.animate-pulse-subtle {
+  animation: pulseSubtle 3s ease-in-out infinite;
+}
+
 .bg-animated {
   background-image:
     radial-gradient(1200px 800px at 10% 10%, rgba(96, 165, 250, 0.12), transparent 60%),
@@ -64,6 +73,14 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   border-radius: var(--panel-radius);
   background-clip: padding-box;
   box-shadow: 0 14px 28px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.25), var(--panel-inner);
+}
+
+.glass-bright {
+  background-color: rgba(27, 32, 38, 0.98);
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  border-radius: var(--panel-radius);
+  background-clip: padding-box;
+  box-shadow: 0 14px 28px rgba(0,0,0,0.35), 0 4px 10px rgba(0,0,0,0.25), var(--panel-inner), 0 0 20px rgba(59, 130, 246, 0.1);
 }
 
 /* Softer shadow inside the Launch Options grid to avoid stacked heavy shadows */
@@ -187,3 +204,68 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
 
 /* Inputs sizing */
 .input, .select { height: 2.25rem; }
+
+/* Enhanced Navigation Tabs */
+.nav-tab {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: calc(var(--panel-radius) - 4px);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+  min-height: 2.75rem;
+  box-sizing: border-box;
+}
+
+.nav-tab:hover {
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
+  transform: translateY(-1px);
+}
+
+.nav-tab-active {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.15));
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.nav-tab-active::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #3b82f6, #6366f1);
+  border-radius: 1px;
+}
+
+.nav-tab svg {
+  transition: transform 0.2s ease;
+}
+
+.nav-tab:hover svg {
+  transform: scale(1.1);
+}
+
+.nav-tab-active svg {
+  color: #60a5fa;
+}
+
+/* Navigation Separators */
+.nav-separator {
+  width: 1px;
+  height: 1.5rem;
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.15), transparent);
+  margin: 0 0.25rem;
+  flex-shrink: 0;
+}

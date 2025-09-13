@@ -652,8 +652,9 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
     }
   } catch {}
   activeDownloadToken = createCancelToken();
+  downloadPaused = false;
   try {
-    await downloadAll(baseUrl, checksums, installDir, emit, Boolean(includeOptional), Number(concurrency) || 4, Number(partConcurrency) || 4, activeDownloadToken);
+    await downloadAll(baseUrl, checksums, installDir, emit, Boolean(includeOptional), Number(concurrency) || 4, Number(partConcurrency) || 4, activeDownloadToken, () => downloadPaused);
     try {
       const channels = getSetting('channels', {}) || {};
       channels[String(channelName || 'default')] = {
@@ -751,9 +752,24 @@ ipcMain.handle('open-external', async (_e, { url }) => {
   try { await shell.openExternal(url); return true; } catch { return false; }
 });
 
+let downloadPaused = false;
+
+ipcMain.handle('download:pause', async () => {
+  downloadPaused = true;
+  try { mainWindow?.webContents.send('progress:paused', {}); } catch {}
+  return true;
+});
+
+ipcMain.handle('download:resume', async () => {
+  downloadPaused = false;
+  try { mainWindow?.webContents.send('progress:resumed', {}); } catch {}
+  return true;
+});
+
 ipcMain.handle('download:cancel', async () => {
   try { cancelToken(activeDownloadToken); } catch {}
   activeDownloadToken = null;
+  downloadPaused = false;
   try { mainWindow?.webContents.send('progress:cancelled', {}); } catch {}
   return true;
 });

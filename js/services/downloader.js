@@ -206,7 +206,7 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
 
   if (await fileExistsAndValid(targetPath, fileObj.checksum, fileObj.size)) {
     emit('progress:skip', { path: fileObj.path });
-    return;
+    return { downloadComplete: true, verificationComplete: true, targetPath };
   }
 
   if (token?.cancelled) throw new Error('cancelled');
@@ -290,28 +290,58 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
 
     const workers = Array.from({ length: Math.max(1, partConcurrency) }, () => partWorker());
     await Promise.all(workers);
-    emit('progress:merge:start', { path: fileObj.path, parts: partPaths.length });
-    const out = fs.createWriteStream(targetPath);
-    for (let idx = 0; idx < partPaths.length; idx++) {
-      const p = partPaths[idx];
-      emit('progress:merge:part', { path: fileObj.path, part: idx, totalParts: partPaths.length });
-      await new Promise((resolve, reject) => {
-        const read = fs.createReadStream(p);
-        read.on('error', reject);
-        out.on('error', reject);
-        read.on('end', () => {
-          try { fs.unlinkSync(p); } catch {}
-          resolve();
+    
+    // For multipart files, return info that parts are downloaded and merging can start
+    // This allows the next download to begin while this file is merging and verifying
+    return { 
+      downloadComplete: true, 
+      verificationComplete: false, 
+      targetPath,
+      mergeAndVerifyAsync: async () => {
+        emit('progress:merge:start', { path: fileObj.path, parts: partPaths.length });
+        const out = fs.createWriteStream(targetPath);
+        for (let idx = 0; idx < partPaths.length; idx++) {
+          const p = partPaths[idx];
+          emit('progress:merge:part', { path: fileObj.path, part: idx, totalParts: partPaths.length });
+          await new Promise((resolve, reject) => {
+            const read = fs.createReadStream(p);
+            read.on('error', reject);
+            out.on('error', reject);
+            read.on('end', () => {
+              try { fs.unlinkSync(p); } catch {}
+              resolve();
+            });
+            read.pipe(out, { end: false });
+          });
+        }
+        await new Promise((resolve, reject) => {
+          out.on('error', reject);
+          out.on('finish', resolve);
+          out.end();
         });
-        read.pipe(out, { end: false });
-      });
-    }
-    await new Promise((resolve, reject) => {
-      out.on('error', reject);
-      out.on('finish', resolve);
-      out.end();
-    });
-    try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
+        try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
+        
+        // Now verify the merged file
+        emit('progress:verify', { path: fileObj.path });
+        const finalHash = await sha256File(targetPath);
+        if (finalHash.toLowerCase() !== String(fileObj.checksum).toLowerCase()) {
+          throw new Error(`Checksum mismatch for ${fileObj.path}`);
+        }
+        
+        // Final cleanup: ensure all part files are removed after successful verification
+        try {
+          const files = fs.readdirSync(path.dirname(targetPath));
+          const baseName = path.basename(targetPath);
+          files.forEach(file => {
+            if (file.startsWith(baseName + '.part')) {
+              try { fs.unlinkSync(path.join(path.dirname(targetPath), file)); } catch {}
+            }
+          });
+        } catch {}
+        
+        return { verificationComplete: true, targetPath, filePath: fileObj.path };
+      }
+    };
   } else {
     const fileRel = normalizeRelative(fileObj.path);
     const fileUrl = `${baseUrl.replace(/\/$/, '')}/${fileRel}`;
@@ -350,9 +380,10 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
   if (finalHash.toLowerCase() !== String(fileObj.checksum).toLowerCase()) {
     throw new Error(`Checksum mismatch for ${fileObj.path}`);
   }
+  return { downloadComplete: true, verificationComplete: true, targetPath };
 }
 
-export async function downloadAll(baseUrl, checksums, installDir, emit, includeOptional = false, concurrency = 4, partConcurrency = 4, token) {
+export async function downloadAll(baseUrl, checksums, installDir, emit, includeOptional = false, concurrency = 4, partConcurrency = 4, token, isPausedFn) {
   // De-duplicate by path to avoid downloading same file multiple times
   const seen = new Set();
   const filtered = [];
@@ -379,10 +410,18 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   }, 0);
   try { emit('progress:bytes:total', { totalBytes }); } catch {}
 
-  async function processGroup(group, offset, groupConcurrency) {
+  async function processGroup(group, offset, groupConcurrency, allowOverlappedVerification = false) {
     let nextLocal = 0;
+    const pendingVerifications = [];
+    
     async function worker() {
       while (true) {
+        // Check if paused and wait
+        while (isPausedFn && isPausedFn()) {
+          await delay(100); // Check every 100ms
+          if (token?.cancelled) return;
+        }
+        
         const iLocal = nextLocal++;
         if (iLocal >= group.length) return;
         const f = group[iLocal];
@@ -395,16 +434,93 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
           emit('progress:start', { index: globalIndex, total, path: f.path, completed });
           p = (async () => {
             try {
-              await doOnce();
+              const result = await doOnce();
+              
+              // If this is a multipart file and we have overlapped processing enabled
+              if (allowOverlappedVerification && result?.mergeAndVerifyAsync) {
+                // Start merge and verification asynchronously but don't wait for it
+                const mergeVerifyPromise = result.mergeAndVerifyAsync().then((verifyResult) => {
+                  // Emit progress:done after verification completes for multipart files
+                  if (verifyResult?.filePath) {
+                    completed += 1;
+                    emit('progress:done', { index: globalIndex, total, path: verifyResult.filePath, completed });
+                  }
+                  return verifyResult;
+                }).catch((err) => {
+                  const message = String(err?.message || err || 'error');
+                  if (message.includes('cancelled')) throw err;
+                  try {
+                    const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
+                    try { fs.unlinkSync(targetPath); } catch {}
+                    // Clean up any remaining part files from failed merge/verify
+                    try {
+                      const files = fs.readdirSync(path.dirname(targetPath));
+                      const baseName = path.basename(targetPath);
+                      files.forEach(file => {
+                        if (file.startsWith(baseName + '.part')) {
+                          try { fs.unlinkSync(path.join(path.dirname(targetPath), file)); } catch {}
+                        }
+                      });
+                    } catch {}
+                    return doOnce().then(r => r.mergeAndVerifyAsync ? r.mergeAndVerifyAsync().then((retryResult) => {
+                      // Emit progress:done for successful retry
+                      if (retryResult?.filePath) {
+                        completed += 1;
+                        emit('progress:done', { index: globalIndex, total, path: retryResult.filePath, completed });
+                      }
+                      return retryResult;
+                    }) : r);
+                  } catch (err2) {
+                    try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                    throw err2;
+                  }
+                });
+                pendingVerifications.push(mergeVerifyPromise);
+                // Don't increment completed here for multipart files - it will be done after verification
+                return { ...result, skipProgressDone: true };
+              }
+              
+              return result;
             } catch (err) {
               const message = String(err?.message || err || 'error');
               if (message.includes('cancelled')) throw err;
               try {
                 const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
                 try { fs.unlinkSync(targetPath); } catch {}
-                await doOnce();
+                const retryResult = await doOnce();
+                
+                // Handle retry with overlapped merge and verification
+                if (allowOverlappedVerification && retryResult?.mergeAndVerifyAsync) {
+                  const mergeVerifyPromise = retryResult.mergeAndVerifyAsync().then((verifyResult) => {
+                    // Emit progress:done after verification completes for retry
+                    if (verifyResult?.filePath) {
+                      completed += 1;
+                      emit('progress:done', { index: globalIndex, total, path: verifyResult.filePath, completed });
+                    }
+                    return verifyResult;
+                  }).catch((err2) => {
+                    // Clean up part files on final failure
+                    try {
+                      const targetPath = path.join(installDir, f.path.replace(/\\/g, path.sep));
+                      const files = fs.readdirSync(path.dirname(targetPath));
+                      const baseName = path.basename(targetPath);
+                      files.forEach(file => {
+                        if (file.startsWith(baseName + '.part')) {
+                          try { fs.unlinkSync(path.join(path.dirname(targetPath), file)); } catch {}
+                        }
+                      });
+                    } catch {}
+                    try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                    throw err2;
+                  });
+                  pendingVerifications.push(mergeVerifyPromise);
+                  return { ...retryResult, skipProgressDone: true };
+                }
+                
+                return retryResult;
               } catch (err2) {
                 try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                throw err2;
               }
             }
           })();
@@ -412,19 +528,29 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
         } else {
           awaitingExisting = true;
         }
+        let result;
         try {
-          await p;
+          result = await p;
         } finally {
           if (!awaitingExisting) activePromises.delete(key);
         }
-        completed += 1;
-        emit('progress:done', { index: globalIndex, total, path: f.path, completed });
+        
+        // Only emit progress:done if this isn't a multipart file with overlapped verification
+        if (!result?.skipProgressDone) {
+          completed += 1;
+          emit('progress:done', { index: globalIndex, total, path: f.path, completed });
+        }
         // Small delay to allow agent to reuse sockets gracefully between last multipart and next
         await delay(10);
       }
     }
     const pool = Array.from({ length: Math.max(1, groupConcurrency) }, () => worker());
     await Promise.all(pool);
+    
+    // Wait for all pending verifications to complete
+    if (pendingVerifications.length > 0) {
+      await Promise.all(pendingVerifications);
+    }
   }
 
   // Stage 1: regular files with full concurrency
@@ -433,6 +559,6 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   if (activePromises.size > 0) {
     try { await Promise.all([...activePromises.values()]); } catch {}
   }
-  // Stage 2: multipart files, serialized (one at a time)
-  await processGroup(multis, singles.length, 1);
+  // Stage 2: multipart files, serialized (one at a time) with overlapped merge/verification
+  await processGroup(multis, singles.length, 1, true);
 }
