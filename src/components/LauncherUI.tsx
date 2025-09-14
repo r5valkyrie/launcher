@@ -1,7 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Sidebar from './Sidebar';
-import TabNav from './TabNav';
-import HeroBanner from './HeroBanner';
+import Sidebar from './ui/Sidebar';
+import TabNav from './ui/TabNav';
+import HeroBanner from './sections/HeroBanner';
+import InstallPromptModal from './modals/InstallPromptModal';
+import PermissionPromptModal from './modals/PermissionPromptModal';
+import EulaModal from './modals/EulaModal';
+import SettingsPanel from './panels/SettingsPanel';
+import ModsPanel from './panels/ModsPanel';
+import NewsPanel from './panels/NewsPanel';
+import ModDetailsModal from './modals/ModDetailsModal';
+import DownloadProgress from './ui/DownloadProgress';
+import UpdaterModal from './modals/UpdaterModal';
+import OutdatedModsBanner from './ui/OutdatedModsBanner';
+import ToastNotification from './modals/ToastNotification';
+import GameLaunchSection from './sections/GameLaunchSection';
+import UpdateBanner from './ui/UpdateBanner';
+import MainProgressBar from './ui/MainProgressBar';
+import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
+import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible } from './common/modUtils';
+import { buildLaunchParameters } from './common/launchUtils';
 
 type Channel = {
   name: string;
@@ -318,15 +335,6 @@ export default function LauncherUI() {
     } catch {}
   }
 
-  function deriveBaseFromDir(dir: string, channelName: string): string {
-    if (!dir) return '';
-    const norm = dir.replace(/\\+$/,'');
-    const suffix = `\\${channelName.replace(/\\+/g,'\\')}`;
-    if (norm.toLowerCase().endsWith(suffix.toLowerCase())) {
-      return norm.slice(0, -suffix.length) || '';
-    }
-    return norm;
-  }
 
   async function openInstallPrompt() {
     const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
@@ -466,6 +474,7 @@ export default function LauncherUI() {
       {
         let windowBytes = 0;
         let lastTick = Date.now();
+        let lastUIUpdate = Date.now();
         const tick = () => {
           if (runIdRef.current !== runId) return;
           const now = Date.now();
@@ -484,14 +493,20 @@ export default function LauncherUI() {
         window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
-            setBytesReceived((x) => {
-              const tentative = Math.max(0, x + d);
+            const now = Date.now();
+            // Update internal counters immediately for accuracy
+            const tentative = Math.max(0, bytesReceivedRef.current + d);
               const capped = bytesTotalRef.current > 0 ? Math.min(tentative, bytesTotalRef.current) : tentative;
               bytesReceivedRef.current = capped;
-              return capped;
-            });
+            
             if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
             if (d > 0) setReceivedAnyBytes(true);
+            
+            // Throttle UI updates to max 10 times per second to reduce React overhead
+            if (now - lastUIUpdate >= 100) {
+              setBytesReceived(capped);
+              lastUIUpdate = now;
+            }
           }
         }));
       }
@@ -549,8 +564,15 @@ export default function LauncherUI() {
           [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 }
         }));
       }));
-      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setCurrentOperation('Verifying files'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
-      window.electronAPI!.onProgress('progress:skip', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); }));
+      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { 
+        setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); 
+        setCurrentOperation('Verifying files'); 
+        // Don't add verify-only files to progress display to reduce visual jumping
+      }));
+      window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
+        // Don't add skipped files to progress display to reduce visual jumping
+        if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); 
+      }));
       window.electronAPI!.onProgress('progress:error', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => {
         setOverall(p);
@@ -818,24 +840,9 @@ export default function LauncherUI() {
     return latest?.version_number || null;
   }
 
-  function getPackByName(name?: string): any | null {
-    const needle = String(name || '').toLowerCase();
-    const packs = (allMods || []);
-    let pack = packs.find((p: any) => String(p?.name||'').toLowerCase() === needle);
-    if (!pack) pack = packs.find((p: any) => String(p?.full_name||'').toLowerCase() === needle);
-    if (!pack) {
-      const base = needle.split('-')[0];
-      pack = packs.find((p: any) => {
-        const n = String(p?.name||'').toLowerCase();
-        const fn = String(p?.full_name||'').toLowerCase();
-        return n === base || fn.startsWith(`${base}-`);
-      });
-    }
-    return pack || null;
-  }
 
   function isInstalledModVisible(mod: InstalledMod): boolean {
-    const pack = getPackByName(mod.name || mod.id);
+    const pack = getPackByName(mod.name || mod.id, allMods || undefined);
     const isDeprecated = !!(pack && pack.is_deprecated);
     const isNsfw = !!(pack && pack.has_nsfw_content);
     if (!modsShowDeprecated && isDeprecated) return false;
@@ -843,38 +850,8 @@ export default function LauncherUI() {
     return true;
   }
 
-  function sanitizeFolderName(s: string): string {
-    return String(s || 'mod').replace(/[\\/:*?"<>|]/g, '_');
-  }
 
-  function deriveFolderFromDownloadUrl(url?: string): string | null {
-    if (!url) return null;
-    try {
-      const u = new URL(url);
-      const parts = u.pathname.split('/').filter(Boolean);
-      // Expect: /package/download/{owner}/{package}/{version}/
-      const pkgIdx = parts.findIndex((p) => p.toLowerCase() === 'package');
-      if (pkgIdx >= 0 && parts[pkgIdx + 1]?.toLowerCase() === 'download') {
-        const owner = parts[pkgIdx + 2];
-        const pack = parts[pkgIdx + 3];
-        if (owner && pack) return sanitizeFolderName(`${owner}-${pack}`);
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  }
 
-  function compareVersions(a?: string|null, b?: string|null): number {
-    const pa = String(a || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    const pb = String(b || '0').split('.').map((n) => parseInt(n, 10) || 0);
-    const len = Math.max(pa.length, pb.length);
-    for (let i = 0; i < len; i++) {
-      const x = pa[i] || 0; const y = pb[i] || 0;
-      if (x > y) return 1; if (x < y) return -1;
-    }
-    return 0;
-  }
 
   async function installFromAll(pack: any) {
     const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
@@ -898,7 +875,7 @@ export default function LauncherUI() {
   }
 
   async function updateInstalled(mod: InstalledMod) {
-    const pack = getPackByName(mod.name);
+    const pack = getPackByName(mod.name, allMods || undefined);
     if (!pack) return;
     await installMod({ name: mod.folder || mod.name, versions: pack.versions });
   }
@@ -1020,12 +997,12 @@ export default function LauncherUI() {
         
         // For "All" tab, prioritize community content first
         if (patchNotesFilter === 'all') {
-          posts = posts.sort((a, b) => {
-            const aCategory = getPostCategoryFromTags(a.tags);
-            const bCategory = getPostCategoryFromTags(b.tags);
+          posts = posts.sort((a: any, b: any) => {
+            const aCategory = getPostCategoryFromTags((a as any).tags);
+            const bCategory = getPostCategoryFromTags((b as any).tags);
             
             // Community posts first, then dev-blog, then patch-notes
-            const categoryOrder = { 'community': 0, 'dev-blog': 1, 'patch-notes': 2 };
+            const categoryOrder: { [key: string]: number } = { 'community': 0, 'dev-blog': 1, 'patch-notes': 2 };
             const aOrder = categoryOrder[aCategory] ?? 3;
             const bOrder = categoryOrder[bCategory] ?? 3;
             
@@ -1083,8 +1060,8 @@ export default function LauncherUI() {
   };
 
   const getPostCategory = (post: NewsPost): string => {
-    if (!post.tags) return 'patch-notes';
-    const tags = Array.isArray(post.tags) ? post.tags : [];
+    if (!(post as any).tags) return 'patch-notes';
+    const tags = Array.isArray((post as any).tags) ? (post as any).tags : [];
     
     // Check for explicit community tag first (case-insensitive)
     if (tags.some((tag: any) => tag.name?.toLowerCase() === 'community')) return 'community';
@@ -1184,47 +1161,56 @@ export default function LauncherUI() {
     return filtered;
   }, [allMods, modsCategory, modsFilter, modsSortBy, modsShowDeprecated, modsShowNsfw, installedMods]);
 
-  function buildLaunchParameters(): string {
-    const params: string[] = [];
-    // Common
-    if (reservedCores) params.push(`-numreservedcores ${reservedCores}`);
-    if (workerThreads) params.push(`-numworkerthreads ${workerThreads}`);
-    params.push(encryptPackets ? '+net_encryptionEnable 1' : '+net_encryptionEnable 0');
-    params.push(randomNetkey ? '+net_useRandomKey 1' : '+net_useRandomKey 0');
-    params.push(queuedPackets ? '+net_queued_packet_thread 1' : '+net_queued_packet_thread 0');
-    if (noTimeout) params.push('-notimeout');
-    const mode = launchMode;
-    if (showConsole || mode === 'SERVER') params.push('-wconsole'); else params.push('-noconsole');
-    if (colorConsole) params.push('-ansicolor');
-    if (playlistFile) params.push(`-playlistfile "${playlistFile}"`);
-    if (mapIndex > 0) params.push(`+map ${mapIndex}`);
-    if (playlistIndex > 0) params.push(`+launchplaylist ${playlistIndex}`);
-    if (enableDeveloper) params.push('-dev -devsdk');
-    if (enableCheats) params.push('+sv_cheats 1');
-    if (offlineMode) params.push('-offline');
-    if (!discordRichPresence) params.push('+discord_enable 0');
-    // Hostname/visibility only for dedicated server mode
-    if (mode === 'SERVER' && hostname) {
-      params.push(`+hostname "${hostname}"`);
-      params.push(`+sv_pylonVisibility ${visibility}`);
-    }
-    // Video
-    params.push(windowed ? '-windowed' : '-fullscreen');
-    params.push(borderless ? '-noborder' : '-forceborder');
-    if (maxFps && /^-?\d+$/.test(maxFps)) params.push(`+fps_max ${maxFps}`);
-    if (/^\d+$/.test(resW)) params.push(`-w ${resW}`);
-    if (/^\d+$/.test(resH)) params.push(`-h ${resH}`);
-    // Mode specifics
-    if (mode === 'CLIENT') params.push('-noserverdll');
-    if (noAsync) {
-      params.push('-noasync');
-      params.push('+async_serialize 0 +sv_asyncAIInit 0 +sv_asyncSendSnapshot 0 +sv_scriptCompileAsync 0 +physics_async_sv 0');
-      if (mode !== 'SERVER') {
-        params.push('+buildcubemaps_async 0 +cl_scriptCompileAsync 0 +cl_async_bone_setup 0 +cl_updatedirty_async 0 +mat_syncGPU 1 +mat_sync_rt 1 +mat_sync_rt_flushes_gpu 1 +net_async_sendto 0 +physics_async_cl 0');
-      }
-    }
-    if (customCmd) params.push(customCmd);
-    return params.join(' ').trim();
+  // Download optimization functions
+  function optimizeForSpeed() {
+    setConcurrency(12);      // Higher file concurrency
+    setPartConcurrency(8);   // Higher part concurrency
+    window.electronAPI?.setSetting('concurrency', 12);
+    window.electronAPI?.setSetting('partConcurrency', 8);
+  }
+
+  function optimizeForStability() {
+    setConcurrency(4);       // Lower file concurrency
+    setPartConcurrency(3);   // Lower part concurrency  
+    window.electronAPI?.setSetting('concurrency', 4);
+    window.electronAPI?.setSetting('partConcurrency', 3);
+  }
+
+  function resetDownloadDefaults() {
+    setConcurrency(8);       // Default file concurrency
+    setPartConcurrency(6);   // Default part concurrency
+    window.electronAPI?.setSetting('concurrency', 8);
+    window.electronAPI?.setSetting('partConcurrency', 6);
+  }
+
+  function buildLaunchParametersLocal(): string {
+    return buildLaunchParameters({
+      launchMode: launchMode as any,
+      hostname,
+      visibility: String(visibility),
+      windowed,
+      borderless,
+      maxFps,
+      resW,
+      resH,
+      reservedCores,
+      workerThreads,
+      encryptPackets,
+      randomNetkey,
+      queuedPackets,
+      noTimeout,
+      showConsole,
+      colorConsole,
+      playlistFile,
+      mapIndex: String(mapIndex),
+      playlistIndex: String(playlistIndex),
+      enableDeveloper,
+      enableCheats,
+      offlineMode,
+      noAsync,
+      discordRichPresence,
+      customCmd,
+    });
   }
 
   async function persistLaunchOptions() {
@@ -1300,17 +1286,20 @@ export default function LauncherUI() {
     setBytesReceived(0);
     setSpeedBps(0);
     setEtaSeconds(0);
+    const runId = Date.now();
+    runIdRef.current = runId;
     try {
       const checksums = await window.electronAPI!.fetchChecksums(target.game_url);
       const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
-      window.electronAPI!.onProgress('progress:start', (p: any) => { 
+      const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
+      window.electronAPI!.onProgress('progress:start', guard((p: any) => { 
         setOverall(p); 
         setHasStarted(true); 
         setCurrentOperation(operationText); 
-      });
-      window.electronAPI!.onProgress('progress:bytes:total', (p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); });
+      }));
+      window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); }));
       {
         let windowBytes = 0;
         let lastTick = Date.now();
@@ -1328,22 +1317,22 @@ export default function LauncherUI() {
           if (busy && !isPaused) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
-        window.electronAPI!.onProgress('progress:bytes', (p: any) => {
+        window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
             setBytesReceived((x) => Math.max(0, x + d));
             if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
           }
-        });
+        }));
       }
-      window.electronAPI!.onProgress('progress:file', (p: any) => {
+      window.electronAPI!.onProgress('progress:file', guard((p: any) => {
         setFileProgress(p);
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: 'downloading', received: p.received, total: p.total }
         }));
-      });
-      window.electronAPI!.onProgress('progress:part', (p: any) => {
+      }));
+      window.electronAPI!.onProgress('progress:part', guard((p: any) => {
         setFileProgress({ path: `${p.path} (part ${p.part+1}/${p.totalParts})`, received: p.received, total: p.total });
         setProgressItems((prev) => {
           const current = prev[p.path] || { status: 'downloading' } as FileInfo;
@@ -1354,13 +1343,25 @@ export default function LauncherUI() {
             [p.path]: { ...current, status: 'downloading parts', totalParts: p.totalParts, parts }
           };
         });
-      });
-      window.electronAPI!.onProgress('progress:merge:start', (p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setCurrentOperation('Merging file parts'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:merge:part', (p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:merge:done', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:verify', (p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setCurrentOperation('Verifying files'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:skip', (p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'skipped', parts: {}, totalParts: 0 } })); });
-      window.electronAPI!.onProgress('progress:done', (p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); });
+      }));
+      window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setCurrentOperation('Merging file parts'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:merge:part', guard((p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:merge:done', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:verify', guard((p: any) => { 
+        setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); 
+        setCurrentOperation('Verifying files'); 
+        // Don't add verify-only files to progress display to reduce visual jumping
+      }));
+      window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
+        // Don't add skipped files to progress display to reduce visual jumping
+        // Remove from progress display if it was there from a previous download attempt
+        setProgressItems((prev) => {
+          const next = { ...prev };
+          delete next[p.path];
+          return next;
+        });
+      }));
+      window.electronAPI!.onProgress('progress:done', guard((p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); }));
       await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name, mode: 'repair' });
       setToastMessage('Repair completed');
       setFinished(true);
@@ -1430,7 +1431,7 @@ export default function LauncherUI() {
           return;
         }
         if (name) {
-          const pack = getPackByName(name);
+          const pack = getPackByName(name, allMods || undefined);
           if (!pack) return; // wait for next effect run after list refresh
           if (version) {
             const v = (Array.isArray(pack?.versions) ? pack.versions : []).find((x: any) => String(x?.version_number || '').toLowerCase() === String(version).toLowerCase());
@@ -1474,7 +1475,7 @@ export default function LauncherUI() {
             const s: any = await window.electronAPI?.getSettings();
             const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
             const lo = s?.launchOptions?.[selectedChannel] || {};
-            const args = buildLaunchParameters();
+            const args = buildLaunchParametersLocal();
             const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
@@ -1484,979 +1485,195 @@ export default function LauncherUI() {
           launchClickGuardRef={launchClickGuardRef}
           enabledChannels={enabledChannels}
           setSelectedChannel={setSelectedChannel}
-          onOpenSettings={() => setActiveTab('settings')}
+          onOpenLaunchOptions={() => setActiveTab('launch')}
         />
 
+        <MainProgressBar
+          visible={activeTab === 'general' && busy}
+          busy={busy}
+          hasStarted={hasStarted}
+          currentOperation={currentOperation}
+          bytesTotal={bytesTotal}
+          bytesReceived={bytesReceived}
+          speedBps={speedBps}
+          etaSeconds={etaSeconds}
+          doneCount={doneCount}
+          totalCount={totalCount}
+          isPaused={isPaused}
+          onPause={async () => {
+            try {
+              await window.electronAPI?.pauseDownload?.();
+              setIsPaused(true);
+            } catch {}
+          }}
+          onResume={async () => {
+            try {
+              await window.electronAPI?.resumeDownload?.();
+              setIsPaused(false);
+            } catch {}
+          }}
+          onCancel={async () => {
+            try {
+              await window.electronAPI?.cancelDownload?.();
+              setBusy(false);
+              setHasStarted(false);
+              setCurrentOperation('');
+              setBytesTotal(0);
+              setBytesReceived(0);
+              setSpeedBps(0);
+              setEtaSeconds(0);
+              setProgressItems({});
+            } catch {}
+          }}
+        />
 
         {activeTab === 'general' && null}
         {activeTab === 'settings' && (
-          <div key="content-settings" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 fade-in">
-            <div className="glass rounded-xl p-4 flex flex-wrap items-center gap-4">
-              <div className="mb-2 w-full text-sm opacity-80">Downloads</div>
-              <div className="flex items-center gap-2">
-            <span className="text-sm opacity-70">Concurrent files</span>
-            <select
-              className="select select-bordered select-sm"
-              value={concurrency}
-              onChange={async (e) => {
-                const n = Math.max(1, Math.min(16, Number(e.target.value)));
-                setConcurrency(n);
-                await window.electronAPI?.setSetting('concurrency', n);
-              }}
-            >
-              {[1,2,4,6,8,12,16,20,24].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-              <div className="flex items-center gap-2">
-            <span className="text-sm opacity-70">Concurrent parts</span>
-            <select
-              className="select select-bordered select-sm"
-              value={partConcurrency}
-              onChange={async (e) => {
-                const n = Math.max(1, Math.min(16, Number(e.target.value)));
-                setPartConcurrency(n);
-                await window.electronAPI?.setSetting('partConcurrency', n);
-              }}
-            >
-              {[1,2,4,6,8,12,16,20,24].map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
-              {channel && (
-                <div className="ml-auto text-xs opacity-70 truncate">
-                  Using: <span className="font-mono">{channel.game_url}</span>
-                </div>
-              )}
-        </div>
-
-            <div className="glass rounded-xl p-4 grid gap-3">
-              <div className="text-sm opacity-80">Appearance</div>
-              <label className="label cursor-pointer justify-start gap-3">
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  checked={bannerVideoEnabled}
-                  onChange={async (e) => {
-                    const v = e.target.checked;
-                    setBannerVideoEnabled(v);
-                    await window.electronAPI?.setSetting('bannerVideoEnabled', v);
-                  }}
-                />
-                <span className="label-text">Enable banner video</span>
-              </label>
-            </div>
-
-            <div className="glass rounded-xl p-4 grid gap-3">
-              <div className="text-sm opacity-80">Mods</div>
-              <label className="label cursor-pointer justify-start gap-3">
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  checked={modsShowDeprecated}
-                  onChange={async (e) => {
-                    const v = e.target.checked;
-                    setModsShowDeprecated(v);
-                    await window.electronAPI?.setSetting('modsShowDeprecated', v);
-                  }}
-                />
-                <span className="label-text">Show deprecated mods</span>
-              </label>
-              <label className="label cursor-pointer justify-start gap-3">
-                <input
-                  type="checkbox"
-                  className="toggle-switch"
-                  checked={modsShowNsfw}
-                  onChange={async (e) => {
-                    const v = e.target.checked;
-                    setModsShowNsfw(v);
-                    await window.electronAPI?.setSetting('modsShowNsfw', v);
-                  }}
-                />
-                <span className="label-text">Show NSFW mods</span>
-              </label>
-            </div>
-
-            <div className="glass rounded-xl p-4 col-span-1 xl:col-span-2 mb-4">
-              <div className="mb-3 text-sm opacity-80">Manage installed channels</div>
-              <div className="grid gap-2">
-                {enabledChannels.map((c) => {
-                  const ch = channelsSettings?.[c.name];
-                  const dir = ch?.installDir;
-                  const ver = ch?.gameVersion;
-                  return (
-                    <div key={c.name} className="flex items-center gap-3">
-                      <div className="min-w-24 badge badge-ghost">{c.name}</div>
-                      <div className="text-xs opacity-80 truncate">{dir || 'Not installed'}</div>
-                      {ver && <div className="ml-auto text-xs opacity-60">{ver}</div>}
-                      <button className="btn btn-sm btn-outline" disabled={!dir || busy} onClick={() => repairChannel(c.name)}>Repair</button>
-                      <button className="btn btn-sm btn-outline" disabled={!dir || busy} onClick={() => fixChannelPermissions(c.name)}>Fix Permissions</button>
-                      {(() => {
-                        const info = config?.channels.find((x) => x.name === c.name);
-                        const dedi = info?.dedi_url;
-                        if (!dedi) return null;
-                        return (
-                          <button className="btn btn-sm btn-outline" onClick={() => window.electronAPI?.openExternal?.(dedi)}>Download Dedicated Server</button>
-                        );
-                      })()}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
+          <SettingsPanel
+            busy={busy}
+            channel={channel as any}
+            enabledChannels={enabledChannels as any}
+            channelsSettings={channelsSettings}
+            concurrency={concurrency}
+            setConcurrency={setConcurrency}
+            partConcurrency={partConcurrency}
+            setPartConcurrency={setPartConcurrency}
+            bannerVideoEnabled={bannerVideoEnabled}
+            setBannerVideoEnabled={setBannerVideoEnabled}
+            modsShowDeprecated={modsShowDeprecated}
+            setModsShowDeprecated={setModsShowDeprecated}
+            modsShowNsfw={modsShowNsfw}
+            setModsShowNsfw={setModsShowNsfw}
+            repairChannel={repairChannel}
+            fixChannelPermissions={fixChannelPermissions}
+            setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}
+            openExternal={(url) => { window.electronAPI?.openExternal?.(url); }}
+            optimizeForSpeed={optimizeForSpeed}
+            optimizeForStability={optimizeForStability}
+            resetDownloadDefaults={resetDownloadDefaults}
+          />
         )}
 
         {activeTab === 'launch' && (
-          <div key="content-launch" className="mx-6 grid grid-cols-1 xl:grid-cols-2 gap-4 overflow-y-auto pb-6 fade-in launch-panels">
-            {/* Left column */}
-            <div className="grid gap-4">
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Session</div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm opacity-80">Mode</span>
-                  <div className="btn-group">
-                    {(['CLIENT','HOST','SERVER'] as LaunchMode[]).map((m) => (
-                      <button key={m} className={`btn btn-sm ${launchMode===m?'btn-active btn-primary':'btn-ghost'}`} onClick={() => setLaunchMode(m)}>{m}</button>
-                    ))}
-                  </div>
-                </div>
-                {launchMode === 'SERVER' && (
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm opacity-80">Hostname</span>
-                    <input className="input input-bordered input-sm w-full" value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="Server name" />
-          </div>
+          <GameLaunchSection
+            launchMode={launchMode as any}
+            setLaunchMode={setLaunchMode as any}
+            hostname={hostname}
+            setHostname={setHostname}
+            windowed={windowed}
+            setWindowed={setWindowed}
+            borderless={borderless}
+            setBorderless={setBorderless}
+            maxFps={maxFps}
+            setMaxFps={setMaxFps}
+            resW={resW}
+            setResW={setResW}
+            resH={resH}
+            setResH={setResH}
+            reservedCores={reservedCores}
+            setReservedCores={setReservedCores}
+            workerThreads={workerThreads}
+            setWorkerThreads={setWorkerThreads}
+            noAsync={noAsync}
+            setNoAsync={setNoAsync}
+            encryptPackets={encryptPackets}
+            setEncryptPackets={setEncryptPackets}
+            randomNetkey={randomNetkey}
+            setRandomNetkey={setRandomNetkey}
+            queuedPackets={queuedPackets}
+            setQueuedPackets={setQueuedPackets}
+            noTimeout={noTimeout}
+            setNoTimeout={setNoTimeout}
+            showConsole={showConsole}
+            setShowConsole={setShowConsole}
+            colorConsole={colorConsole}
+            setColorConsole={setColorConsole}
+            playlistFile={playlistFile}
+            setPlaylistFile={setPlaylistFile}
+            enableDeveloper={enableDeveloper}
+            setEnableDeveloper={setEnableDeveloper}
+            enableCheats={enableCheats}
+            setEnableCheats={setEnableCheats}
+            offlineMode={offlineMode}
+            setOfflineMode={setOfflineMode}
+            discordRichPresence={discordRichPresence}
+            setDiscordRichPresence={setDiscordRichPresence}
+            customCmd={customCmd}
+            setCustomCmd={setCustomCmd}
+            buildLaunchParameters={buildLaunchParametersLocal}
+          />
         )}
-              </div>
-
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Video</div>
-                <div className="flex items-center gap-3">
-                  <span className="text-sm opacity-80">Window</span>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={windowed} onChange={(e)=>setWindowed(e.target.checked)} /><span className="label-text">Windowed</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={borderless} onChange={(e)=>setBorderless(e.target.checked)} /><span className="label-text">Borderless</span></label>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="form-control flex flex-col">
-                    <span className="label-text text-xs opacity-70">Max FPS</span>
-                    <input className="input input-bordered input-sm mt-1 w-full" value={maxFps} onChange={(e)=>setMaxFps(e.target.value)} placeholder="0" />
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="form-control flex flex-col">
-                      <span className="label-text text-xs opacity-70">Width</span>
-                      <input className="input input-bordered input-sm mt-1 w-full" value={resW} onChange={(e)=>setResW(e.target.value)} placeholder="1920" />
-                    </label>
-                    <label className="form-control flex flex-col">
-                      <span className="label-text text-xs opacity-70">Height</span>
-                      <input className="input input-bordered input-sm mt-1 w-full" value={resH} onChange={(e)=>setResH(e.target.value)} placeholder="1080" />
-                    </label>
-                  </div>
-                </div>
-              </div>
-
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Performance</div>
-                <div className="grid grid-cols-2 gap-3">
-                  <label className="form-control flex flex-col">
-                    <span className="label-text text-xs opacity-70">Reserved cores</span>
-                    <input className="input input-bordered input-sm mt-1 w-full" value={reservedCores} onChange={(e)=>setReservedCores(e.target.value)} />
-                  </label>
-                  <label className="form-control flex flex-col">
-                    <span className="label-text text-xs opacity-70">Worker threads</span>
-                    <input className="input input-bordered input-sm mt-1 w-full" value={workerThreads} onChange={(e)=>setWorkerThreads(e.target.value)} />
-                  </label>
-                </div>
-                <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={noAsync} onChange={(e)=>setNoAsync(e.target.checked)} /><span className="label-text">Disable async systems</span></label>
-              </div>
-            </div>
-
-            {/* Right column */}
-            <div className="grid gap-4">
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Network</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={encryptPackets} onChange={(e)=>setEncryptPackets(e.target.checked)} /><span className="label-text">Encrypt</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={randomNetkey} onChange={(e)=>setRandomNetkey(e.target.checked)} /><span className="label-text">Random key</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={queuedPackets} onChange={(e)=>setQueuedPackets(e.target.checked)} /><span className="label-text">Queued pkts</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={noTimeout} onChange={(e)=>setNoTimeout(e.target.checked)} /><span className="label-text">No timeout</span></label>
-                </div>
-              </div>
-
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Console & Playlist</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={showConsole} onChange={(e)=>setShowConsole(e.target.checked)} /><span className="label-text">Console</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={colorConsole} onChange={(e)=>setColorConsole(e.target.checked)} /><span className="label-text">ANSI color</span></label>
-                </div>
-                <label className="form-control flex flex-col">
-                  <span className="label-text text-xs opacity-70">Playlist file (string)</span>
-                  <input className="input input-bordered input-sm w-full mt-1" value={playlistFile} onChange={(e)=>setPlaylistFile(e.target.value)} placeholder="playlists_r5_patch.txt" />
-                </label>
-        </div>
-
-              <div className="glass rounded-xl p-4 grid gap-3">
-                <div className="text-xs uppercase opacity-60">Gameplay & Advanced</div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
-                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={discordRichPresence} onChange={(e)=>setDiscordRichPresence(e.target.checked)} /><span className="label-text">Discord Rich Presence</span></label>
-                </div>
-                <label className="form-control flex flex-col">
-                  <span className="label-text text-xs opacity-70">Custom command line</span>
-                  <input className="input input-bordered input-sm mt-1 w-full" value={customCmd} onChange={(e)=>setCustomCmd(e.target.value)} placeholder="-debug +foo 1" />
-                </label>
-                <div className="text-[11px] opacity-70 font-mono break-words p-2 bg-base-300/40 rounded">
-                  {buildLaunchParameters()}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'general' && null}
 
         {activeTab !== 'settings' && (
           <div
             key={`content-main-${activeTab}`}
             className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in"
           >
-            {updateAvailable && !updateDownloaded && (
-              <div className="glass rounded-xl overflow-hidden xl:col-span-2">
-                <div className="flex items-stretch">
-                  <div className="px-4 py-3 text-sm">Launcher update available</div>
-                  <div className="ml-auto">
-                    <button className="btn btn-primary h-full rounded-none" onClick={() => window.electronAPI?.downloadUpdate?.()}>
-                      {updateProgress > 0 ? `${updateProgress.toFixed(0)}%` : 'Download'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            {updateDownloaded && (
-              <div className="glass rounded-xl overflow-hidden xl:col-span-2">
-                <div className="flex items-stretch">
-                  <div className="px-4 py-3 text-sm">Update ready. Restart now?</div>
-                  <div className="ml-auto">
-                    <button className="btn btn-primary h-full rounded-none" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart</button>
-                  </div>
-                </div>
-              </div>
-            )}
+            <UpdateBanner
+              updateAvailable={updateAvailable}
+              updateDownloaded={updateDownloaded}
+              updateProgress={updateProgress}
+              onDownloadUpdate={() => window.electronAPI?.downloadUpdate?.()}
+              onRestartToUpdate={() => window.electronAPI?.quitAndInstall?.()}
+            />
             <div className="space-y-3 xl:col-span-2">
-              {activeTab === 'general' && (outdatedMods.length > 0) && (
-                <div className="glass rounded-xl overflow-hidden">
-                  <div className="flex items-stretch">
-                    <div className="px-4 py-3 text-sm">
-                      {outdatedMods.length === 1 ? '1 mod has an update:' : `${outdatedMods.length} mods have updates:`}
-                      <div className="mt-2 text-xs opacity-80 space-y-1">
-                        {outdatedMods.slice(0,6).map((m, idx) => (
-                          <div key={String(m?.name||'')+idx} className="flex items-center gap-2">
-                            <span className="font-medium truncate max-w-[40vw]">{m?.name}</span>
-                            <span className="opacity-70">—</span>
-                            <span className="font-mono">{m?.current || '—'}</span>
-                            <span className="opacity-70">→</span>
-                            <span className="font-mono text-warning">{m?.latest || '—'}</span>
-                          </div>
-                        ))}
-                        {outdatedMods.length > 6 && (
-                          <div className="opacity-60">and {outdatedMods.length - 6} more…</div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="ml-auto p-2">
-                      <button className="btn btn-primary" onClick={() => { setActiveTab('mods'); setModsSubtab('installed'); }}>
-                        Manage
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              <OutdatedModsBanner
+                visible={activeTab === 'general'}
+                outdatedMods={outdatedMods as any}
+                onManageClick={() => { setActiveTab('mods'); setModsSubtab('installed'); }}
+              />
               {activeTab === 'mods' && (
-                <div className="space-y-4">
-                  {/* Enhanced Header with Controls */}
-                  <div className="glass rounded-xl p-4">
-                    <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-4">
-                      <div className="flex items-center gap-3">
-                        <h3 className="text-lg font-bold">Mod Manager</h3>
-                        <div className="btn-group">
-                          <button className={`btn btn-sm ${modsSubtab==='installed'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('installed')}>
-                            Installed ({(installedMods || []).length})
-                          </button>
-                          <button className={`btn btn-sm ${modsSubtab==='all'?'btn-active btn-primary':''}`} onClick={()=>setModsSubtab('all')}>
-                            Browse ({filteredAndSortedMods.length})
-                          </button>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        {/* View Toggle */}
-                        <div className="btn-group">
-                          <button 
-                            className={`btn btn-sm ${modsView === 'grid' ? 'btn-active' : ''}`}
-                            onClick={() => setModsView('grid')}
-                            title="Grid View"
-                          >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <rect x="3" y="3" width="7" height="7"/>
-                              <rect x="14" y="3" width="7" height="7"/>
-                              <rect x="3" y="14" width="7" height="7"/>
-                              <rect x="14" y="14" width="7" height="7"/>
-                            </svg>
-                          </button>
-                          <button 
-                            className={`btn btn-sm ${modsView === 'list' ? 'btn-active' : ''}`}
-                            onClick={() => setModsView('list')}
-                            title="List View"
-                          >
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <line x1="8" y1="6" x2="21" y2="6"/>
-                              <line x1="8" y1="12" x2="21" y2="12"/>
-                              <line x1="8" y1="18" x2="21" y2="18"/>
-                              <line x1="3" y1="6" x2="3.01" y2="6"/>
-                              <line x1="3" y1="12" x2="3.01" y2="12"/>
-                              <line x1="3" y1="18" x2="3.01" y2="18"/>
-                            </svg>
-                          </button>
-                        </div>
-                        
-                        <div className="tooltip tooltip-primary tooltip-bottom z-20" data-tip="Refresh">
-                          <button className="btn btn-sm btn-primary" onClick={()=> setModsRefreshNonce((x)=>x+1)}>
-                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <polyline points="23 4 23 10 17 10"/>
-                              <polyline points="1 20 1 14 7 14"/>
-                              <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-                            </svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {modsSubtab === 'all' && (
-                      <>
-                        {/* Advanced Filters */}
-                        <div className="flex flex-wrap items-center gap-2 mb-4">
-                          {/* Category Filter */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm opacity-70">Category:</span>
-                            <select 
-                              className="select select-bordered select-sm"
-                              value={modsCategory}
-                              onChange={(e) => setModsCategory(e.target.value as any)}
-                            >
-                              <option value="all">All Categories</option>
-                              <option value="weapons">🔫 Weapons</option>
-                              <option value="maps">🗺️ Maps</option>
-                              <option value="ui">🖥️ UI/HUD</option>
-                              <option value="gameplay">🎮 Gameplay</option>
-                              <option value="audio">🔊 Audio</option>
-                            </select>
-                          </div>
-
-                          {/* Status Filter */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm opacity-70">Status:</span>
-                            <select 
-                              className="select select-bordered select-sm"
-                              value={modsFilter}
-                              onChange={(e) => setModsFilter(e.target.value as any)}
-                            >
-                              <option value="all">All Mods</option>
-                              <option value="available">Available</option>
-                              <option value="installed">Installed</option>
-                              <option value="updates">Need Updates</option>
-                            </select>
-                          </div>
-
-                          {/* Sort By */}
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm opacity-70">Sort:</span>
-                            <select 
-                              className="select select-bordered select-sm"
-                              value={modsSortBy}
-                              onChange={(e) => setModsSortBy(e.target.value as any)}
-                            >
-                              <option value="name">Name</option>
-                              <option value="date">Date Added</option>
-                              <option value="downloads">Downloads</option>
-                              <option value="rating">Rating</option>
-                            </select>
-                          </div>
-                        </div>
-
-                        {/* Search Bar */}
-                        <div className="relative">
-                          <input 
-                            type="text" 
-                            placeholder="Search mods by name, author, or description..." 
-                            className="input input-bordered w-full pr-10"
-                            value={modsQuery}
-                            onChange={(e) => setModsQuery(e.target.value)}
-                          />
-                          <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <circle cx="11" cy="11" r="8"/>
-                            <path d="M21 21l-4.35-4.35"/>
-                          </svg>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  {modsSubtab === 'installed' && (
-                    <div className="mt-3 grid grid-cols-1 gap-3">
-                      {installedModsLoading && <div className="text-xs opacity-70">Loading…</div>}
-                      {!installedModsLoading && (installedModsAugmented||[]).filter(isInstalledModVisible).map((m) => (
-                        <div
-                          key={m.name}
-                          className={`glass-soft rounded-lg border border-white/10 relative transition-transform duration-150 ${dragOverModName===m.name?'ring-1 ring-primary scale-[1.01]':''} ${draggingModName===m.name?'opacity-60':''}`}
-                          draggable
-                          onDragStart={(e)=>{ setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed='move'; }}
-                          onDragEnd={()=>{ setDraggingModName(null); setDragOverModName(null); }}
-                          onDragEnter={()=> setDragOverModName(m.name)}
-                          onDragLeave={(e)=>{ if ((e.target as HTMLElement).closest('[data-mod-card]')) return; setDragOverModName(null); }}
-                          onDragOver={(e)=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; }}
-                          onDrop={(e)=>{ e.preventDefault(); const name=e.dataTransfer.getData('text/mod-name'); setDragOverModName(null); if(!name||name===m.name) return; setInstalledMods((prev)=>{ const list=(prev||[]).slice(); const fromIdx=list.findIndex(x=>x.name===name); const toIdx=list.findIndex(x=>x.name===m.name); if(fromIdx<0||toIdx<0||fromIdx===toIdx) return prev||[]; const [item]=list.splice(fromIdx,1); list.splice(toIdx,0,item); (async()=>{ try { const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir; if (dir) await window.electronAPI?.reorderMods?.(dir, list.map(x=>String(x.id||''))); } catch{} })(); return list; }); }}
-                          data-mod-card
-                        >
-                          <div className="flex items-stretch min-h-[96px]">
-                            <div className="w-28 bg-base-300/40 flex items-center justify-center overflow-hidden">
-                              {m as any && (m as any).iconDataUrl ? (
-                                <img src={(m as any).iconDataUrl} alt="" className="w-full h-full object-cover rounded-l-[var(--panel-radius)]" />
-                              ) : getModIconUrl(m.name || m.id) ? (
-                                <img src={getModIconUrl(m.name || m.id)} alt="" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full" />
-                              )}
-                            </div>
-                            <div className="flex-1 p-3 flex flex-col">
-                              <div className="flex items-start gap-3">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-medium truncate">{String(m.name || m.id || '').replace(/_/g, ' ')}</div>
-                                  <div className="text-[11px] opacity-60 truncate">Installed: {m.version || '—'}{(() => { const lv = getLatestVersionForName(m.name); return lv && m.version && compareVersions(m.version, lv) < 0 ? ` • Latest: ${lv}` : ''; })()}</div>
-                                </div>
-                                <div className="ml-auto flex items-center gap-2">
-                                  {(() => { const latest = getLatestVersionForName(m.name); const needs = latest && m.version && compareVersions(m.version, latest) < 0; const key = (m.folder || m.name); if (needs) return (
-                                    <button className={`btn btn-md btn-warning ${installingMods[key]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=> updateInstalled(m)}>
-                                      {installingMods[key]==='install' ? 'Updating…' : 'Update'}
-                                    </button>
-                                  ); return null; })()}
-                                  <label className="label cursor-pointer gap-2">
-                                    <input type="checkbox" className="toggle-switch" checked={!!m.enabled} onChange={()=>toggleModEnabled(m)} />
-                                  </label>
-                                  {(() => { const key = (m.folder || m.name); return (
-                                    <div className="tooltip tooltip-error tooltip-top z-20" data-tip="Uninstall">
-                                      <button className={`btn btn-md btn-error ${(!m.hasManifest || installingMods[key]==='uninstall')?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>uninstallMod(m)} disabled={!m.hasManifest}>
-                                        <span className="text-xl leading-none">🗑</span>
-                                      </button>
-                                    </div>
-                                  ); })()}
-                                  <div className="cursor-grab active:cursor-grabbing select-none opacity-70 text-2xl ml-1" title="Drag to reorder">≡</div>
-                                </div>
-                              </div>
-                              {m.description && <div className="text-xs opacity-70 mt-2 line-clamp-2">{m.description}</div>}
-                            </div>
-                          </div>
-                          {(() => { const key = (m.folder || m.name); if (installingMods[key]==='install') return (
-                            <div className="absolute bottom-0 right-2 left-30 m-0 p-0">
-                              {(() => { const mp = modProgress[key]; const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; return (
-                                <>
-                                  <div className="flex items-center justify-between text-[10px] opacity-80 leading-none mb-0">
-                                    <span>{phaseLabel}</span>
-                                    <span>{pct}%</span>
-                                  </div>
-                                  <progress className="progress progress-primary progress-xs w-full rounded-none m-0" value={pct} max={100}></progress>
-                                </>
-                              ); })()}
-                            </div>
-                          ); return null; })()}
-                        </div>
-                      ))}
-                      {!installedModsLoading && (installedModsAugmented||[]).length===0 && (
-                        <div className="text-xs opacity-70">No mods installed.</div>
-                      )}
-                    </div>
-                  )}
-
-                  {modsSubtab === 'all' && (
-                    <div className="glass rounded-xl p-4">
-                      {allModsLoading && (
-                        <div className={modsView === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-3'}>
-                          {Array.from({ length: 6 }).map((_, i) => (
-                            <div key={`loading-${i}`} className="glass-soft rounded-lg border border-white/10 animate-pulse">
-                              {modsView === 'grid' && <div className="w-full pb-[40%] bg-base-300/50" />}
-                              <div className="p-4 space-y-3">
-                                <div className="h-4 bg-base-300/60 rounded w-3/4" />
-                                <div className="h-3 bg-base-300/40 rounded w-full" />
-                                <div className="h-3 bg-base-300/40 rounded w-2/3" />
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {(!allModsLoading && modsError) && (
-                        <div className="text-center py-8">
-                          <div className="text-4xl mb-4">⚠️</div>
-                          <div className="text-sm opacity-80 text-warning">{modsError}</div>
-                        </div>
-                      )}
-                      
-                      {!isInstalled && !allModsLoading && (
-                        <div className="text-center py-8">
-                          <div className="text-4xl mb-4">🎮</div>
-                          <div className="text-sm opacity-80 text-warning">Install the selected channel before installing mods.</div>
-                        </div>
-                      )}
-                      
-                      {!allModsLoading && isInstalled && (
-                        <>
-                          {modsView === 'grid' ? (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                              {filteredAndSortedMods.slice(0, 60).map((m: any) => {
-                                const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
-                                const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
-                                const title = String(rawTitle).replace(/_/g, ' ');
-                                const ver = latest?.version_number || '';
-                                const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
-                                const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
-                                const key = sanitizeFolderName(m?.full_name || m?.name || title);
-                                const modId = m?.uuid4 || m?.full_name || title;
-                                const isFavorite = favoriteMods.has(modId);
-                                const category = getModCategory(m);
-                                
-                                return (
-                                  <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg flex flex-col h-full">
-                                    {/* Mod Image */}
-                                    <div className="relative w-full pb-[50%] bg-base-300/40 overflow-hidden rounded-t-lg">
-                                      {m?.versions?.[0]?.icon ? (
-                                        <img src={m.versions[0].icon} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="absolute inset-0 flex items-center justify-center text-4xl opacity-30">
-                                          {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
-                                        </div>
-                                      )}
-                                      
-                                      {/* Category Badge */}
-                                      <div className="absolute top-2 left-2">
-                                        <span className={`badge badge-sm ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
-                                          {category === 'weapons' ? '🔫 Weapons' : category === 'maps' ? '🗺️ Maps' : category === 'ui' ? '🖥️ UI' : category === 'gameplay' ? '🎮 Gameplay' : category === 'audio' ? '🔊 Audio' : '📦 Other'}
-                                        </span>
-                                      </div>
-
-                                      {/* Status Badge */}
-                                      {(state === 'installed' || state === 'update') && (
-                                        <div className="absolute top-2 right-2">
-                                          <span className={`badge badge-sm ${state === 'update' ? 'badge-warning' : 'badge-success'}`}>
-                                            {state === 'update' ? 'Update Available' : 'Installed'}
-                                          </span>
-                                        </div>
-                                      )}
-
-                                      {/* Favorite Button */}
-                                      <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button 
-                                          className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
-                                          onClick={() => toggleFavoriteMod(modId)}
-                                          title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                                        >
-                                          ⭐
-                                        </button>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Mod Info */}
-                                    <div className="p-4 flex flex-col h-full">
-                                      <div className="flex-1">
-                                        <h4 className="font-semibold text-sm mb-1 line-clamp-1">{title}</h4>
-                                        <div className="text-xs opacity-60 mb-2">v{ver}</div>
-                                        {m?.versions?.[0]?.description && (
-                                          <p className="text-xs opacity-80 line-clamp-3 mb-3">{m.versions[0].description}</p>
-                                        )}
-                                        
-                                        {/* Download/Rating Info */}
-                                        <div className="flex items-center gap-3 text-xs opacity-60 mb-3">
-                                          {m?.download_count && (
-                                            <span>📥 {m.download_count.toLocaleString()}</span>
-                                          )}
-                                          {m?.rating_score && (
-                                            <span>⭐ {m.rating_score.toFixed(1)}</span>
-                                          )}
-                                        </div>
-                                        
-                                        {isFavorite && (
-                                          <div className="text-xs opacity-50 flex items-center gap-1 mb-2">
-                                            ⭐ Favorited
-                                          </div>
-                                        )}
-                                      </div>
-                                      
-                                      {/* Action Buttons - Pinned to Bottom */}
-                                      <div className="flex items-center gap-2 mt-auto">
-                                        {state === 'not' && (
-                                          <button 
-                                            className={`btn btn-sm btn-success flex-1 ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                            onClick={()=>installFromAll(m)} 
-                                            disabled={!isInstalled || !!installingMods[key]}
-                                          > 
-                                            {installingMods[key]==='install' ? 'Installing…' : 'Install'}
-                                          </button>
-                                        )}
-                                        {state === 'installed' && (
-                                          <button 
-                                            className={`btn btn-sm btn-error flex-1 ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                            onClick={()=>uninstallFromAll(m)}
-                                          >
-                                            🗑 Uninstall
-                                          </button>
-                                        )}
-                                        {state === 'update' && (
-                                          <>
-                                            <button 
-                                              className={`btn btn-sm btn-warning flex-1 ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                              onClick={()=>updateFromAll(m)} 
-                                              disabled={!isInstalled}
-                                            >
-                                              {installingMods[key]==='install' ? 'Updating…' : 'Update'}
-                                            </button>
-                                            <button 
-                                              className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                              onClick={()=>uninstallFromAll(m)}
-                                              title="Uninstall"
-                                            >
-                                              🗑
-                                            </button>
-                                          </>
-                                        )}
-                                        <button 
-                                          className="btn btn-sm btn-ghost" 
-                                          onClick={()=>openModDetails(m)}
-                                          title="View details"
-                                        >
-                                          ℹ️
-                                        </button>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Progress Bar */}
-                                    {installingMods[key]==='install' && (
-                                      <div className="absolute bottom-0 left-0 right-0 p-2">
-                                        {(() => { 
-                                          const mp = modProgress[key]; 
-                                          const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); 
-                                          const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; 
-                                          return (
-                                            <div className="bg-base-100/90 rounded p-2">
-                                              <div className="flex items-center justify-between text-xs opacity-80 mb-1">
-                                                <span>{phaseLabel}</span>
-                                                <span>{pct}%</span>
-                                              </div>
-                                              <progress className="progress progress-primary progress-xs w-full" value={pct} max={100}></progress>
-                                            </div>
-                                          );
-                                        })()}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          ) : (
-                            <div className="space-y-3">
-                              {filteredAndSortedMods.slice(0, 60).map((m: any) => {
-                                const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
-                                const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
-                                const title = String(rawTitle).replace(/_/g, ' ');
-                                const ver = latest?.version_number || '';
-                                const installed = (installedMods || []).find((im) => String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase());
-                                const state = installed ? (compareVersions(installed?.version || null, ver) < 0 ? 'update' : 'installed') : 'not';
-                                const key = sanitizeFolderName(m?.full_name || m?.name || title);
-                                const modId = m?.uuid4 || m?.full_name || title;
-                                const isFavorite = favoriteMods.has(modId);
-                                const category = getModCategory(m);
-                                
-                                return (
-                                  <div key={modId} className="flex gap-4 p-4 glass-soft rounded-lg border border-white/10 hover:border-primary/30 transition-all hover:shadow-md relative">
-                                    {/* Mod Icon */}
-                                    <div className="w-16 h-16 bg-base-300/40 rounded-lg overflow-hidden flex-shrink-0">
-                                      {m?.versions?.[0]?.icon ? (
-                                        <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">
-                                          {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
-                                        </div>
-                                      )}
-                                    </div>
-                                    
-                                    {/* Mod Info */}
-                                    <div className="flex-1 min-w-0">
-                                      <div className="flex items-start justify-between gap-3 mb-2">
-                                        <div className="min-w-0">
-                                          <div className="flex items-center gap-2 flex-wrap">
-                                            <h4 className="font-semibold text-sm">{title}</h4>
-                                            <span className={`badge badge-xs ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
-                                              {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
-                                            </span>
-                                            {(state === 'installed' || state === 'update') && (
-                                              <span className={`badge badge-xs ${state === 'update' ? 'badge-warning' : 'badge-success'}`}>
-                                                {state === 'update' ? 'Update' : 'Installed'}
-                                              </span>
-                                            )}
-                                            {isFavorite && <span className="text-xs">⭐</span>}
-                                          </div>
-                                          <div className="text-xs opacity-60 mb-1">v{ver}</div>
-                                          {m?.versions?.[0]?.description && (
-                                            <p className="text-xs opacity-80 line-clamp-2 mb-2">{m.versions[0].description}</p>
-                                          )}
-                                          <div className="flex items-center gap-3 text-xs opacity-60">
-                                            {m?.download_count && (
-                                              <span>📥 {m.download_count.toLocaleString()}</span>
-                                            )}
-                                            {m?.rating_score && (
-                                              <span>⭐ {m.rating_score.toFixed(1)}</span>
-                                            )}
-                                          </div>
-                                        </div>
-                                        
-                                        {/* Action Buttons */}
-                                        <div className="flex items-center gap-2 flex-shrink-0">
-                                          <button 
-                                            className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
-                                            onClick={() => toggleFavoriteMod(modId)}
-                                            title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                                          >
-                                            ⭐
-                                          </button>
-                                          
-                                          {state === 'not' && (
-                                            <button 
-                                              className={`btn btn-sm btn-success ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                              onClick={()=>installFromAll(m)} 
-                                              disabled={!isInstalled || !!installingMods[key]}
-                                            > 
-                                              {installingMods[key]==='install' ? 'Installing…' : 'Install'}
-                                            </button>
-                                          )}
-                                          {state === 'installed' && (
-                                            <button 
-                                              className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                              onClick={()=>uninstallFromAll(m)}
-                                            >
-                                              🗑 Uninstall
-                                            </button>
-                                          )}
-                                          {state === 'update' && (
-                                            <>
-                                              <button 
-                                                className={`btn btn-sm btn-warning ${(!isInstalled || installingMods[key]==='install')?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                                onClick={()=>updateFromAll(m)} 
-                                                disabled={!isInstalled}
-                                              >
-                                                {installingMods[key]==='install' ? 'Updating…' : 'Update'}
-                                              </button>
-                                              <button 
-                                                className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
-                                                onClick={()=>uninstallFromAll(m)}
-                                                title="Uninstall"
-                                              >
-                                                🗑
-                                              </button>
-                                            </>
-                                          )}
-                                          <button 
-                                            className="btn btn-sm btn-ghost" 
-                                            onClick={()=>openModDetails(m)}
-                                            title="View details"
-                                          >
-                                            ℹ️
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Progress Bar */}
-                                    {installingMods[key]==='install' && (
-                                      <div className="absolute bottom-2 left-20 right-2">
-                                        {(() => { 
-                                          const mp = modProgress[key]; 
-                                          const pct = mp?.total ? Math.min(100, Math.floor((mp.received/mp.total)*100)) : (mp?.phase==='extracting' ? 100 : 0); 
-                                          const phaseLabel = mp?.phase==='extracting' ? 'Extracting' : 'Downloading'; 
-                                          return (
-                                            <div className="bg-base-100/90 rounded p-2">
-                                              <div className="flex items-center justify-between text-xs opacity-80 mb-1">
-                                                <span>{phaseLabel}</span>
-                                                <span>{pct}%</span>
-                                              </div>
-                                              <progress className="progress progress-primary progress-xs w-full" value={pct} max={100}></progress>
-                                            </div>
-                                          );
-                                        })()}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-
-                          {filteredAndSortedMods.length === 0 && !allModsLoading && (
-                            <div className="text-center py-12">
-                              <div className="text-4xl mb-4">🔍</div>
-                              <h4 className="text-lg font-semibold mb-2">No mods found</h4>
-                              <p className="text-sm opacity-70 mb-4">
-                                {modsQuery.trim() 
-                                  ? `No mods match "${modsQuery}"`
-                                  : `No mods available for the selected filters`
-                                }
-                              </p>
-                              {modsQuery.trim() && (
-                                <button 
-                                  className="btn btn-sm btn-outline"
-                                  onClick={() => setModsQuery('')}
-                                >
-                                  Clear Search
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  )}
-                  
-                  {/* Footer */}
-                  <div className="text-xs opacity-60 mt-4 flex items-center justify-between">
-                    <div>Mods powered by <a className="link" href="https://thunderstore.io/c/r5valkyrie" target="_blank" rel="noreferrer">Thunderstore</a></div>
-                    <div className="opacity-70">Tip: Drag installed mods to change load order.</div>
-                  </div>
-                </div>
+                <ModsPanel
+                  modsSubtab={modsSubtab as any}
+                  setModsSubtab={setModsSubtab as any}
+                  modsView={modsView as any}
+                  setModsView={setModsView as any}
+                  setModsRefreshNonce={setModsRefreshNonce}
+                  installedMods={installedMods as any}
+                  installedModsLoading={installedModsLoading}
+                  installedModsAugmented={installedModsAugmented as any}
+                  isInstalledModVisible={isInstalledModVisible as any}
+                  draggingModName={draggingModName}
+                  setDraggingModName={setDraggingModName}
+                  dragOverModName={dragOverModName}
+                  setDragOverModName={setDragOverModName}
+                  setInstalledMods={setInstalledMods as any}
+                  channelsSettings={channelsSettings}
+                  selectedChannel={selectedChannel}
+                  installDir={installDir}
+                  filteredAndSortedMods={filteredAndSortedMods as any}
+                  modsCategory={modsCategory as any}
+                  setModsCategory={setModsCategory as any}
+                  modsFilter={modsFilter as any}
+                  setModsFilter={setModsFilter as any}
+                  modsSortBy={modsSortBy as any}
+                  setModsSortBy={setModsSortBy as any}
+                  modsQuery={modsQuery}
+                  setModsQuery={setModsQuery}
+                  modsError={modsError}
+                  isInstalled={isInstalled}
+                  getModIconUrl={getModIconUrl as any}
+                  getLatestVersionForName={getLatestVersionForName as any}
+                  compareVersions={compareVersions as any}
+                  updateInstalled={updateInstalled as any}
+                  toggleModEnabled={toggleModEnabled as any}
+                  uninstallMod={uninstallMod as any}
+                  installFromAll={installFromAll as any}
+                  uninstallFromAll={uninstallFromAll as any}
+                  updateFromAll={updateFromAll as any}
+                  favoriteMods={favoriteMods}
+                  toggleFavoriteMod={toggleFavoriteMod}
+                  openModDetails={openModDetails}
+                  getModCategory={getModCategory as any}
+                  installingMods={installingMods}
+                  modProgress={modProgress}
+                />
               )}
-              {activeTab === 'general' && (busy && (hasStarted || overall)) && (
-                <div className="glass rounded-xl p-4">
-                  {(() => {
-                    const trackingByBytes = receivedAnyBytes && bytesTotal > 0;
-                    let percent: number;
-                    if (trackingByBytes) {
-                      percent = Math.min(100, (bytesReceived / (bytesTotal || 1)) * 100);
-                    } else if (overall && typeof overall.total === 'number') {
-                      const completedSoFar = typeof overall.completed === 'number' ? Math.min(overall.completed, overall.total || overall.completed) : Math.min(overall.index + 1, overall.total || (overall.index + 1));
-                      percent = Math.min(100, (completedSoFar / (overall.total || 1)) * 100);
-                    } else {
-                      percent = totalCount > 0 ? Math.min(100, ((doneCount / totalCount) * 100)) : 0;
-                    }
-                    const checkedNumerator = overall && typeof overall.total === 'number'
-                      ? (typeof overall.completed === 'number' ? overall.completed : (overall.index + 1))
-                      : doneCount;
-                    const checkedDenominator = overall && typeof overall.total === 'number'
-                      ? (overall.total || totalCount)
-                      : totalCount;
-                    return (
-                      <>
-                        {currentOperation && (
-                          <div className="mb-2 text-sm opacity-70 flex items-center gap-2">
-                            <div className="loading loading-spinner loading-xs"></div>
-                            <span>{currentOperation}</span>
-                          </div>
-                        )}
-                        <progress className="progress w-full" value={percent} max={100}></progress>
-                        <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
-                          {trackingByBytes ? (
-                            <>
-                              <span>{Number(percent).toFixed(1)}%</span>
-                              <span>•</span>
-                              <span>{(speedBps/1024/1024).toFixed(2)} MB/s</span>
-                              <span>•</span>
-                              <span>ETA {etaSeconds > 0 ? `${Math.floor(etaSeconds/60)}m ${etaSeconds%60}s` : '—'}</span>
-                              {fileProgress && (
-                                <>
-                                  <span>•</span>
-                                  <span className="truncate max-w-[200px]" title={fileProgress.path}>
-                                    {(() => {
-                                      // Extract filename from path like "path/file.pak (part 17/20)" -> "file.pak (part 17/20)"
-                                      const pathParts = fileProgress.path.split('/');
-                                      const lastPart = pathParts[pathParts.length - 1] || fileProgress.path;
-                                      return lastPart;
-                                    })()}
-                                  </span>
-                                </>
-                              )}
-                            </>
-                          ) : (
-                            <>
-                              <span>
-                                {currentOperation || 'Checking files'} {checkedNumerator}/{checkedDenominator}
-                              </span>
-                              {overall?.path && (
-                                <>
-                                  <span>•</span>
-                                  <span className="truncate max-w-[200px]" title={overall.path}>
-                                    {(() => {
-                                      // Extract filename from path, handling cases with parentheses
-                                      const pathParts = overall.path.split('/');
-                                      const lastPart = pathParts[pathParts.length - 1] || overall.path;
-                                      return lastPart;
-                                    })()}
-                                  </span>
-                                </>
-                              )}
-                            </>
-                          )}
-                          <span className="ml-auto flex items-center gap-2">
-                            {!isPaused ? (
-                              <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.pauseDownload?.(); setIsPaused(true); }}>Pause</button>
-                            ) : (
-                              <button className="btn btn-outline btn-xs" onClick={async () => { await window.electronAPI?.resumeDownload?.(); setIsPaused(false); }}>Resume</button>
-                            )}
-                            <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.cancelDownload(); setIsPaused(false); setHasStarted(false); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setProgressItems({}); setBusy(false); }}>Cancel</button>
-                          </span>
-                        </div>
-                      </>
-                    );
-                  })()}
-          </div>
-        )}
-
-        {/* Detailed Downloads Panel - shown when downloads are active */}
-        {activeTab === 'general' && busy && (hasStarted || overall) && Object.entries(progressItems).length > 0 && (
-          <div className="glass rounded-xl p-4 mt-4 overflow-y-auto" style={{ maxHeight: '300px' }}>
-            <div className="text-sm font-semibold mb-3 opacity-80">Download Details</div>
-            {Object.entries(progressItems).map(([p, info]) => {
-              const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
-              const parts = info.parts || {};
-              const totalParts = info.totalParts || Object.keys(parts).length || 0;
-              const exiting = !!exitingItems[p];
-              return (
-                <div key={p} className={`py-2 ${exiting ? 'item-exit' : 'item-enter'}`}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-mono truncate mr-3">{p}</span>
-                    <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
-                  </div>
-                  {percent !== undefined && (
-                    <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
-                  )}
-                  {totalParts > 0 && (
-                    <div className="mt-2 pl-3 border-l border-white/10">
-                      {Array.from({ length: totalParts }).map((_, i) => {
-                        const part = parts[i];
-                        const pcent = part ? Math.floor(((part.received || 0) / (part.total || 1)) * 100) : 0;
-                        return (
-                          <div key={`${p}-part-${i}`} className={`text-xs mb-1 ${exiting ? 'item-exit' : 'item-enter'}`}>
-                            <div className="flex items-center justify-between">
-                              <span className="opacity-70">Part {i+1}/{totalParts}</span>
-                              <span className="opacity-60">{pcent}%</span>
-                            </div>
-                            <progress className="progress progress-accent w-full mt-1" value={pcent} max={100}></progress>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+        <DownloadProgress
+          visible={activeTab === 'general' && busy}
+          progressItems={progressItems as any}
+          exitingItems={exitingItems}
+        />
 
               {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
@@ -2467,549 +1684,88 @@ export default function LauncherUI() {
 
         </div>
 
-          {false && finished && (
-            <div className="fixed top-4 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
-              <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
-                <span>Completed</span>
-              </div>
-            </div>
-          )}
 
             
 
 
             {activeTab === 'general' && (
-              <div className="xl:col-span-2 space-y-4">
-                {/* Enhanced Header with Controls */}
-                <div className="glass rounded-xl p-4">
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
-                    <div className="flex items-center gap-3">
-                      <h3 className="text-lg font-bold">News & Updates</h3>
-                      {!!(filteredPatchPosts && filteredPatchPosts.length) && (
-                        <span className="badge badge-primary">{filteredPatchPosts.length}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {/* View Toggle */}
-                      <div className="btn-group">
-                        <button 
-                          className={`btn btn-sm ${patchNotesView === 'grid' ? 'btn-active' : ''}`}
-                          onClick={() => setPatchNotesView('grid')}
-                          title="Grid View"
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="3" width="7" height="7"/>
-                            <rect x="14" y="3" width="7" height="7"/>
-                            <rect x="3" y="14" width="7" height="7"/>
-                            <rect x="14" y="14" width="7" height="7"/>
-                          </svg>
-                        </button>
-                        <button 
-                          className={`btn btn-sm ${patchNotesView === 'timeline' ? 'btn-active' : ''}`}
-                          onClick={() => setPatchNotesView('timeline')}
-                          title="Timeline View"
-                        >
-                          <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="8" y1="6" x2="21" y2="6"/>
-                            <line x1="8" y1="12" x2="21" y2="12"/>
-                            <line x1="8" y1="18" x2="21" y2="18"/>
-                            <line x1="3" y1="6" x2="3.01" y2="6"/>
-                            <line x1="3" y1="12" x2="3.01" y2="12"/>
-                            <line x1="3" y1="18" x2="3.01" y2="18"/>
-                          </svg>
-                        </button>
-                      </div>
-                      <a className="btn btn-sm btn-ghost" href={`https://blog.playvalkyrie.org/`} target="_blank" rel="noreferrer">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                          <polyline points="15,3 21,3 21,9"/>
-                          <line x1="10" y1="14" x2="21" y2="3"/>
-                        </svg>
-                        Blog
-                      </a>
-                    </div>
-                  </div>
-
-                  {/* Filter Tabs */}
-                  <div className="flex flex-wrap items-center gap-2 mb-4">
-                    <div className="tabs tabs-boxed bg-base-200/50">
-                      <button 
-                        className={`tab tab-sm ${patchNotesFilter === 'all' ? 'tab-active' : ''}`}
-                        onClick={() => setPatchNotesFilter('all')}
-                      >
-                        All
-                      </button>
-                      <button 
-                        className={`tab tab-sm ${patchNotesFilter === 'community' ? 'tab-active' : ''}`}
-                        onClick={() => setPatchNotesFilter('community')}
-                      >
-                        👥 Community
-                      </button>
-                      <button 
-                        className={`tab tab-sm ${patchNotesFilter === 'patch-notes' ? 'tab-active' : ''}`}
-                        onClick={() => setPatchNotesFilter('patch-notes')}
-                      >
-                        📋 Patch Notes
-                      </button>
-                      <button 
-                        className={`tab tab-sm ${patchNotesFilter === 'dev-blog' ? 'tab-active' : ''}`}
-                        onClick={() => setPatchNotesFilter('dev-blog')}
-                      >
-                        🛠️ Dev Blog
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Search Bar */}
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      placeholder="Search news and updates..." 
-                      className="input input-bordered w-full pr-10"
-                      value={patchNotesSearch}
-                      onChange={(e) => setPatchNotesSearch(e.target.value)}
-                    />
-                    <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <circle cx="11" cy="11" r="8"/>
-                      <path d="M21 21l-4.35-4.35"/>
-                    </svg>
-                  </div>
-                </div>
-
-                {/* Content Area */}
-                <div className="glass rounded-xl p-4 min-h-[400px]">
-                  {patchLoading && (
-                    <div className={patchNotesView === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-4'}>
-                      {Array.from({ length: 6 }).map((_, i) => (
-                        <div key={`ps-${i}`} className="glass-soft rounded-xl overflow-hidden border border-white/10 animate-pulse">
-                          {patchNotesView === 'grid' && <div className="w-full pb-[40%] bg-base-300/50" />}
-                          <div className="p-4 space-y-3">
-                            <div className="h-4 bg-base-300/60 rounded w-3/4" />
-                            <div className="h-3 bg-base-300/40 rounded w-full" />
-                            <div className="h-3 bg-base-300/40 rounded w-2/3" />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {!patchLoading && (
-                    <>
-                      {patchNotesView === 'grid' ? (
-                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                          {filteredPatchPosts.map((post) => {
-                            const category = getPostCategory(post);
-                            const isRead = readPosts.has(post.url);
-                            const isFavorite = favoritePosts.has(post.url);
-                            
-                            return (
-                              <div key={post.url} className={`group rounded-xl overflow-hidden glass border transition-all hover:shadow-lg ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/40'}`}>
-                                <div className="relative w-full pb-[40%] bg-base-300">
-                                  {post.feature_image ? (
-                                    <img loading="lazy" src={post.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
-                                  ) : (
-                                    <div className="absolute inset-0 grid place-items-center text-xs opacity-60">
-                                      {category === 'patch-notes' ? '📋' : category === 'community' ? '👥' : '🛠️'}
-                                    </div>
-                                  )}
-                                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                                  
-                                  {/* Category Badge */}
-                                  <div className="absolute top-2 left-2">
-                                    <span className={`badge badge-sm ${category === 'patch-notes' ? 'badge-primary' : category === 'community' ? 'badge-secondary' : 'badge-accent'}`}>
-                                      {category === 'patch-notes' ? 'Patch' : category === 'community' ? 'Community' : 'Dev Blog'}
-                                    </span>
-                                  </div>
-
-                                  {/* Quick Actions */}
-                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button 
-                                      className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
-                                      onClick={(e) => { e.preventDefault(); toggleFavoritePost(post.url); }}
-                                      title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                                    >
-                                      ⭐
-                                    </button>
-                                  </div>
-
-                                  {!isRead && (
-                                    <div className="absolute bottom-2 left-2">
-                                      <span className="badge badge-xs badge-info">New</span>
-                                    </div>
-                                  )}
-                                </div>
-                                
-                                <div className="p-4">
-                                  <h4 className="font-semibold text-sm mb-2 line-clamp-2">{post.title}</h4>
-                                  <div className="flex items-center gap-2 text-xs opacity-60 mb-2">
-                                    {post.published_at && (
-                                      <span>{new Date(post.published_at).toLocaleDateString('en-US', { 
-                                        month: 'short', 
-                                        day: 'numeric',
-                                        year: 'numeric'
-                                      })}</span>
-                                    )}
-                                  </div>
-                                  {post.excerpt && (
-                                    <p className="text-xs opacity-80 line-clamp-3 mb-3">{post.excerpt}</p>
-                                  )}
-                                  <div className="flex items-center justify-between">
-                                    <a 
-                                      href={post.url} 
-                                      target="_blank" 
-                                      rel="noreferrer"
-                                      className="btn btn-xs btn-primary"
-                                      onClick={() => markPostAsRead(post.url)}
-                                    >
-                                      Read More
-                                    </a>
-                                    {isFavorite && <span className="text-xs opacity-50">⭐ Favorited</span>}
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {filteredPatchPosts.map((post, index) => {
-                            const category = getPostCategory(post);
-                            const isRead = readPosts.has(post.url);
-                            const isFavorite = favoritePosts.has(post.url);
-                            
-                            return (
-                              <div key={post.url} className={`flex gap-4 p-4 rounded-xl glass border transition-all hover:shadow-md ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/30'}`}>
-                                {/* Timeline Indicator */}
-                                <div className="flex flex-col items-center">
-                                  <div className={`w-3 h-3 rounded-full ${category === 'patch-notes' ? 'bg-primary' : category === 'community' ? 'bg-secondary' : 'bg-accent'}`}></div>
-                                  {index < filteredPatchPosts.length - 1 && <div className="w-px h-full bg-white/10 mt-2"></div>}
-                                </div>
-                                
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between gap-3 mb-2">
-                                    <div className="flex items-center gap-2 flex-wrap">
-                                      <h4 className="font-semibold text-sm">{post.title}</h4>
-                                      <span className={`badge badge-xs ${category === 'patch-notes' ? 'badge-primary' : category === 'community' ? 'badge-secondary' : 'badge-accent'}`}>
-                                        {category === 'patch-notes' ? 'Patch' : category === 'community' ? 'Community' : 'Dev Blog'}
-                                      </span>
-                                      {!isRead && <span className="badge badge-xs badge-info">New</span>}
-                                      {isFavorite && <span className="text-xs">⭐</span>}
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                      <button 
-                                        className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost'}`}
-                                        onClick={() => toggleFavoritePost(post.url)}
-                                        title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                                      >
-                                        ⭐
-                                      </button>
-                                    </div>
-                                  </div>
-                                  
-                                  {post.published_at && (
-                                    <div className="text-xs opacity-60 mb-2">
-                                      {new Date(post.published_at).toLocaleDateString('en-US', { 
-                                        weekday: 'short',
-                                        month: 'short', 
-                                        day: 'numeric',
-                                        year: 'numeric',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                      })}
-                                    </div>
-                                  )}
-                                  
-                                  {post.excerpt && (
-                                    <p className="text-xs opacity-80 mb-3 line-clamp-2">{post.excerpt}</p>
-                                  )}
-                                  
-                                  <a 
-                                    href={post.url} 
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    className="btn btn-xs btn-outline"
-                                    onClick={() => markPostAsRead(post.url)}
-                                  >
-                                    Read Full Article →
-                                  </a>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {filteredPatchPosts.length === 0 && !patchLoading && (
-                        <div className="text-center py-12">
-                          <div className="text-4xl mb-4">📰</div>
-                          <h4 className="text-lg font-semibold mb-2">No posts found</h4>
-                          <p className="text-sm opacity-70 mb-4">
-                            {patchNotesSearch.trim() 
-                              ? `No posts match "${patchNotesSearch}"`
-                              : `No ${patchNotesFilter === 'all' ? '' : patchNotesFilter + ' '}posts available`
-                            }
-                          </p>
-                          {patchNotesSearch.trim() && (
-                            <button 
-                              className="btn btn-sm btn-outline"
-                              onClick={() => setPatchNotesSearch('')}
-                            >
-                              Clear Search
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
+              <NewsPanel
+                patchNotesView={patchNotesView as any}
+                setPatchNotesView={setPatchNotesView as any}
+                patchNotesFilter={patchNotesFilter as any}
+                setPatchNotesFilter={setPatchNotesFilter as any}
+                patchNotesSearch={patchNotesSearch}
+                setPatchNotesSearch={setPatchNotesSearch}
+                filteredPatchPosts={filteredPatchPosts as any}
+                patchLoading={patchLoading}
+                readPosts={readPosts}
+                favoritePosts={favoritePosts}
+                markPostAsRead={markPostAsRead}
+                toggleFavoritePost={toggleFavoritePost}
+                getPostCategory={getPostCategory as any}
+              />
             )}
         </div>
         )}
       </section>
-          {finished && (
-        <div className="fixed top-14 right-4 flex flex-col gap-2 items-end pointer-events-none z-50">
-          <div className="alert alert-success toast-slide-in-tr pointer-events-auto shadow-lg">
-            <span>{toastMessage}</span>
-          </div>
-        </div>
-      )}
-      {installPromptOpen && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="absolute inset-0 grid place-items-center p-4">
-          <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
-            <div className="text-sm font-semibold mb-2">Choose install location</div>
-            <div className="text-xs opacity-80 mb-3">The game will be installed inside a folder named <span className="font-mono">{selectedChannel}</span> at the path you pick.</div>
-            {(() => {
-              const normRoot = (launcherRoot || '').replace(/\\+$/,'').toLowerCase();
-              const normBase = (installBaseDir || '').replace(/\\+$/,'').toLowerCase();
-              const isLauncherFolderSelected = normRoot && normBase && normBase === normRoot;
-              if (!isLauncherFolderSelected) return null;
-              return (
-                <div className="alert alert-warning text-xs mb-3">
-                  <span>Do not select the launchers own install folder. Pick a separate base directory; the <span className="font-mono">{selectedChannel}</span> subfolder will be created automatically.</span>
-                </div>
-              );
-            })()}
-            <div className="flex items-center gap-2">
-              <input className="input input-bordered input-sm w-full" value={installBaseDir} onChange={(e)=>setInstallBaseDir(e.target.value)} placeholder="Select base folder" />
-              <button className="btn btn-sm" onClick={async()=>{ const picked = await window.electronAPI?.selectDirectory?.(); if (picked) setInstallBaseDir(picked); }}>Browse</button>
-            </div>
-            <div className="mt-3 text-xs opacity-70">Final path</div>
-            <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">{(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? `\\${selectedChannel}` : selectedChannel}</div>
-            
-            {/* Download Size Information */}
-            {baseGameSize > 0 && (
-              <div className="mt-4 p-3 rounded-lg bg-base-100/50 border border-base-300/30">
-                <div className="text-sm font-medium mb-1">Download Size</div>
-                <div className="flex items-center justify-between text-sm">
-                  <span className="opacity-80">Base game:</span>
-                  <span className="font-mono">{(baseGameSize / 1024 / 1024 / 1024).toFixed(1)} GB</span>
-                </div>
-                {optionalFilesSize > 0 && (
-                  <div className="flex items-center justify-between text-sm mt-1">
-                    <span className="opacity-80">HD textures:</span>
-                    <span className="font-mono text-warning">+{(optionalFilesSize / 1024 / 1024 / 1024).toFixed(1)} GB</span>
-                  </div>
-                )}
-                <div className="border-t border-base-300/50 mt-2 pt-2">
-                  <div className="flex items-center justify-between text-sm font-semibold">
-                    <span>Total {installIncludeOptional ? '(with HD textures)' : '(base only)'}:</span>
-                    <span className="font-mono">{((baseGameSize + (installIncludeOptional ? optionalFilesSize : 0)) / 1024 / 1024 / 1024).toFixed(1)} GB</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* HD Textures Option */}
-            <div className="mt-4 p-3 rounded-lg bg-base-200/50 border border-base-300/50">
-              <label className="label cursor-pointer justify-start gap-3 p-0">
-                <input 
-                  type="checkbox" 
-                  className="toggle-switch" 
-                  checked={installIncludeOptional} 
-                  onChange={(e) => setInstallIncludeOptional(e.target.checked)} 
-                />
-                <div className="flex flex-col">
-                  <span className="label-text font-medium">Include HD Textures</span>
-                  <span className="text-xs opacity-70">Download high-resolution textures for better visual quality</span>
-                </div>
-              </label>
-            </div>
-            
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="btn btn-sm btn-ghost" onClick={()=>setInstallPromptOpen(false)}>Cancel</button>
-              <button className="btn btn-sm btn-primary" onClick={confirmInstallWithDir} disabled={!installBaseDir}>Install here</button>
-            </div>
-          </div>
-          </div>
-        </div>
-      )}
+      <ToastNotification
+        visible={finished}
+        message={toastMessage}
+        type="success"
+      />
+      <InstallPromptModal
+        open={installPromptOpen}
+        onClose={() => setInstallPromptOpen(false)}
+        selectedChannel={selectedChannel}
+        launcherRoot={launcherRoot}
+        installBaseDir={installBaseDir}
+        setInstallBaseDir={setInstallBaseDir}
+        baseGameSize={baseGameSize}
+        optionalFilesSize={optionalFilesSize}
+        installIncludeOptional={installIncludeOptional}
+        setInstallIncludeOptional={setInstallIncludeOptional}
+        onConfirm={confirmInstallWithDir}
+        onBrowse={async () => window.electronAPI?.selectDirectory?.() ?? null}
+      />
 
-      {(updateAvailable || updateDownloaded) && (
-        <div className="fixed inset-0 z-[60]">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-          <div className="absolute inset-0 grid place-items-center p-4">
-            <div className="glass rounded-xl p-0 w-[640px] max-w-[92vw] overflow-hidden shadow-2xl">
-              <div className="bg-gradient-to-r from-primary/20 to-transparent px-5 py-4 flex items-center gap-3">
-                <div className="w-8 h-8 rounded-full bg-primary/40 grid place-items-center text-white">↑</div>
-                <div>
-                  <div className="text-sm font-semibold">Launcher update required</div>
-                  <div className="text-xs opacity-80">You must update to continue using the launcher.</div>
-                </div>
-              </div>
-              {!updateDownloaded && (
-                <div className="px-5 py-4">
-                  <progress className="progress w-full" value={Math.min(100, Math.max(0, updateProgress))} max={100}></progress>
-                  <div className="mt-2 text-xs opacity-80 flex items-center gap-3 font-mono">
-                    <span>{Math.floor(updateProgress)}%</span>
-                    <span>•</span>
-                    <span>{(updateBps/1024/1024).toFixed(2)} MB/s</span>
-                    {updateTotal > 0 && (
-                      <>
-                        <span>•</span>
-                        <span>{(updateTransferred/1024/1024).toFixed(1)} / {(updateTotal/1024/1024).toFixed(1)} MB</span>
-                      </>
-                    )}
-                  </div>
-                  {updateError && <div className="alert alert-error mt-3 text-xs"><span>{updateError}</span></div>}
-                </div>
-              )}
-              {updateDownloaded && (
-                <div className="px-5 py-4 flex justify-end gap-2">
-                  <button className="btn btn-sm btn-primary" onClick={() => window.electronAPI?.quitAndInstall?.()}>Restart to update</button>
-            </div>
-          )}
-        </div>
-          </div>
-        </div>
-      )}
+      <UpdaterModal
+        visible={!!(updateAvailable || updateDownloaded)}
+        updateDownloaded={updateDownloaded}
+        updateProgress={updateProgress}
+        updateBps={updateBps}
+        updateTotal={updateTotal}
+        updateTransferred={updateTransferred}
+        updateError={updateError}
+        onRestartToUpdate={() => window.electronAPI?.quitAndInstall?.()}
+      />
 
-      {modDetailsOpen && modDetailsPack && (
-        <div className="fixed inset-0 z-[55]">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={()=>setModDetailsOpen(false)} />
-          <div className="absolute inset-0 grid place-items-center p-4">
-            <div className="glass rounded-xl w-[760px] max-w-[95vw] overflow-hidden">
-              <div className="px-5 py-4 flex items-start gap-3 border-b border-white/10">
-                <div className="w-14 h-14 bg-base-300/40 rounded overflow-hidden flex items-center justify-center">
-                  {modDetailsPack?.versions?.[0]?.icon && (
-                    <img src={modDetailsPack.versions[0].icon} alt="" className="w-full h-full object-cover" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-base font-semibold truncate">{String(modDetailsPack?.name || modDetailsPack?.full_name || 'Mod').replace(/_/g, ' ')}</div>
-                  <div className="text-xs opacity-70 truncate">Author: {modDetailsPack?.owner || (modDetailsPack?.full_name||'').split('-')[0] || 'Unknown'}</div>
-                  {(() => { const latest = (Array.isArray(modDetailsPack?.versions) && modDetailsPack.versions[0]) ? modDetailsPack.versions[0] : null; if (!latest) return null; return (
-                    <div className="text-xs opacity-80 mt-1 line-clamp-3">{latest.description || ''}</div>
-                  ); })()}
-                </div>
-                <div className="ml-auto flex items-center gap-2">
-                  <a className="btn btn-sm btn-ghost" href={getPackageUrlFromPack(modDetailsPack) || '#'} target="_blank" rel="noreferrer">Open on Thunderstore</a>
-                  <button className="btn btn-sm btn-ghost" onClick={()=>setModDetailsOpen(false)}>Close</button>
-                </div>
-              </div>
-              <div className="p-4">
-                <div className="text-xs uppercase opacity-60 mb-2">Versions</div>
-                <div className="max-h-[50vh] overflow-y-auto pr-1">
-                  {(modDetailsPack?.versions || []).map((v: any, idx: number) => {
-                    const installed = (installedMods || []).find(im => String(im.name||'').toLowerCase() === String(modDetailsPack?.name||'').toLowerCase());
-                    const isCurrent = installed && installed.version && v?.version_number && compareVersions(installed.version, v.version_number) === 0;
-                    const folderKey = sanitizeFolderName(modDetailsPack?.full_name || modDetailsPack?.name || v?.name || 'mod');
-                    return (
-                      <div key={v?.uuid4 || v?.full_name || v?.version_number || idx} className="flex items-center gap-3 py-2 border-b border-white/10 last:border-b-0">
-                        <div className="min-w-24 text-sm">{v?.version_number || '—'}</div>
-                        <div className="text-xs opacity-70 flex-1 truncate">{v?.description || ''}</div>
-                        {isCurrent ? (
-                          <span className="btn btn-md btn-success btn-outline pointer-events-none">Installed</span>
-                        ) : (
-                          <button className={`btn btn-md ${idx===0 ? 'btn-success' : 'btn-outline'} ${installingMods[folderKey]==='install'?'btn-disabled pointer-events-none opacity-60':''}`} onClick={()=>installSpecificVersion(modDetailsPack, v)}>
-                            {installingMods[folderKey]==='install' ? 'Installing…' : (idx===0 ? 'Install latest' : 'Install')}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ModDetailsModal
+        open={modDetailsOpen && !!modDetailsPack}
+        modDetailsPack={modDetailsPack}
+        onClose={() => setModDetailsOpen(false)}
+        getPackageUrlFromPack={getPackageUrlFromPack as any}
+        installedMods={installedMods}
+        compareVersions={compareVersions as any}
+        sanitizeFolderName={sanitizeFolderName as any}
+        installingMods={installingMods}
+        installSpecificVersion={installSpecificVersion as any}
+      />
 
-      {eulaOpen && (
-        <div className="fixed inset-0 z-[60]">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="absolute inset-0 grid place-items-center p-4">
-            <div className="glass rounded-xl w-[900px] max-w-[95vw] max-h-[85vh] overflow-hidden">
-              <div className="px-5 py-4 flex items-center gap-3 border-b border-white/10">
-                <div className="text-base font-semibold">End User License Agreement</div>
-                <div className="ml-auto text-xs opacity-70">{eulaLoading ? 'Loading…' : ''}</div>
-              </div>
-              <div className="p-4">
-                <div className="prose prose-invert max-w-none text-sm leading-relaxed whitespace-pre-wrap overflow-y-auto max-h-[55vh] pr-2">
-                  {eulaContent || 'Failed to load EULA.'}
-                </div>
-                <div className="mt-4 flex items-center justify-end gap-2">
-                  <button className="btn btn-ghost" onClick={()=>{ setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(false); }}>Decline</button>
-                  <button className="btn btn-primary" onClick={async ()=>{ try { const ver = eulaKeyRef.current || 'latest'; const s:any = await window.electronAPI?.getSettings?.(); const next = { ...(s||{}) }; next.eulaAcceptedVersion = ver; await window.electronAPI?.setSetting?.('eulaAcceptedVersion', ver); } catch {} finally { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(true); } }}>I Agree</button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <EulaModal
+        open={eulaOpen}
+        loading={eulaLoading}
+        content={eulaContent}
+        onDecline={() => { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(false); }}
+        onAccept={async () => { try { const ver = eulaKeyRef.current || 'latest'; const s:any = await window.electronAPI?.getSettings?.(); const next = { ...(s||{}) }; next.eulaAcceptedVersion = ver; await window.electronAPI?.setSetting?.('eulaAcceptedVersion', ver); } catch {} finally { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(true); } }}
+      />
 
-      {/* Permission prompt modal */}
-      {permissionPromptOpen && (
-        <div className="fixed inset-0 z-50">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="absolute inset-0 grid place-items-center p-4">
-            <div className="glass rounded-xl p-5 w-[560px] max-w-[92vw]">
-              <div className="text-sm font-semibold mb-2">Folder Permissions Required</div>
-              <div className="text-xs opacity-80 mb-4">
-                To ensure the game runs properly, we need to set the correct folder permissions. 
-                This requires administrator privileges and will be done automatically.
-              </div>
-              
-              <div className="alert alert-info text-xs mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="stroke-current shrink-0 w-6 h-6">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>
-                  <strong>What we'll do:</strong><br />
-                  • Create the installation folder if it doesn't exist<br />
-                  • Set proper read/write permissions for your user account<br />
-                  • Remove admin requirements for the game folder
-                </span>
-              </div>
-
-              <div className="mt-3 text-xs opacity-70">Installation path</div>
-              <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">
-                {(channelsSettings?.[selectedChannel]?.installDir) || installDir}
-              </div>
-
-              <div className="mt-4 flex justify-end gap-2">
-                <button 
-                  className="btn btn-sm btn-ghost" 
-                  onClick={() => setPermissionPromptOpen(false)}
-                  disabled={isFixingPermissions}
-                >
-                  Cancel
-                </button>
-                <button 
-                  className={`btn btn-sm btn-primary ${isFixingPermissions ? 'loading' : ''}`}
-                  onClick={confirmPermissionsAndInstall}
-                  disabled={isFixingPermissions}
-                >
-                  {isFixingPermissions ? 'Setting Permissions...' : 'Continue & Fix Permissions'}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <PermissionPromptModal
+        open={permissionPromptOpen}
+        onCancel={() => setPermissionPromptOpen(false)}
+        onConfirm={confirmPermissionsAndInstall}
+        isFixingPermissions={isFixingPermissions}
+        installDir={(channelsSettings?.[selectedChannel]?.installDir) || installDir}
+      />
     </div>
   );
 }
