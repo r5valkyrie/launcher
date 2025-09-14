@@ -40,7 +40,7 @@ export default function MainProgressBar(props: MainProgressBarProps) {
   const progressPercent = bytesTotal > 0 ? Math.min(100, (bytesReceived / bytesTotal) * 100) : 0;
   const speedMBps = speedBps / (1024 * 1024);
   const etaMinutes = Math.floor(etaSeconds / 60);
-  const etaSecondsRemainder = etaSeconds % 60;
+  const etaSecondsRemainder = Math.floor(etaSeconds % 60);
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';

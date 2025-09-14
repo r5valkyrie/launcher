@@ -25,7 +25,6 @@ type SettingsPanelProps = {
   optimizeForSpeed: () => void;
   optimizeForStability: () => void;
   resetDownloadDefaults: () => void;
-  includeOptional: boolean;
   installHdTextures: (channelName: string) => void;
   uninstallHdTextures: (channelName: string) => void;
 };
@@ -53,7 +52,6 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     optimizeForSpeed,
     optimizeForStability,
     resetDownloadDefaults,
-    includeOptional,
     installHdTextures,
     uninstallHdTextures,
   } = props;
@@ -182,6 +180,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             const dir = ch?.installDir;
             const ver = ch?.gameVersion;
             const isInstalled = !!dir;
+            const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
             
             return (
               <div key={c.name} className="p-4 rounded-lg bg-base-200/30 border border-base-300/50">
@@ -219,9 +218,9 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                   <button 
                     className="btn btn-sm btn-outline btn-primary" 
                     disabled={!dir || busy} 
-                    onClick={() => includeOptional ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
+                    onClick={() => hdTexturesInstalled ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
                   >
-                    {includeOptional ? 'Uninstall HD Textures' : 'Install HD Textures'}
+                    {hdTexturesInstalled ? 'Uninstall HD Textures' : 'Install HD Textures'}
                   </button>
                   {(() => {
                     const dedi = (c as any)?.dedi_url as string | undefined;

@@ -99,7 +99,22 @@ export default function LauncherUI() {
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
   const [currentOperation, setCurrentOperation] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('');
-  const [includeOptional, setIncludeOptional] = useState(false);
+  // Helper function to get per-channel includeOptional setting
+  const getIncludeOptional = (channelName?: string) => {
+    const channel = channelName || selectedChannel;
+    const result = !!channelsSettings?.[channel]?.includeOptional;
+    console.log(`getIncludeOptional(${channel}):`, result, 'channelsSettings:', channelsSettings?.[channel]);
+    return result;
+  };
+
+  // Helper function to set per-channel includeOptional setting
+  const setIncludeOptional = async (channelName: string, value: boolean) => {
+    const s: any = await window.electronAPI?.getSettings();
+    const channels = { ...(s?.channels || {}) };
+    channels[channelName] = { ...(channels[channelName] || {}), includeOptional: value };
+    await window.electronAPI?.setSetting('channels', channels);
+    setChannelsSettings(channels);
+  };
   const [concurrency, setConcurrency] = useState<number>(8);
   const [partConcurrency, setPartConcurrency] = useState<number>(6);
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
@@ -211,6 +226,30 @@ export default function LauncherUI() {
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
+      if (s?.channels) {
+        // Migrate existing channels to include missing fields
+        const migratedChannels = { ...s.channels };
+        let needsUpdate = false;
+        
+        Object.keys(migratedChannels).forEach(channelName => {
+          const channel = migratedChannels[channelName];
+          if (typeof channel.includeOptional === 'undefined') {
+            channel.includeOptional = false;
+            needsUpdate = true;
+          }
+          if (typeof channel.hdTexturesInstalled === 'undefined') {
+            channel.hdTexturesInstalled = false;
+            needsUpdate = true;
+          }
+        });
+        
+        if (needsUpdate) {
+          console.log('Migrating channel settings to include HD texture fields');
+          window.electronAPI?.setSetting('channels', migratedChannels);
+        }
+        
+        setChannelsSettings(migratedChannels);
+      }
     });
   }, [selectedChannel]);
 
@@ -340,7 +379,7 @@ export default function LauncherUI() {
     const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
     setInstallBaseDir(base || '');
-    setInstallIncludeOptional(includeOptional); // Initialize with current setting
+    setInstallIncludeOptional(getIncludeOptional(selectedChannel)); // Initialize with current channel setting
     
     // Calculate base game size and optional files size
     try {
@@ -382,9 +421,8 @@ export default function LauncherUI() {
       }
     } catch {}
     await persistDir(finalPath);
-    // Update the global includeOptional setting with the dialog choice
-    setIncludeOptional(installIncludeOptional);
-    await window.electronAPI?.setSetting('includeOptional', installIncludeOptional);
+    // Update the per-channel includeOptional setting with the dialog choice
+    await setIncludeOptional(selectedChannel, installIncludeOptional);
     setChannelsSettings((prev) => ({
       ...prev,
       [selectedChannel]: { ...(prev?.[selectedChannel] || {}), installDir: finalPath }
@@ -461,10 +499,18 @@ export default function LauncherUI() {
     runIdRef.current = runId;
     try {
       const checksums = await window.electronAPI!.fetchChecksums(channel.game_url);
-      const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
+      const filtered = (checksums.files || []).filter((f: any) => getIncludeOptional(selectedChannel) || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
       const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
+      
+      // Create a lookup map for file sizes from checksums data
+      const fileSizeMap = new Map<string, number>();
+      (checksums.files || []).forEach((file: any) => {
+        if (file.path && file.size) {
+          fileSizeMap.set(file.path, Number(file.size));
+        }
+      });
       window.electronAPI!.onProgress('progress:start', guard((p: any) => { 
         setOverall(p); 
         setHasStarted(true); 
@@ -570,6 +616,16 @@ export default function LauncherUI() {
         // Don't add verify-only files to progress display to reduce visual jumping
       }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
+        // Add skipped file bytes to received total for accurate progress
+        let sizeBytes = Number(p.size || 0);
+        if (!sizeBytes && p.path && fileSizeMap.has(p.path)) {
+          sizeBytes = fileSizeMap.get(p.path) || 0;
+        }
+        
+        if (sizeBytes > 0) {
+          setBytesReceived((x) => Math.max(0, x + sizeBytes));
+          bytesReceivedRef.current = Math.max(0, bytesReceivedRef.current + sizeBytes);
+        }
         // Don't add skipped files to progress display to reduce visual jumping
         if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); 
       }));
@@ -587,7 +643,7 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:paused', guard(() => { setIsPaused(true); }));
       window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
       window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
-      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional, concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
+      await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional: getIncludeOptional(selectedChannel), concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
       setFinished(true);
       // Update local install state so primary button flips to Play
@@ -1329,6 +1385,14 @@ export default function LauncherUI() {
     setBusy(true);
     setFinished(false);
     setProgressItems({});
+    setDoneCount(0);
+    setTotalCount(0);
+    setCurrentOperation('Installing HD textures');
+    const runId = Date.now();
+    runIdRef.current = runId;
+    
+    // Switch to home page to show download progress
+    setActiveTab('general');
     
     try {
       // Fetch checksums to get optional files info
@@ -1338,18 +1402,160 @@ export default function LauncherUI() {
         return;
       }
 
-      // Filter for only optional files (HD textures)
+      // Check if there are optional files available
       const optionalFiles = checksums.files.filter((f: any) => f.optional);
+      console.log(`Found ${optionalFiles.length} optional files for ${channelName}:`, optionalFiles.map((f: any) => f.path));
       if (optionalFiles.length === 0) {
         alert('No HD textures available for this channel');
         return;
       }
 
-      // Download only the optional files
-      const optionalChecksums = { ...checksums, files: optionalFiles };
+      // Set up progress tracking - count all files that will be processed (base + optional)
+      const filtered = (checksums.files || []).filter((f: any) => true); // All files since includeOptional: true
+      setTotalCount(filtered.length);
+      setDoneCount(0);
+      const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
+      
+      // Create a lookup map for file sizes from checksums data
+      const fileSizeMap = new Map<string, number>();
+      (checksums.files || []).forEach((file: any) => {
+        if (file.path && file.size) {
+          fileSizeMap.set(file.path, Number(file.size));
+        }
+      });
+      console.log(`Created file size map with ${fileSizeMap.size} entries`);
+      
+      window.electronAPI!.onProgress('progress:start', guard((p: any) => { 
+        setOverall(p); 
+        setHasStarted(true); 
+        setCurrentOperation('Installing HD textures'); 
+      }));
+      window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { 
+        const tot = Math.max(0, Number(p.totalBytes || 0)); 
+        console.log(`HD Texture progress:bytes:total - Total bytes: ${tot} (${(tot / 1024 / 1024 / 1024).toFixed(1)} GB)`);
+        setBytesTotal(tot); 
+        bytesTotalRef.current = tot; 
+        setBytesReceived(0); 
+        bytesReceivedRef.current = 0; 
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+        setHasStarted(true); 
+        setReceivedAnyBytes(false); 
+      }));
+      
+      {
+        let windowBytes = 0;
+        let lastTick = Date.now();
+        const tick = () => {
+          const now = Date.now();
+          const dt = Math.max(1, now - lastTick);
+          if (dt >= 240) {
+            const bps = (windowBytes * 1000) / dt;
+            setSpeedBps(bps);
+            const remaining = Math.max(0, bytesTotalRef.current - bytesReceivedRef.current);
+            const eta = bps > 0 ? remaining / bps : 0;
+            setEtaSeconds(eta);
+            windowBytes = 0;
+            lastTick = now;
+          }
+          if (busyRef.current && !pausedRef.current) requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+        window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
+          const d = Number(p?.delta || 0);
+          if (d !== 0) {
+            console.log(`HD Texture progress:bytes - Adding ${d} bytes`);
+            const now = Date.now();
+            setBytesReceived((x) => Math.max(0, x + d));
+            bytesReceivedRef.current = Math.max(0, bytesReceivedRef.current + d);
+            windowBytes += d;
+            setReceivedAnyBytes(true);
+          }
+        }));
+      }
+      
+      window.electronAPI!.onProgress('progress:file:start', guard((p: any) => { 
+        setFileProgress({ path: p.path, received: 0, total: p.size || 0 }); 
+        setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', parts: {}, totalParts: 0 } })); 
+      }));
+      window.electronAPI!.onProgress('progress:file', guard((p: any) => {
+        setFileProgress({ path: p.path, received: 0, total: p.size || 0 });
+        setProgressItems((prev) => ({ ...prev, [p.path]: { status: 'downloading', parts: {}, totalParts: 0 } }));
+      }));
+      window.electronAPI!.onProgress('progress:file:bytes', guard((p: any) => { 
+        setFileProgress((prev) => (prev && prev.path === p.path) ? { path: prev.path, total: prev.total, received: p.received || 0 } : prev); 
+      }));
+      window.electronAPI!.onProgress('progress:file:done', guard((p: any) => { 
+        if (fileProgress?.path === p.path) setFileProgress(null); 
+        setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); 
+      }));
+      window.electronAPI!.onProgress('progress:file:error', guard((p: any) => { 
+        if (fileProgress?.path === p.path) setFileProgress(null);
+      }));
+      window.electronAPI!.onProgress('progress:part', guard((p: any) => {
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: {
+            ...(prev[p.path] || {}),
+            status: 'downloading',
+            parts: { ...(prev[p.path]?.parts || {}), [p.part]: { received: p.received, total: p.total } },
+            totalParts: Math.max(prev[p.path]?.totalParts || 0, p.part + 1)
+          }
+        }));
+      }));
+      window.electronAPI!.onProgress('progress:part:reset', guard((p: any) => {
+        setProgressItems((prev) => ({
+          ...prev,
+          [p.path]: { ...(prev[p.path] || {}), parts: {}, totalParts: 0 }
+        }));
+      }));
+      window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
+        // Add skipped file bytes to received total for accurate progress
+        console.log('HD Texture progress:skip event:', p);
+        
+        // Try to get size from event first, then from checksums lookup
+        let sizeBytes = Number(p.size || 0);
+        if (!sizeBytes && p.path && fileSizeMap.has(p.path)) {
+          sizeBytes = fileSizeMap.get(p.path) || 0;
+          console.log(`Got size from checksums lookup: ${sizeBytes} bytes for ${p.path}`);
+        }
+        
+        if (sizeBytes > 0) {
+          console.log(`Adding ${sizeBytes} bytes from skipped file: ${p.path}`);
+          setBytesReceived((x) => Math.max(0, x + sizeBytes));
+          bytesReceivedRef.current = Math.max(0, bytesReceivedRef.current + sizeBytes);
+        } else {
+          console.log(`Skipped file ${p.path} has no size information in event or checksums:`, p);
+        }
+        // Remove from progress display if it was there
+        if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); 
+      }));
+      window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => {
+        setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
+        setCurrentOperation('Merging file parts');
+        setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } }));
+      }));
+      window.electronAPI!.onProgress('progress:merge:done', guard((p: any) => {
+        setCurrentOperation('Installing HD textures');
+        setProgressItems((prev) => {
+          const next = { ...prev };
+          delete next[p.path];
+          return next;
+        });
+      }));
+      window.electronAPI!.onProgress('progress:done', guard((p: any) => { 
+        setOverall(p); 
+        setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); 
+        setDoneCount((x) => x + 1); 
+      }));
+      window.electronAPI!.onProgress('progress:paused', guard(() => { setIsPaused(true); }));
+      window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
+      window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
+
+      // Download all files with includeOptional: true (this will download missing optional files)
       await window.electronAPI!.downloadAll({ 
         baseUrl: target.game_url, 
-        checksums: optionalChecksums, 
+        checksums, 
         installDir: dir, 
         includeOptional: true, 
         concurrency, 
@@ -1358,9 +1564,19 @@ export default function LauncherUI() {
         mode: 'install' 
       });
 
-      // Update the global includeOptional setting
-      setIncludeOptional(true);
-      await window.electronAPI?.setSetting('includeOptional', true);
+      // Update the channel-specific HD textures and includeOptional settings
+      const s: any = await window.electronAPI?.getSettings();
+      const channels = { ...(s?.channels || {}) };
+      channels[channelName] = { 
+        ...(channels[channelName] || {}), 
+        hdTexturesInstalled: true,
+        includeOptional: true 
+      };
+      console.log(`Updating settings for ${channelName}:`, channels[channelName]);
+      await window.electronAPI?.setSetting('channels', channels);
+      
+      // Update local state
+      setChannelsSettings(channels);
       
       alert('HD textures installed successfully!');
     } catch (error: any) {
@@ -1368,6 +1584,7 @@ export default function LauncherUI() {
     } finally {
       setBusy(false);
       setFinished(true);
+      setHasStarted(false);
     }
   }
 
@@ -1403,9 +1620,18 @@ export default function LauncherUI() {
       // and actually delete the optional texture files from the filesystem
       console.log(`Simulating HD texture removal for ${optionalFiles.length} files in ${dir}`);
 
-      // Update the global includeOptional setting
-      setIncludeOptional(false);
-      await window.electronAPI?.setSetting('includeOptional', false);
+      // Update the channel-specific HD textures and includeOptional settings
+      const s: any = await window.electronAPI?.getSettings();
+      const channels = { ...(s?.channels || {}) };
+      channels[channelName] = { 
+        ...(channels[channelName] || {}), 
+        hdTexturesInstalled: false,
+        includeOptional: false 
+      };
+      await window.electronAPI?.setSetting('channels', channels);
+      
+      // Update local state
+      setChannelsSettings(channels);
       
       alert('HD textures uninstalled successfully!');
     } catch (error: any) {
@@ -1440,10 +1666,18 @@ export default function LauncherUI() {
     runIdRef.current = runId;
     try {
       const checksums = await window.electronAPI!.fetchChecksums(target.game_url);
-      const filtered = (checksums.files || []).filter((f: any) => includeOptional || !f.optional);
+      const filtered = (checksums.files || []).filter((f: any) => getIncludeOptional(name) || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
       const guard = (fn: (x:any)=>void) => (payload: any) => { if (runIdRef.current !== runId) return; fn(payload); };
+      
+      // Create a lookup map for file sizes from checksums data
+      const fileSizeMap = new Map<string, number>();
+      (checksums.files || []).forEach((file: any) => {
+        if (file.path && file.size) {
+          fileSizeMap.set(file.path, Number(file.size));
+        }
+      });
       window.electronAPI!.onProgress('progress:start', guard((p: any) => { 
         setOverall(p); 
         setHasStarted(true); 
@@ -1503,6 +1737,16 @@ export default function LauncherUI() {
         // Don't add verify-only files to progress display to reduce visual jumping
       }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
+        // Add skipped file bytes to received total for accurate progress
+        let sizeBytes = Number(p.size || 0);
+        if (!sizeBytes && p.path && fileSizeMap.has(p.path)) {
+          sizeBytes = fileSizeMap.get(p.path) || 0;
+        }
+        
+        if (sizeBytes > 0) {
+          setBytesReceived((x) => Math.max(0, x + sizeBytes));
+          bytesReceivedRef.current = Math.max(0, bytesReceivedRef.current + sizeBytes);
+        }
         // Don't add skipped files to progress display to reduce visual jumping
         // Remove from progress display if it was there from a previous download attempt
         setProgressItems((prev) => {
@@ -1512,7 +1756,7 @@ export default function LauncherUI() {
         });
       }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); }));
-      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional, concurrency, partConcurrency, channelName: name, mode: 'repair' });
+      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional: getIncludeOptional(name), concurrency, partConcurrency, channelName: name, mode: 'repair' });
       setToastMessage('Repair completed');
       setFinished(true);
       // Update local install state so primary button flips to Play/reflects new version
@@ -1701,7 +1945,6 @@ export default function LauncherUI() {
             optimizeForSpeed={optimizeForSpeed}
             optimizeForStability={optimizeForStability}
             resetDownloadDefaults={resetDownloadDefaults}
-            includeOptional={includeOptional}
             installHdTextures={installHdTextures}
             uninstallHdTextures={uninstallHdTextures}
           />
