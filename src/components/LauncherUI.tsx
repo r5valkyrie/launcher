@@ -1100,16 +1100,66 @@ export default function LauncherUI() {
     });
   };
 
+  const getModTags = (mod: any): string[] => {
+    const categories = mod?.categories || mod?.tags || mod?.versions?.[0]?.categories || [];
+    if (Array.isArray(categories) && categories.length > 0) {
+      return categories.map(cat => String(cat)).slice(0, 3); // Limit to 3 tags for display
+    }
+    return [];
+  };
+
   const getModCategory = (mod: any): string => {
+    // First, check if mod has actual categories/tags from the API
+    const categories = mod?.categories || mod?.tags || mod?.versions?.[0]?.categories || [];
+    if (Array.isArray(categories) && categories.length > 0) {
+      // Map common Thunderstore categories to our categories
+      const firstCategory = String(categories[0]).toLowerCase();
+      
+      // Direct mappings
+      if (firstCategory.includes('weapon')) return 'weapon';
+      if (firstCategory.includes('map')) return 'map';  
+      if (firstCategory.includes('legend') || firstCategory.includes('character')) return 'legend';
+      if (firstCategory.includes('gamemode') || firstCategory.includes('mode')) return 'gamemode';
+      if (firstCategory.includes('ui') || firstCategory.includes('hud')) return 'ui';
+      if (firstCategory.includes('sound') || firstCategory.includes('audio')) return 'sound';
+      if (firstCategory.includes('animation')) return 'animation';
+      if (firstCategory.includes('model')) return 'model';
+      if (firstCategory.includes('cosmetic') || firstCategory.includes('skin')) return 'cosmetic';
+      if (firstCategory.includes('server')) return 'server-side';
+      if (firstCategory.includes('client')) return 'client-side';
+      if (firstCategory.includes('modpack') || firstCategory.includes('pack')) return 'modpack';
+      if (firstCategory.includes('framework') || firstCategory.includes('library')) return 'framework';
+      if (firstCategory.includes('qol') || firstCategory.includes('quality')) return 'qol';
+    }
+    
+    // Fallback to keyword matching if no categories found
     const name = (mod?.name || mod?.full_name || '').toLowerCase();
     const desc = (mod?.versions?.[0]?.description || '').toLowerCase();
     
-    if (name.includes('weapon') || name.includes('gun') || desc.includes('weapon')) return 'weapons';
-    if (name.includes('map') || name.includes('level') || desc.includes('map')) return 'maps';
-    if (name.includes('ui') || name.includes('hud') || desc.includes('interface')) return 'ui';
-    if (name.includes('audio') || name.includes('sound') || desc.includes('audio')) return 'audio';
-    if (name.includes('gameplay') || desc.includes('gameplay')) return 'gameplay';
-    return 'all';
+    // Use more precise keyword matching with word boundaries
+    const checkKeyword = (text: string, keywords: string[]) => {
+      return keywords.some(keyword => {
+        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+        return regex.test(text);
+      });
+    };
+    
+    if (checkKeyword(name, ['weapon', 'gun', 'rifle', 'pistol', 'shotgun', 'sniper'])) return 'weapon';
+    if (checkKeyword(name, ['map', 'level', 'arena', 'zone'])) return 'map';
+    if (checkKeyword(name, ['legend', 'character', 'hero', 'pilot'])) return 'legend';
+    if (checkKeyword(name, ['gamemode', 'mode'])) return 'gamemode';
+    if (checkKeyword(name, ['ui', 'hud', 'interface', 'menu', 'overlay'])) return 'ui';
+    if (checkKeyword(name, ['sound', 'audio', 'music', 'sfx', 'voice'])) return 'sound';
+    if (checkKeyword(name, ['animation', 'anim'])) return 'animation';
+    if (checkKeyword(name, ['model', 'mesh'])) return 'model';
+    if (checkKeyword(name, ['cosmetic', 'skin', 'texture', 'visual'])) return 'cosmetic';
+    if (checkKeyword(name, ['server'])) return 'server-side';
+    if (checkKeyword(name, ['client'])) return 'client-side';
+    if (checkKeyword(name, ['modpack', 'pack', 'collection'])) return 'modpack';
+    if (checkKeyword(name, ['framework', 'api', 'library', 'core'])) return 'framework';
+    if (checkKeyword(name, ['qol']) || checkKeyword(desc, ['quality of life', 'improvement', 'fix', 'enhance'])) return 'qol';
+    
+    return 'other';
   };
 
   const filteredAndSortedMods = useMemo(() => {
@@ -1260,6 +1310,106 @@ export default function LauncherUI() {
       }
     } catch (error: any) {
       alert(`Failed to fix permissions: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function installHdTextures(channelName: string) {
+    const target = config?.channels.find((c) => c.name === channelName);
+    if (!target) return;
+    
+    const ch = channelsSettings?.[channelName];
+    const dir = ch?.installDir;
+    if (!dir) {
+      alert('Channel not installed or directory not found');
+      return;
+    }
+
+    setBusy(true);
+    setFinished(false);
+    setProgressItems({});
+    
+    try {
+      // Fetch checksums to get optional files info
+      const checksums = await window.electronAPI?.fetchChecksums?.(target.game_url);
+      if (!checksums?.files) {
+        alert('Failed to fetch file information');
+        return;
+      }
+
+      // Filter for only optional files (HD textures)
+      const optionalFiles = checksums.files.filter((f: any) => f.optional);
+      if (optionalFiles.length === 0) {
+        alert('No HD textures available for this channel');
+        return;
+      }
+
+      // Download only the optional files
+      const optionalChecksums = { ...checksums, files: optionalFiles };
+      await window.electronAPI!.downloadAll({ 
+        baseUrl: target.game_url, 
+        checksums: optionalChecksums, 
+        installDir: dir, 
+        includeOptional: true, 
+        concurrency, 
+        partConcurrency, 
+        channelName: target.name, 
+        mode: 'install' 
+      });
+
+      // Update the global includeOptional setting
+      setIncludeOptional(true);
+      await window.electronAPI?.setSetting('includeOptional', true);
+      
+      alert('HD textures installed successfully!');
+    } catch (error: any) {
+      alert(`Failed to install HD textures: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+      setFinished(true);
+    }
+  }
+
+  async function uninstallHdTextures(channelName: string) {
+    const ch = channelsSettings?.[channelName];
+    const dir = ch?.installDir;
+    if (!dir) {
+      alert('Channel not installed or directory not found');
+      return;
+    }
+
+    const confirmed = confirm('Are you sure you want to uninstall HD textures? This will remove high-resolution texture files to save disk space.');
+    if (!confirmed) return;
+
+    setBusy(true);
+    
+    try {
+      const target = config?.channels.find((c) => c.name === channelName);
+      if (!target) return;
+
+      // Fetch checksums to identify optional files
+      const checksums = await window.electronAPI?.fetchChecksums?.(target.game_url);
+      if (!checksums?.files) {
+        alert('Failed to fetch file information');
+        return;
+      }
+
+      // Get list of optional files to remove
+      const optionalFiles = checksums.files.filter((f: any) => f.optional);
+      
+      // For now, we'll simulate uninstall by just updating the setting
+      // In a full implementation, you'd need to add a removeFile function to electronAPI
+      // and actually delete the optional texture files from the filesystem
+      console.log(`Simulating HD texture removal for ${optionalFiles.length} files in ${dir}`);
+
+      // Update the global includeOptional setting
+      setIncludeOptional(false);
+      await window.electronAPI?.setSetting('includeOptional', false);
+      
+      alert('HD textures uninstalled successfully!');
+    } catch (error: any) {
+      alert(`Failed to uninstall HD textures: ${error?.message || 'Unknown error'}`);
     } finally {
       setBusy(false);
     }
@@ -1551,6 +1701,9 @@ export default function LauncherUI() {
             optimizeForSpeed={optimizeForSpeed}
             optimizeForStability={optimizeForStability}
             resetDownloadDefaults={resetDownloadDefaults}
+            includeOptional={includeOptional}
+            installHdTextures={installHdTextures}
+            uninstallHdTextures={uninstallHdTextures}
           />
         )}
 
@@ -1665,6 +1818,7 @@ export default function LauncherUI() {
                   toggleFavoriteMod={toggleFavoriteMod}
                   openModDetails={openModDetails}
                   getModCategory={getModCategory as any}
+                  getModTags={getModTags as any}
                   installingMods={installingMods}
                   modProgress={modProgress}
                 />

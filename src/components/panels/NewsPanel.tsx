@@ -104,9 +104,6 @@ export default function NewsPanel(props: NewsPanelProps) {
         {/* Filter Section */}
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-secondary/20 to-accent/20 flex items-center justify-center">
-              <span className="text-xs">🏷️</span>
-            </div>
             <h3 className="text-lg font-semibold">Categories</h3>
           </div>
           
@@ -121,19 +118,19 @@ export default function NewsPanel(props: NewsPanelProps) {
               className={`btn btn-sm ${patchNotesFilter === 'community' ? 'btn-primary' : 'btn-outline'} gap-2`}
               onClick={() => setPatchNotesFilter('community')}
             >
-              👥 Community
+              Community
             </button>
             <button 
               className={`btn btn-sm ${patchNotesFilter === 'patch-notes' ? 'btn-primary' : 'btn-outline'} gap-2`}
               onClick={() => setPatchNotesFilter('patch-notes')}
             >
-              📋 Patch Notes
+              Patch Notes
             </button>
             <button 
               className={`btn btn-sm ${patchNotesFilter === 'dev-blog' ? 'btn-primary' : 'btn-outline'} gap-2`}
               onClick={() => setPatchNotesFilter('dev-blog')}
             >
-              🛠️ Dev Blog
+              Dev Blog
             </button>
           </div>
         </div>

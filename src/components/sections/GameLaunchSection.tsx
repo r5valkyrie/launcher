@@ -120,7 +120,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         {/* Session Configuration */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center">
               <span className="text-white text-sm">🎮</span>
             </div>
             <div>
@@ -139,7 +139,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                     className={`btn flex-1 ${launchMode===m ? 'btn-primary' : 'btn-outline'}`} 
                     onClick={() => setLaunchMode(m)}
                   >
-                    {m === 'CLIENT' && '👤'} {m === 'HOST' && '🏠'} {m === 'SERVER' && '🖥️'} {m}
+                    {m === 'CLIENT'} {m === 'HOST'} {m === 'SERVER'} {m}
                   </button>
                 ))}
               </div>
@@ -162,7 +162,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         {/* Video Settings */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-secondary/80 to-secondary flex items-center justify-center">
               <span className="text-white text-sm">🖥️</span>
             </div>
             <div>
@@ -177,7 +177,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 <span className="font-medium">Windowed</span>
                 <input 
                   type="checkbox" 
-                  className="toggle toggle-primary" 
+                  className="toggle toggle-secondary" 
                   checked={windowed} 
                   onChange={(e)=>setWindowed(e.target.checked)} 
                 />
@@ -228,7 +228,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         {/* Performance Settings */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent/80 to-accent flex items-center justify-center">
               <span className="text-white text-sm">⚡</span>
             </div>
             <div>
@@ -266,7 +266,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </div>
               <input 
                 type="checkbox" 
-                className="toggle toggle-warning" 
+                className="toggle toggle-accent" 
                 checked={noAsync} 
                 onChange={(e)=>setNoAsync(e.target.checked)} 
               />
@@ -277,7 +277,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         {/* Network Settings */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-info/80 to-info flex items-center justify-center">
               <span className="text-white text-sm">🌐</span>
             </div>
             <div>
@@ -291,7 +291,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium">Encrypt Packets</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-success" 
+                className="toggle toggle-info" 
                 checked={encryptPackets} 
                 onChange={(e)=>setEncryptPackets(e.target.checked)} 
               />
@@ -309,7 +309,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium">Queued Packets</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-accent" 
+                className="toggle toggle-info" 
                 checked={queuedPackets} 
                 onChange={(e)=>setQueuedPackets(e.target.checked)} 
               />
@@ -318,7 +318,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium">No Timeout</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-warning" 
+                className="toggle toggle-info" 
                 checked={noTimeout} 
                 onChange={(e)=>setNoTimeout(e.target.checked)} 
               />
@@ -330,7 +330,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       {/* Console & Playlist */}
       <div className="glass rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-gray-500 to-slate-600 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neutral/80 to-neutral flex items-center justify-center">
             <span className="text-white text-sm">💻</span>
           </div>
           <div>
@@ -348,7 +348,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </div>
               <input 
                 type="checkbox" 
-                className="toggle toggle-primary" 
+                className="toggle" 
                 checked={showConsole} 
                 onChange={(e)=>setShowConsole(e.target.checked)} 
               />
@@ -360,7 +360,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </div>
               <input 
                 type="checkbox" 
-                className="toggle toggle-secondary" 
+                className="toggle" 
                 checked={colorConsole} 
                 onChange={(e)=>setColorConsole(e.target.checked)} 
               />
@@ -383,7 +383,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       {/* Advanced Options */}
       <div className="glass rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-pink-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-warning/80 to-warning flex items-center justify-center">
             <span className="text-white text-sm">🔧</span>
           </div>
           <div>
@@ -398,7 +398,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium text-sm">Developer Mode</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-error toggle-sm" 
+                className="toggle toggle-warning toggle-sm" 
                 checked={enableDeveloper} 
                 onChange={(e)=>setEnableDeveloper(e.target.checked)} 
               />
@@ -416,7 +416,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium text-sm">Offline Mode</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-info toggle-sm" 
+                className="toggle toggle-warning toggle-sm" 
                 checked={offlineMode} 
                 onChange={(e)=>setOfflineMode(e.target.checked)} 
               />
@@ -425,7 +425,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span className="font-medium text-sm">Discord RPC</span>
               <input 
                 type="checkbox" 
-                className="toggle toggle-accent toggle-sm" 
+                className="toggle toggle-warning toggle-sm" 
                 checked={discordRichPresence} 
                 onChange={(e)=>setDiscordRichPresence(e.target.checked)} 
               />
@@ -446,10 +446,18 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       </div>
 
       {/* Generated Command Preview */}
-      <div className="alert alert-info">
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-2">🚀 Generated Launch Command</div>
-          <div className="text-xs font-mono bg-base-300/50 p-3 rounded break-all">
+      <div className="glass rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neutral/60 to-neutral/80 flex items-center justify-center">
+            <span className="text-white text-sm">🚀</span>
+          </div>
+          <div>
+            <h3 className="text-lg font-semibold">Generated Launch Command</h3>
+            <p className="text-xs opacity-70">Preview of the command that will be executed</p>
+          </div>
+        </div>
+        <div className="bg-base-200/30 border border-white/10 rounded-lg p-4">
+          <div className="text-xs font-mono text-base-content/80 break-all leading-relaxed">
             {buildLaunchParameters()}
           </div>
         </div>

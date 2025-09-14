@@ -24,7 +24,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
   return (
     <div className="glass rounded-xl p-6 space-y-6">
       <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center">
+        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent/80 to-accent flex items-center justify-center">
           <span className="text-white text-sm">⚡</span>
         </div>
         <div>
@@ -33,11 +33,11 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
         </div>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="space-y-6">
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">File Concurrency</label>
-            <div className="badge badge-primary badge-outline font-mono">{concurrency}</div>
+            <div className="badge badge-accent badge-outline font-mono">{concurrency}</div>
           </div>
           <input
             type="range"
@@ -45,7 +45,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             max="16"
             value={concurrency}
             onChange={(e) => setConcurrency(Number(e.target.value))}
-            className="range range-primary"
+            className="range range-accent w-full"
           />
           <div className="text-xs opacity-60">Simultaneous file downloads</div>
         </div>
@@ -53,7 +53,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <label className="text-sm font-medium">Part Concurrency</label>
-            <div className="badge badge-secondary badge-outline font-mono">{partConcurrency}</div>
+            <div className="badge badge-accent badge-outline font-mono">{partConcurrency}</div>
           </div>
           <input
             type="range"
@@ -61,7 +61,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             max="12"
             value={partConcurrency}
             onChange={(e) => setPartConcurrency(Number(e.target.value))}
-            className="range range-secondary"
+            className="range range-accent w-full"
           />
           <div className="text-xs opacity-60">Parts per multipart file</div>
         </div>
@@ -73,7 +73,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
         <div className="text-sm font-medium opacity-80">Quick Presets</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button 
-            className="btn btn-outline btn-success gap-2 justify-start" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
             onClick={onOptimizeForSpeed}
             title="Optimize for maximum speed (may be less stable)"
           >
@@ -84,7 +84,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             </div>
           </button>
           <button 
-            className="btn btn-outline btn-warning gap-2 justify-start" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
             onClick={onOptimizeForStability}
             title="Optimize for stability (slower but more reliable)"
           >
@@ -95,7 +95,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             </div>
           </button>
           <button 
-            className="btn btn-outline btn-ghost gap-2 justify-start" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
             onClick={onResetToDefaults}
             title="Reset to recommended defaults"
           >
@@ -108,15 +108,20 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
         </div>
       </div>
       
-      <div className="alert alert-info">
-        <div className="flex-1">
-          <div className="text-sm font-medium mb-2">💡 Troubleshooting Tips</div>
-          <ul className="text-xs space-y-1 opacity-80">
-            <li>• Use "Stability" preset if downloads frequently get stuck</li>
-            <li>• Lower part concurrency for unstable internet connections</li>
-            <li>• Higher file concurrency works best with fast, stable connections</li>
-            <li>• Try pause/resume if downloads appear frozen</li>
-          </ul>
+      <div className="bg-base-200/30 border border-white/10 rounded-lg p-4">
+        <div className="flex items-start gap-3">
+          <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-neutral/40 to-neutral/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <span className="text-white text-xs">💡</span>
+          </div>
+          <div className="flex-1">
+            <div className="text-sm font-medium mb-2 text-base-content/90">Troubleshooting Tips</div>
+            <ul className="text-xs space-y-1 text-base-content/70 leading-relaxed">
+              <li>• Use "Stability" preset if downloads frequently get stuck</li>
+              <li>• Lower part concurrency for unstable internet connections</li>
+              <li>• Higher file concurrency works best with fast, stable connections</li>
+              <li>• Try pause/resume if downloads appear frozen</li>
+            </ul>
+          </div>
         </div>
       </div>
     </div>

@@ -25,6 +25,9 @@ type SettingsPanelProps = {
   optimizeForSpeed: () => void;
   optimizeForStability: () => void;
   resetDownloadDefaults: () => void;
+  includeOptional: boolean;
+  installHdTextures: (channelName: string) => void;
+  uninstallHdTextures: (channelName: string) => void;
 };
 
 export default function SettingsPanel(props: SettingsPanelProps) {
@@ -50,6 +53,9 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     optimizeForSpeed,
     optimizeForStability,
     resetDownloadDefaults,
+    includeOptional,
+    installHdTextures,
+    uninstallHdTextures,
   } = props;
 
   return (
@@ -79,7 +85,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         {/* Appearance Settings */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-secondary/80 to-secondary flex items-center justify-center">
               <span className="text-white text-sm">🎨</span>
             </div>
             <div>
@@ -96,7 +102,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               </div>
               <input
                 type="checkbox"
-                className="toggle toggle-primary"
+                className="toggle toggle-secondary"
                 checked={bannerVideoEnabled}
                 onChange={async (e) => {
                   const v = e.target.checked;
@@ -111,7 +117,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         {/* Mod Settings */}
         <div className="glass rounded-xl p-6 space-y-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-info/80 to-info flex items-center justify-center">
               <span className="text-white text-sm">🔧</span>
             </div>
             <div>
@@ -128,7 +134,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               </div>
               <input
                 type="checkbox"
-                className="toggle toggle-warning"
+                className="toggle toggle-info"
                 checked={modsShowDeprecated}
                 onChange={async (e) => {
                   const v = e.target.checked;
@@ -145,7 +151,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               </div>
               <input
                 type="checkbox"
-                className="toggle toggle-error"
+                className="toggle toggle-info"
                 checked={modsShowNsfw}
                 onChange={async (e) => {
                   const v = e.target.checked;
@@ -161,7 +167,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
       {/* Channel Management */}
       <div className="glass rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-success/80 to-success flex items-center justify-center">
             <span className="text-white text-sm">⚙️</span>
           </div>
           <div>
@@ -197,28 +203,35 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 
                 <div className="flex flex-wrap gap-2">
                   <button 
-                    className="btn btn-sm btn-outline btn-primary" 
+                    className="btn btn-sm btn-outline btn-success" 
                     disabled={!dir || busy} 
                     onClick={() => repairChannel(c.name)}
                   >
-                    🔧 Repair
+                    Repair
                   </button>
                   <button 
-                    className="btn btn-sm btn-outline btn-warning" 
+                    className="btn btn-sm btn-outline btn-success" 
                     disabled={!dir || busy} 
                     onClick={() => fixChannelPermissions(c.name)}
                   >
-                    🛡️ Fix Permissions
+                    Fix Permissions
+                  </button>
+                  <button 
+                    className="btn btn-sm btn-outline btn-success" 
+                    disabled={!dir || busy} 
+                    onClick={() => includeOptional ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
+                  >
+                    {includeOptional ? 'Uninstall HD Textures' : 'Install HD Textures'}
                   </button>
                   {(() => {
                     const dedi = (c as any)?.dedi_url as string | undefined;
                     if (!dedi) return null;
                     return (
                       <button 
-                        className="btn btn-sm btn-outline btn-info" 
+                        className="btn btn-sm btn-outline btn-success" 
                         onClick={() => openExternal(dedi)}
                       >
-                        📥 Dedicated Server
+                        Dedicated Server
                       </button>
                     );
                   })()}

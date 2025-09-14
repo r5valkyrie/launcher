@@ -71,12 +71,10 @@ export default function ModDetailsModal(props: ModDetailsModalProps) {
                       <span>{totalDownloads.toLocaleString()} downloads</span>
                     </div>
                   )}
-                  {rating > 0 && (
-                    <div className="flex items-center gap-1">
-                      <span>⭐</span>
-                      <span>{rating.toFixed(1)} rating</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <span>⭐</span>
+                    <span>{rating.toFixed(1)} rating</span>
+                  </div>
                   <div className="flex items-center gap-1">
                     <span>📅</span>
                     <span>{(modDetailsPack?.versions || []).length} version{(modDetailsPack?.versions || []).length !== 1 ? 's' : ''}</span>

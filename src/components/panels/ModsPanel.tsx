@@ -24,7 +24,7 @@ type ModsPanelProps = {
 
   // Catalog and filters
   filteredAndSortedMods: any[];
-  modsCategory: 'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio';
+  modsCategory: 'all' | 'qol' | 'animation' | 'sound' | 'ui' | 'model' | 'cosmetic' | 'server-side' | 'client-side' | 'modpack' | 'framework' | 'map' | 'gamemode' | 'weapon' | 'legend';
   setModsCategory: (v: ModsPanelProps['modsCategory']) => void;
   modsFilter: 'all' | 'installed' | 'available' | 'updates';
   setModsFilter: (v: ModsPanelProps['modsFilter']) => void;
@@ -48,7 +48,8 @@ type ModsPanelProps = {
   favoriteMods: Set<string>;
   toggleFavoriteMod: (id: string) => void;
   openModDetails: (pack: any) => void;
-  getModCategory: (m: any) => 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio' | 'other' | string;
+  getModCategory: (m: any) => 'qol' | 'animation' | 'sound' | 'ui' | 'model' | 'cosmetic' | 'server-side' | 'client-side' | 'modpack' | 'framework' | 'map' | 'gamemode' | 'weapon' | 'legend' | 'other' | string;
+  getModTags: (m: any) => string[];
   installingMods: Record<string, 'install' | 'uninstall' | undefined>;
   modProgress: Record<string, { received: number; total: number; phase: string }>;
 };
@@ -96,6 +97,7 @@ export default function ModsPanel(props: ModsPanelProps) {
     toggleFavoriteMod,
     openModDetails,
     getModCategory,
+    getModTags,
     installingMods,
     modProgress,
   } = props;
@@ -115,14 +117,14 @@ export default function ModsPanel(props: ModsPanelProps) {
                 className={`btn ${modsSubtab==='installed' ? 'btn-primary' : 'btn-outline'} gap-2`} 
                 onClick={()=>setModsSubtab('installed')}
               >
-                📦 Installed
+                Installed
                 <div className="badge badge-neutral badge-sm">{(installedMods || []).length}</div>
               </button>
               <button 
                 className={`btn ${modsSubtab==='all' ? 'btn-primary' : 'btn-outline'} gap-2`} 
                 onClick={()=>setModsSubtab('all')}
               >
-                🌐 Browse
+                Browse
                 <div className="badge badge-neutral badge-sm">{filteredAndSortedMods.length}</div>
               </button>
             </div>
@@ -196,11 +198,20 @@ export default function ModsPanel(props: ModsPanelProps) {
                     onChange={(e) => setModsCategory(e.target.value as any)}
                   >
                     <option value="all">All Categories</option>
-                    <option value="weapons">🔫 Weapons</option>
-                    <option value="maps">🗺️ Maps</option>
-                    <option value="ui">🖥️ UI/HUD</option>
-                    <option value="gameplay">🎮 Gameplay</option>
-                    <option value="audio">🔊 Audio</option>
+                    <option value="qol">QoL</option>
+                    <option value="animation">Animation</option>
+                    <option value="sound">Sound</option>
+                    <option value="ui">UI</option>
+                    <option value="model">Model</option>
+                    <option value="cosmetic">Cosmetic</option>
+                    <option value="server-side">Server-side</option>
+                    <option value="client-side">Client-side</option>
+                    <option value="modpack">Modpack</option>
+                    <option value="framework">Framework</option>
+                    <option value="map">Map</option>
+                    <option value="gamemode">Gamemode</option>
+                    <option value="weapon">Weapon</option>
+                    <option value="legend">Legend</option>
                   </select>
                 </div>
 
@@ -225,10 +236,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                     value={modsSortBy}
                     onChange={(e) => setModsSortBy(e.target.value as any)}
                   >
-                    <option value="name">📝 Name</option>
-                    <option value="date">📅 Date Added</option>
-                    <option value="downloads">📥 Downloads</option>
-                    <option value="rating">⭐ Rating</option>
+                    <option value="name">Name</option>
+                    <option value="date">Date Added</option>
+                    <option value="downloads">Downloads</option>
+                    <option value="rating">Rating</option>
                   </select>
                 </div>
               </div>
@@ -405,6 +416,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                     const modId = m?.uuid4 || m?.full_name || title;
                     const isFavorite = favoriteMods.has(modId);
                     const category = getModCategory(m);
+                    const tags = getModTags(m);
                     
                     return (
                       <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg flex flex-col h-full">
@@ -413,14 +425,45 @@ export default function ModsPanel(props: ModsPanelProps) {
                             <img src={m.versions[0].icon} alt="" className="absolute inset-0 w-full h-full object-cover" />
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center text-4xl opacity-30">
-                              {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
+                              📦
                             </div>
                           )}
                           
-                          <div className="absolute top-2 left-2">
-                            <span className={`badge badge-sm ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
-                              {category === 'weapons' ? '🔫 Weapons' : category === 'maps' ? '🗺️ Maps' : category === 'ui' ? '🖥️ UI' : category === 'gameplay' ? '🎮 Gameplay' : category === 'audio' ? '🔊 Audio' : '📦 Other'}
-                            </span>
+                          <div className="absolute top-2 left-2 flex flex-wrap gap-1 max-w-[calc(100%-1rem)]">
+                            {tags.length > 0 ? (
+                              tags.map((tag, idx) => (
+                                <span key={idx} className="badge badge-xs bg-black/50 text-white border-white/20">
+                                  {tag}
+                                </span>
+                              ))
+                            ) : (
+                              <span className={`badge badge-sm ${
+                                category === 'weapon' ? 'badge-error' : 
+                                category === 'map' ? 'badge-info' : 
+                                category === 'ui' ? 'badge-warning' : 
+                                category === 'gamemode' ? 'badge-success' : 
+                                category === 'sound' ? 'badge-secondary' : 
+                                category === 'animation' ? 'badge-accent' :
+                                category === 'qol' ? 'badge-primary' :
+                                'badge-neutral'
+                              }`}>
+                                {category === 'qol' ? 'QoL' :
+                                 category === 'animation' ? 'Animation' :
+                                 category === 'sound' ? 'Sound' :
+                                 category === 'ui' ? 'UI' :
+                                 category === 'model' ? 'Model' :
+                                 category === 'cosmetic' ? 'Cosmetic' :
+                                 category === 'server-side' ? 'Server-side' :
+                                 category === 'client-side' ? 'Client-side' :
+                                 category === 'modpack' ? 'Modpack' :
+                                 category === 'framework' ? 'Framework' :
+                                 category === 'map' ? 'Map' :
+                                 category === 'gamemode' ? 'Gamemode' :
+                                 category === 'weapon' ? 'Weapon' :
+                                 category === 'legend' ? 'Legend' :
+                                 'Other'}
+                              </span>
+                            )}
                           </div>
 
                           {(state === 'installed' || state === 'update') && (
@@ -458,9 +501,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 }
                                 return null;
                               })()}
-                              {m?.rating_score && (
-                                <span>⭐ {m.rating_score.toFixed(1)}</span>
-                              )}
+                              <span>⭐ {(m?.rating_score || 0).toFixed(1)}</span>
                             </div>
                             
                             {isFavorite && (
@@ -551,6 +592,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                     const modId = m?.uuid4 || m?.full_name || title;
                     const isFavorite = favoriteMods.has(modId);
                     const category = getModCategory(m);
+                    const tags = getModTags(m);
                     
                     return (
                       <div key={modId} className="flex gap-4 p-4 glass-soft rounded-lg border border-white/10 hover:border-primary/30 transition-all hover:shadow-md relative">
@@ -559,7 +601,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-2xl opacity-30">
-                              {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
+                              📦
                             </div>
                           )}
                         </div>
@@ -569,9 +611,40 @@ export default function ModsPanel(props: ModsPanelProps) {
                             <div className="min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
                                 <h4 className="font-semibold text-sm">{title}</h4>
-                                <span className={`badge badge-xs ${category === 'weapons' ? 'badge-error' : category === 'maps' ? 'badge-info' : category === 'ui' ? 'badge-warning' : category === 'gameplay' ? 'badge-success' : category === 'audio' ? 'badge-secondary' : 'badge-neutral'}`}>
-                                  {category === 'weapons' ? '🔫' : category === 'maps' ? '🗺️' : category === 'ui' ? '🖥️' : category === 'gameplay' ? '🎮' : category === 'audio' ? '🔊' : '📦'}
-                                </span>
+                                {tags.length > 0 ? (
+                                  tags.map((tag, idx) => (
+                                    <span key={idx} className="badge badge-xs bg-black/30 text-white border-white/20">
+                                      {tag}
+                                    </span>
+                                  ))
+                                ) : (
+                                  <span className={`badge badge-xs ${
+                                    category === 'weapon' ? 'badge-error' : 
+                                    category === 'map' ? 'badge-info' : 
+                                    category === 'ui' ? 'badge-warning' : 
+                                    category === 'gamemode' ? 'badge-success' : 
+                                    category === 'sound' ? 'badge-secondary' : 
+                                    category === 'animation' ? 'badge-accent' :
+                                    category === 'qol' ? 'badge-primary' :
+                                    'badge-neutral'
+                                  }`}>
+                                    {category === 'qol' ? 'QoL' :
+                                     category === 'animation' ? 'Animation' :
+                                     category === 'sound' ? 'Sound' :
+                                     category === 'ui' ? 'UI' :
+                                     category === 'model' ? 'Model' :
+                                     category === 'cosmetic' ? 'Cosmetic' :
+                                     category === 'server-side' ? 'Server-side' :
+                                     category === 'client-side' ? 'Client-side' :
+                                     category === 'modpack' ? 'Modpack' :
+                                     category === 'framework' ? 'Framework' :
+                                     category === 'map' ? 'Map' :
+                                     category === 'gamemode' ? 'Gamemode' :
+                                     category === 'weapon' ? 'Weapon' :
+                                     category === 'legend' ? 'Legend' :
+                                     'Other'}
+                                  </span>
+                                )}
                                 {(state === 'installed' || state === 'update') && (
                                   <span className={`badge badge-xs ${state === 'update' ? 'badge-warning' : 'badge-success'}`}>
                                     {state === 'update' ? 'Update' : 'Installed'}
@@ -591,9 +664,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                   }
                                   return null;
                                 })()}
-                                {m?.rating_score && (
-                                  <span>⭐ {m.rating_score.toFixed(1)}</span>
-                                )}
+                                <span>⭐ {(m?.rating_score || 0).toFixed(1)}</span>
                               </div>
                             </div>
                             
