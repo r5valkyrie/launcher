@@ -50,8 +50,7 @@ declare global {
       getDefaultInstallDir: (channelName?: string) => Promise<string | null>;
       fetchLauncherConfig: (url: string) => Promise<LauncherConfig>;
       cacheBackgroundVideo: (filename: string) => Promise<string>;
-      exists: (path: string) => Promise<boolean>;
-      openPath: (path: string) => Promise<boolean>;
+      isInstalledInDir: (path: string) => Promise<boolean>;
       pauseDownload?: () => Promise<boolean>;
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
@@ -82,7 +81,7 @@ declare global {
       unwatchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
       onModsChanged?: (listener: (payload: any) => void) => void;
       // Permissions
-      fixFolderPermissions?: (payload: { folderPath: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
+      fixFolderPermissions?: (payload: { selectedChannel: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
       testWritePermissions?: (folderPath: string) => Promise<{ hasWriteAccess: boolean }>;
     };
   }
@@ -446,13 +445,6 @@ export default function LauncherUI() {
   }
 
   async function confirmPermissionsAndInstall() {
-    const actualInstallDir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
-    
-    if (!actualInstallDir) {
-      alert('No installation directory specified');
-      return;
-    }
-    
     if (!window.electronAPI?.fixFolderPermissions) {
       alert('Permission fix functionality not available. Please restart the launcher.');
       return;
@@ -461,7 +453,7 @@ export default function LauncherUI() {
     setIsFixingPermissions(true);
     try {
       // Fix folder permissions using admin privileges
-      const result = await window.electronAPI.fixFolderPermissions({ folderPath: actualInstallDir });
+      const result = await window.electronAPI.fixFolderPermissions({ selectedChannel: selectedChannel });
       
       if (!result?.ok) {
         const errorDetails = result?.details ? `\n\nDetails:\n${result.details.join('\n')}` : '';
@@ -965,11 +957,7 @@ export default function LauncherUI() {
         if (ch?.installDir) setInstallDir(ch.installDir);
         setInstalledVersion(ch?.gameVersion || null);
         if (ch?.installDir) {
-          const exeClient = `${ch.installDir.replace(/\\+$/,'')}\\r5apex.exe`;
-          const exeServer = `${ch.installDir.replace(/\\+$/,'')}\\r5apex_ds.exe`;
-          const hasClient = await window.electronAPI?.exists?.(exeClient);
-          const hasServer = await window.electronAPI?.exists?.(exeServer);
-          setIsInstalled(Boolean(hasClient || hasServer));
+          setIsInstalled(Boolean(await window.electronAPI?.isInstalledInDir(ch.installDir)));
         } else {
           setIsInstalled(false);
         }
@@ -1349,17 +1337,10 @@ export default function LauncherUI() {
     else setPrimaryAction('play');
   }, [isInstalled, installedVersion, remoteVersion]);
 
-  async function fixChannelPermissions(name: string) {
-    const ch = channelsSettings?.[name];
-    const dir = ch?.installDir;
-    if (!dir) {
-      alert('Channel not installed or directory not found');
-      return;
-    }
-    
+  async function fixChannelPermissions(ch: string) {
     setBusy(true);
     try {
-      const result = await window.electronAPI?.fixFolderPermissions?.({ folderPath: dir });
+      const result = await window.electronAPI?.fixFolderPermissions?.({ selectedChannel: ch });
       if (result?.ok) {
         if (result.warnings && result.warnings.length > 0) {
           alert(`Permissions fixed with warnings:\n${result.warnings.join('\n')}`);

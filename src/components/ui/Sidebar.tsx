@@ -17,9 +17,8 @@ export default function Sidebar({ appVersion }: SidebarProps) {
       <div className="flex-1" />
       <div className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Discord">
-          <button
-            className="btn btn-circle btn-ghost btn-sm text-white"
-            onClick={() => window.electronAPI?.openExternal?.('https://discord.gg/69V7aNPSzg')}
+          <a className="btn btn-circle btn-ghost btn-sm text-white"
+            href='https://discord.gg/69V7aNPSzg'
           >
             <svg className="w-4 h-4" viewBox="0 -28.5 256 256" preserveAspectRatio="xMidYMid">
               <g>
@@ -29,40 +28,37 @@ export default function Sidebar({ appVersion }: SidebarProps) {
                 ></path>
               </g>
             </svg>
-          </button>
+          </a>
         </div>
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Website">
-          <button
-            className="btn btn-circle btn-ghost btn-sm text-white"
-            onClick={() => window.electronAPI?.openExternal?.('https://playvalkyrie.org')}
+          <a className="btn btn-circle btn-ghost btn-sm text-white"
+            href='https://playvalkyrie.org'
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
               <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
             </svg>
-          </button>
+          </a>
         </div>
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Docs">
-          <button
-            className="btn btn-circle btn-ghost btn-sm text-white"
-            onClick={() => window.electronAPI?.openExternal?.('https://playvalkyrie.org/docs')}
+          <a className="btn btn-circle btn-ghost btn-sm text-white"
+            href='https://playvalkyrie.org/docs'
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 1 2-2V8z" />
               <path d="M14 2v6h6" />
             </svg>
-          </button>
+          </a>
         </div>
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Blog">
-          <button
-            className="btn btn-circle btn-ghost btn-sm text-white"
-            onClick={() => window.electronAPI?.openExternal?.('https://blog.playvalkyrie.org/')}
+          <a className="btn btn-circle btn-ghost btn-sm text-white"
+            href='https://blog.playvalkyrie.org/'
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <path d="M4 19h16M4 5h16v14H4z" />
               <path d="M8 8h8M8 12h8M8 16h5" />
             </svg>
-          </button>
+          </a>
         </div>
         {appVersion && (
           <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip={`Version ${appVersion}`}>

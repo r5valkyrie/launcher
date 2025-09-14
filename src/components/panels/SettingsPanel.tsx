@@ -226,12 +226,12 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                     const dedi = (c as any)?.dedi_url as string | undefined;
                     if (!dedi) return null;
                     return (
-                      <button 
+                      <a 
                         className="btn btn-sm btn-outline btn-primary" 
-                        onClick={() => openExternal(dedi)}
+                        href={dedi}                        
                       >
                         Dedicated Server
-                      </button>
+                      </a>
                     );
                   })()}
                 </div>

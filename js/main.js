@@ -481,6 +481,8 @@ ipcMain.handle('mods:fetchAll', async (_e, { query }) => {
 });
 
 ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
+  if (!downloadUrl.startsWith('https://thunderstore.io')) return { ok: false, error: "Download URL does not point to Thunderstore" }
+
   try {
     const folderKey = String(name || '').trim();
     if (!folderKey) return { ok: false, error: 'Invalid mod name' };
@@ -740,16 +742,12 @@ ipcMain.handle('video:cache', async (_e, { filename }) => {
   return `r5v://videos/${filename}`;
 });
 
-ipcMain.handle('fs:exists', async (_e, { path: targetPath }) => {
-  try { await fs.promises.access(targetPath); return true; } catch { return false; }
-});
-
-ipcMain.handle('path:open', async (_e, { path: targetPath }) => {
-  try { await shell.openPath(targetPath); return true; } catch { return false; }
-});
-
-ipcMain.handle('open-external', async (_e, { url }) => {
-  try { await shell.openExternal(url); return true; } catch { return false; }
+ipcMain.handle('fs:is-installed-in-dir', async (_e, { path: targetPath }) => {
+  let hasClient = false;
+  let hasServer = false;
+  try { await fs.promises.access(path.join(targetPath, 'r5apex.exe')); hasClient = true; } catch { }
+  try { await fs.promises.access(path.join(targetPath, 'r5apex_ds.exe')); hasServer = true; } catch { }
+  return hasClient || hasServer;
 });
 
 let downloadPaused = false;
@@ -804,8 +802,9 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
 });
 
 // Folder permissions handler
-ipcMain.handle('fix-folder-permissions', async (_e, { folderPath }) => {
+ipcMain.handle('fix-folder-permissions', async (_e, { selectedChannel }) => {
   const errors = [];
+  const folderPath = getAllSettings().channels[selectedChannel].installDir;
   
   try {
     if (!folderPath) {
@@ -827,13 +826,6 @@ ipcMain.handle('fix-folder-permissions', async (_e, { folderPath }) => {
     const invalidChars = /[<>:"|?*]/;
     if (invalidChars.test(pathWithoutDrive)) {
       return { ok: false, error: `Path contains invalid characters: ${normalizedPath}` };
-    }
-    
-    // Create folder if it doesn't exist
-    try {
-      fs.mkdirSync(folderPath, { recursive: true });
-    } catch (createError) {
-      errors.push(`Folder creation: ${createError.message}`);
     }
     
     // Get current user
