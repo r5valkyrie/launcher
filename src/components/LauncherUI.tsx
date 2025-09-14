@@ -66,6 +66,7 @@ declare global {
       onModsChanged?: (listener: (payload: any) => void) => void;
       // Permissions
       fixFolderPermissions?: (payload: { folderPath: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
+      testWritePermissions?: (folderPath: string) => Promise<{ hasWriteAccess: boolean }>;
     };
   }
 }
@@ -85,7 +86,7 @@ export default function LauncherUI() {
   const [concurrency, setConcurrency] = useState<number>(8);
   const [partConcurrency, setPartConcurrency] = useState<number>(6);
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'general'|'downloads'|'launch'|'mods'|'settings'>('general');
+  const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
   const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
@@ -113,6 +114,9 @@ export default function LauncherUI() {
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
   const [launcherRoot, setLauncherRoot] = useState<string>('');
+  const [installIncludeOptional, setInstallIncludeOptional] = useState<boolean>(false);
+  const [optionalFilesSize, setOptionalFilesSize] = useState<number>(0);
+  const [baseGameSize, setBaseGameSize] = useState<number>(0);
   // Permission prompt modal state
   const [permissionPromptOpen, setPermissionPromptOpen] = useState<boolean>(false);
   const [isFixingPermissions, setIsFixingPermissions] = useState<boolean>(false);
@@ -287,6 +291,7 @@ export default function LauncherUI() {
   const [enableCheats, setEnableCheats] = useState<boolean>(false);
   const [offlineMode, setOfflineMode] = useState<boolean>(false);
   const [noAsync, setNoAsync] = useState<boolean>(false);
+  const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
   const [customCmd, setCustomCmd] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
@@ -327,6 +332,29 @@ export default function LauncherUI() {
     const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
     setInstallBaseDir(base || '');
+    setInstallIncludeOptional(includeOptional); // Initialize with current setting
+    
+    // Calculate base game size and optional files size
+    try {
+      if (channel) {
+        const checksums = await window.electronAPI?.fetchChecksums(channel.game_url);
+        const allFiles = checksums.files || [];
+        
+        // Calculate base game size (non-optional files)
+        const baseFiles = allFiles.filter((f: any) => !f.optional);
+        const totalBaseSize = baseFiles.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
+        setBaseGameSize(totalBaseSize);
+        
+        // Calculate optional files size
+        const optionalFiles = allFiles.filter((f: any) => f.optional);
+        const totalOptionalSize = optionalFiles.reduce((sum: number, f: any) => sum + (f.size || 0), 0);
+        setOptionalFilesSize(totalOptionalSize);
+      }
+    } catch {
+      setBaseGameSize(0);
+      setOptionalFilesSize(0);
+    }
+    
     try { const lr = await window.electronAPI?.getLauncherInstallRoot?.(); if (lr) setLauncherRoot(lr); } catch {}
     setInstallPromptOpen(true);
   }
@@ -346,11 +374,27 @@ export default function LauncherUI() {
       }
     } catch {}
     await persistDir(finalPath);
+    // Update the global includeOptional setting with the dialog choice
+    setIncludeOptional(installIncludeOptional);
+    await window.electronAPI?.setSetting('includeOptional', installIncludeOptional);
     setChannelsSettings((prev) => ({
       ...prev,
       [selectedChannel]: { ...(prev?.[selectedChannel] || {}), installDir: finalPath }
     }));
     setInstallPromptOpen(false);
+    
+    // Test if we already have write permissions to the install directory
+    try {
+      const testResult = await window.electronAPI?.testWritePermissions?.(finalPath);
+      if (testResult?.hasWriteAccess) {
+        // We already have write access, skip permission dialog and start install directly
+        await startInstall();
+        return;
+      }
+    } catch {
+      // If test fails, proceed with permission dialog as fallback
+    }
+    
     // Show permission prompt before starting installation
     setPermissionPromptOpen(true);
   }
@@ -922,6 +966,7 @@ export default function LauncherUI() {
           setEnableCheats(Boolean(lo.enableCheats));
           setOfflineMode(Boolean(lo.offlineMode));
           setNoAsync(Boolean(lo.noAsync));
+          setDiscordRichPresence(lo.discordRichPresence !== false); // Default to true
           setCustomCmd(String(lo.customCmd || ''));
         }
       } catch {}
@@ -933,7 +978,7 @@ export default function LauncherUI() {
       if (newsPosts || newsLoading) return;
       setNewsLoading(true);
       try {
-        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:community&limit=10&fields=title,excerpt,published_at,url,feature_image');
+        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,published_at,url,feature_image');
         const json = await resp.json();
         const posts = Array.isArray(json?.posts) ? json.posts : [];
         setNewsPosts(posts);
@@ -952,7 +997,7 @@ export default function LauncherUI() {
       try {
         // Fetch multiple types of content
         const channelTag = `${(selectedChannel || '').toLowerCase()}-patch-notes`;
-        const communityTag = 'community';
+        const communityTag = 'Community'; // API uses capital C
         const devBlogTag = 'dev-blog';
         
         let filterQuery = '';
@@ -1040,16 +1085,28 @@ export default function LauncherUI() {
   const getPostCategory = (post: NewsPost): string => {
     if (!post.tags) return 'patch-notes';
     const tags = Array.isArray(post.tags) ? post.tags : [];
-    if (tags.some((tag: any) => tag.name === 'community')) return 'community';
-    if (tags.some((tag: any) => tag.name === 'dev-blog')) return 'dev-blog';
+    
+    // Check for explicit community tag first (case-insensitive)
+    if (tags.some((tag: any) => tag.name?.toLowerCase() === 'community')) return 'community';
+    
+    // Check for dev-blog tag (case-insensitive)
+    if (tags.some((tag: any) => tag.name?.toLowerCase() === 'dev-blog')) return 'dev-blog';
+    
+    // Default to patch-notes for everything else (including untagged posts)
     return 'patch-notes';
   };
 
   const getPostCategoryFromTags = (tags: any): string => {
     if (!tags) return 'patch-notes';
     const tagArray = Array.isArray(tags) ? tags : [];
-    if (tagArray.some((tag: any) => tag.name === 'community')) return 'community';
-    if (tagArray.some((tag: any) => tag.name === 'dev-blog')) return 'dev-blog';
+    
+    // Check for explicit community tag first (case-insensitive)
+    if (tagArray.some((tag: any) => tag.name?.toLowerCase() === 'community')) return 'community';
+    
+    // Check for dev-blog tag (case-insensitive)
+    if (tagArray.some((tag: any) => tag.name?.toLowerCase() === 'dev-blog')) return 'dev-blog';
+    
+    // Default to patch-notes for everything else (including untagged posts)
     return 'patch-notes';
   };
 
@@ -1145,6 +1202,7 @@ export default function LauncherUI() {
     if (enableDeveloper) params.push('-dev -devsdk');
     if (enableCheats) params.push('+sv_cheats 1');
     if (offlineMode) params.push('-offline');
+    if (!discordRichPresence) params.push('+discord_enable 0');
     // Hostname/visibility only for dedicated server mode
     if (mode === 'SERVER' && hostname) {
       params.push(`+hostname "${hostname}"`);
@@ -1170,7 +1228,7 @@ export default function LauncherUI() {
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd };
+    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -1185,7 +1243,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, customCmd]);
+  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
 
   useEffect(() => {
     // Decide primary action
@@ -1467,10 +1525,6 @@ export default function LauncherUI() {
               ))}
             </select>
           </div>
-              <label className="label cursor-pointer justify-start gap-3 ml-2">
-                <input type="checkbox" className="toggle-switch" checked={includeOptional} onChange={(e) => setIncludeOptional(e.target.checked)} />
-                <span className="label-text">Include optional files</span>
-              </label>
               {channel && (
                 <div className="ml-auto text-xs opacity-70 truncate">
                   Using: <span className="font-mono">{channel.game_url}</span>
@@ -1648,6 +1702,7 @@ export default function LauncherUI() {
                   <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableDeveloper} onChange={(e)=>setEnableDeveloper(e.target.checked)} /><span className="label-text">Developer</span></label>
                   <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={enableCheats} onChange={(e)=>setEnableCheats(e.target.checked)} /><span className="label-text">Cheats</span></label>
                   <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={offlineMode} onChange={(e)=>setOfflineMode(e.target.checked)} /><span className="label-text">Offline</span></label>
+                  <label className="label cursor-pointer gap-2"><input type="checkbox" className="toggle-switch" checked={discordRichPresence} onChange={(e)=>setDiscordRichPresence(e.target.checked)} /><span className="label-text">Discord Rich Presence</span></label>
                 </div>
                 <label className="form-control flex flex-col">
                   <span className="label-text text-xs opacity-70">Custom command line</span>
@@ -1666,7 +1721,7 @@ export default function LauncherUI() {
         {activeTab !== 'settings' && (
           <div
             key={`content-main-${activeTab}`}
-            className={`mx-6 mt-4 grid ${activeTab==='downloads' ? 'grid-cols-1' : 'grid-cols-1 xl:grid-cols-[1.2fr_.8fr]'} gap-4 items-start pb-6 fade-in`}
+            className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in"
           >
             {updateAvailable && !updateDownloaded && (
               <div className="glass rounded-xl overflow-hidden xl:col-span-2">
@@ -2348,9 +2403,6 @@ export default function LauncherUI() {
                             </>
                           )}
                           <span className="ml-auto flex items-center gap-2">
-                            <button className="btn btn-outline btn-xs" onClick={() => setActiveTab('downloads')} title="View detailed progress">
-                              📊 Details
-                            </button>
                             {!isPaused ? (
                               <button className="btn btn-outline btn-xs" disabled={!busy} onClick={async () => { await window.electronAPI?.pauseDownload?.(); setIsPaused(true); }}>Pause</button>
                             ) : (
@@ -2365,52 +2417,53 @@ export default function LauncherUI() {
           </div>
         )}
 
+        {/* Detailed Downloads Panel - shown when downloads are active */}
+        {activeTab === 'general' && busy && (hasStarted || overall) && Object.entries(progressItems).length > 0 && (
+          <div className="glass rounded-xl p-4 mt-4 overflow-y-auto" style={{ maxHeight: '300px' }}>
+            <div className="text-sm font-semibold mb-3 opacity-80">Download Details</div>
+            {Object.entries(progressItems).map(([p, info]) => {
+              const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
+              const parts = info.parts || {};
+              const totalParts = info.totalParts || Object.keys(parts).length || 0;
+              const exiting = !!exitingItems[p];
+              return (
+                <div key={p} className={`py-2 ${exiting ? 'item-exit' : 'item-enter'}`}>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-mono truncate mr-3">{p}</span>
+                    <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
+                  </div>
+                  {percent !== undefined && (
+                    <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
+                  )}
+                  {totalParts > 0 && (
+                    <div className="mt-2 pl-3 border-l border-white/10">
+                      {Array.from({ length: totalParts }).map((_, i) => {
+                        const part = parts[i];
+                        const pcent = part ? Math.floor(((part.received || 0) / (part.total || 1)) * 100) : 0;
+                        return (
+                          <div key={`${p}-part-${i}`} className={`text-xs mb-1 ${exiting ? 'item-exit' : 'item-enter'}`}>
+                            <div className="flex items-center justify-between">
+                              <span className="opacity-70">Part {i+1}/{totalParts}</span>
+                              <span className="opacity-60">{pcent}%</span>
+                            </div>
+                            <progress className="progress progress-accent w-full mt-1" value={pcent} max={100}></progress>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
               {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
                   {(fileProgress?.path || '')} — {Math.floor(((fileProgress?.received || 0) / ((fileProgress?.total||1))) * 100)}%
           </div>
         )}
 
-              {activeTab === 'downloads' && (
-                <div className="glass rounded-xl p-4 overflow-y-auto" style={{ minHeight: 'calc(88vh - 360px)' }}>
-                  {Object.entries(progressItems).length > 0 ? Object.entries(progressItems).map(([p, info]) => {
-              const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : undefined;
-                    const parts = info.parts || {};
-                    const totalParts = info.totalParts || Object.keys(parts).length || 0;
-              const exiting = !!exitingItems[p];
-              return (
-                      <div key={p} className={`py-2 ${exiting ? 'item-exit' : 'item-enter'}`}>
-                        <div className="flex items-center justify-between text-sm">
-                  <span className="font-mono truncate mr-3">{p}</span>
-                  <span className="opacity-70">{info.status}{percent !== undefined ? ` — ${percent}%` : ''}</span>
-                        </div>
-                        {percent !== undefined && (
-                          <progress className="progress progress-primary w-full mt-2" value={percent} max={100}></progress>
-                        )}
-                        {totalParts > 0 && (
-                          <div className="mt-2 pl-3 border-l border-white/10">
-                            {Array.from({ length: totalParts }).map((_, i) => {
-                              const part = parts[i];
-                              const pcent = part ? Math.floor(((part.received || 0) / (part.total || 1)) * 100) : 0;
-                              return (
-                                <div key={`${p}-part-${i}`} className={`text-xs mb-1 ${exiting ? 'item-exit' : 'item-enter'}`}>
-                                  <div className="flex items-center justify-between">
-                                    <span className="opacity-70">Part {i+1}/{totalParts}</span>
-                                    <span className="opacity-60">{pcent}%</span>
-                                  </div>
-                                  <progress className="progress progress-accent w-full mt-1" value={pcent} max={100}></progress>
-                </div>
-              );
-            })}
-          </div>
-                        )}
-            </div>
-                    );
-                  }) : (
-                    <div className="text-sm opacity-70 py-6 text-center">No downloads active.</div>
-          )}
-        </div>
-              )}
 
         </div>
 
@@ -2746,6 +2799,46 @@ export default function LauncherUI() {
             </div>
             <div className="mt-3 text-xs opacity-70">Final path</div>
             <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">{(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? `\\${selectedChannel}` : selectedChannel}</div>
+            
+            {/* Download Size Information */}
+            {baseGameSize > 0 && (
+              <div className="mt-4 p-3 rounded-lg bg-base-100/50 border border-base-300/30">
+                <div className="text-sm font-medium mb-1">Download Size</div>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="opacity-80">Base game:</span>
+                  <span className="font-mono">{(baseGameSize / 1024 / 1024 / 1024).toFixed(1)} GB</span>
+                </div>
+                {optionalFilesSize > 0 && (
+                  <div className="flex items-center justify-between text-sm mt-1">
+                    <span className="opacity-80">HD textures:</span>
+                    <span className="font-mono text-warning">+{(optionalFilesSize / 1024 / 1024 / 1024).toFixed(1)} GB</span>
+                  </div>
+                )}
+                <div className="border-t border-base-300/50 mt-2 pt-2">
+                  <div className="flex items-center justify-between text-sm font-semibold">
+                    <span>Total {installIncludeOptional ? '(with HD textures)' : '(base only)'}:</span>
+                    <span className="font-mono">{((baseGameSize + (installIncludeOptional ? optionalFilesSize : 0)) / 1024 / 1024 / 1024).toFixed(1)} GB</span>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* HD Textures Option */}
+            <div className="mt-4 p-3 rounded-lg bg-base-200/50 border border-base-300/50">
+              <label className="label cursor-pointer justify-start gap-3 p-0">
+                <input 
+                  type="checkbox" 
+                  className="toggle-switch" 
+                  checked={installIncludeOptional} 
+                  onChange={(e) => setInstallIncludeOptional(e.target.checked)} 
+                />
+                <div className="flex flex-col">
+                  <span className="label-text font-medium">Include HD Textures</span>
+                  <span className="text-xs opacity-70">Download high-resolution textures for better visual quality</span>
+                </div>
+              </label>
+            </div>
+            
             <div className="mt-4 flex justify-end gap-2">
               <button className="btn btn-sm btn-ghost" onClick={()=>setInstallPromptOpen(false)}>Cancel</button>
               <button className="btn btn-sm btn-primary" onClick={confirmInstallWithDir} disabled={!installBaseDir}>Install here</button>
