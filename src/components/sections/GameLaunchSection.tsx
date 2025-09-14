@@ -330,7 +330,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       {/* Console & Playlist */}
       <div className="glass rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-neutral/80 to-neutral flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/80 to-purple-600 flex items-center justify-center">
             <span className="text-white text-sm">💻</span>
           </div>
           <div>
@@ -348,7 +348,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </div>
               <input 
                 type="checkbox" 
-                className="toggle" 
+                className="toggle toggle-primary" 
                 checked={showConsole} 
                 onChange={(e)=>setShowConsole(e.target.checked)} 
               />
@@ -360,7 +360,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </div>
               <input 
                 type="checkbox" 
-                className="toggle" 
+                className="toggle toggle-primary" 
                 checked={colorConsole} 
                 onChange={(e)=>setColorConsole(e.target.checked)} 
               />

@@ -54,9 +54,6 @@ export default function DownloadProgress(props: DownloadProgressProps) {
                 <div key={p} className={`p-4 rounded-lg bg-base-200/30 border border-base-300/50 transition-all duration-300 ${exiting ? 'opacity-50 scale-95' : 'opacity-100 scale-100'}`}>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-6 h-6 rounded bg-gradient-to-br from-success/20 to-info/20 flex items-center justify-center flex-shrink-0">
-                        <span className="text-xs">📄</span>
-                      </div>
                       <div className="min-w-0 flex-1">
                         <div className="font-mono text-sm truncate" title={p}>{p}</div>
                         <div className="text-xs opacity-70 flex items-center gap-2">

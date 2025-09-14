@@ -73,7 +73,6 @@ export default function MainProgressBar(props: MainProgressBarProps) {
                 onClick={isPaused ? onResume : onPause}
                 title={isPaused ? 'Resume download' : 'Pause download'}
               >
-                {isPaused ? '▶️' : '⏸️'}
                 {isPaused ? 'Resume' : 'Pause'}
               </button>
             )}
@@ -83,7 +82,7 @@ export default function MainProgressBar(props: MainProgressBarProps) {
                 onClick={onCancel}
                 title="Cancel operation"
               >
-                ❌ Cancel
+                Cancel
               </button>
             )}
           </div>
@@ -105,7 +104,6 @@ export default function MainProgressBar(props: MainProgressBarProps) {
           {/* Stats */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div className="flex items-center gap-2 p-3 bg-base-200/50 rounded-lg">
-              <span className="text-lg">📊</span>
               <div>
                 <div className="font-medium">{progressPercent.toFixed(1)}%</div>
                 <div className="text-xs opacity-70">Complete</div>
@@ -114,7 +112,6 @@ export default function MainProgressBar(props: MainProgressBarProps) {
             
             {speedMBps > 0 && (
               <div className="flex items-center gap-2 p-3 bg-base-200/50 rounded-lg">
-                <span className="text-lg">🚀</span>
                 <div>
                   <div className="font-medium">{speedMBps.toFixed(1)} MB/s</div>
                   <div className="text-xs opacity-70">Download Speed</div>
@@ -124,7 +121,6 @@ export default function MainProgressBar(props: MainProgressBarProps) {
             
             {etaSeconds > 0 && (
               <div className="flex items-center gap-2 p-3 bg-base-200/50 rounded-lg">
-                <span className="text-lg">⏱️</span>
                 <div>
                   <div className="font-medium">
                     {etaMinutes > 0 ? `${etaMinutes}m ` : ''}{etaSecondsRemainder}s
@@ -136,7 +132,6 @@ export default function MainProgressBar(props: MainProgressBarProps) {
             
             {isPaused && (
               <div className="flex items-center gap-2 p-3 bg-warning/20 rounded-lg">
-                <span className="text-lg">⏸️</span>
                 <div>
                   <div className="font-medium text-warning">Paused</div>
                   <div className="text-xs opacity-70">Operation suspended</div>

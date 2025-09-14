@@ -167,7 +167,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
       {/* Channel Management */}
       <div className="glass rounded-xl p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-success/80 to-success flex items-center justify-center">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center">
             <span className="text-white text-sm">⚙️</span>
           </div>
           <div>
@@ -203,21 +203,21 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 
                 <div className="flex flex-wrap gap-2">
                   <button 
-                    className="btn btn-sm btn-outline btn-success" 
+                    className="btn btn-sm btn-outline btn-primary" 
                     disabled={!dir || busy} 
                     onClick={() => repairChannel(c.name)}
                   >
                     Repair
                   </button>
                   <button 
-                    className="btn btn-sm btn-outline btn-success" 
+                    className="btn btn-sm btn-outline btn-primary" 
                     disabled={!dir || busy} 
                     onClick={() => fixChannelPermissions(c.name)}
                   >
                     Fix Permissions
                   </button>
                   <button 
-                    className="btn btn-sm btn-outline btn-success" 
+                    className="btn btn-sm btn-outline btn-primary" 
                     disabled={!dir || busy} 
                     onClick={() => includeOptional ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
                   >
@@ -228,7 +228,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                     if (!dedi) return null;
                     return (
                       <button 
-                        className="btn btn-sm btn-outline btn-success" 
+                        className="btn btn-sm btn-outline btn-primary" 
                         onClick={() => openExternal(dedi)}
                       >
                         Dedicated Server
