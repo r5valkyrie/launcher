@@ -1245,6 +1245,11 @@ export default function LauncherUI() {
       
       return true;
     });
+
+    const totalDownloads: Record<string, number> = {};
+    filtered.forEach(mod => {
+      totalDownloads[mod.name] = (mod?.versions || []).reduce((sum: number, v: any) => sum + (v?.downloads || 0), 0);
+    });
     
     // Sort
     filtered.sort((a: any, b: any) => {
@@ -1256,7 +1261,7 @@ export default function LauncherUI() {
           const bDate = new Date(b?.date_created || 0).getTime();
           return bDate - aDate;
         case 'downloads':
-          return (b?.download_count || 0) - (a?.download_count || 0);
+          return (totalDownloads[b.name] || 0) - (totalDownloads[a.name] || 0);
         case 'rating':
           return (b?.rating_score || 0) - (a?.rating_score || 0);
         default:
