@@ -39,18 +39,17 @@ export default function NewsPanel(props: NewsPanelProps) {
   } = props;
 
   return (
-    <div className="xl:col-span-2 space-y-6">
-
-      {/* Main Controls */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+    <div className="xl:col-span-2">
+      {/* Combined Panel */}
+      <div className="glass rounded-xl p-6 min-h-[600px]">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-6">
           {/* Info Section */}
           <div className="flex items-center gap-4">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-info to-cyan-500 flex items-center justify-center">
               <span className="text-white text-sm">📰</span>
             </div>
             <div>
-              <h3 className="text-lg font-semibold">Latest Updates</h3>
+              <h3 className="text-lg font-semibold">News & Updates</h3>
               {!!(filteredPatchPosts && filteredPatchPosts.length) && (
                 <p className="text-xs opacity-70">{filteredPatchPosts.length} post{filteredPatchPosts.length !== 1 ? 's' : ''} available</p>
               )}
@@ -99,15 +98,10 @@ export default function NewsPanel(props: NewsPanelProps) {
           </div>
         </div>
 
-        <div className="divider divider-horizontal opacity-30 my-6"></div>
-
-        {/* Filter Section */}
-        <div className="space-y-4">
-          <div className="flex items-center gap-3">
-            <h3 className="text-lg font-semibold">Categories</h3>
-          </div>
+        {/* Filter and Search Section */}
+        <div className="space-y-4 mb-6">
           
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 mb-4">
             <button 
               className={`btn btn-sm ${patchNotesFilter === 'all' ? 'btn-primary' : 'btn-outline'}`}
               onClick={() => setPatchNotesFilter('all')}
@@ -133,11 +127,8 @@ export default function NewsPanel(props: NewsPanelProps) {
               Dev Blog
             </button>
           </div>
-        </div>
 
-        {/* Search Section */}
-        <div className="mt-4">
-          <label className="block text-sm font-medium mb-2">Search</label>
+          {/* Search Section */}
           <div className="relative">
             <input 
               type="text" 
@@ -152,19 +143,9 @@ export default function NewsPanel(props: NewsPanelProps) {
             </svg>
           </div>
         </div>
-      </div>
 
-      {/* Content Area */}
-      <div className="glass rounded-xl p-6 min-h-[400px]">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-success to-emerald-500 flex items-center justify-center">
-            <span className="text-white text-sm">📄</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold">Posts</h3>
-            <p className="text-xs opacity-70">Latest news and updates from the community</p>
-          </div>
-        </div>
+        {/* Posts Content */}
+        <div>
         {patchLoading && (
           <div className={patchNotesView === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-4'}>
             {Array.from({ length: 6 }).map((_, i) => (
@@ -349,6 +330,7 @@ export default function NewsPanel(props: NewsPanelProps) {
             )}
           </>
         )}
+        </div>
       </div>
     </div>
   );

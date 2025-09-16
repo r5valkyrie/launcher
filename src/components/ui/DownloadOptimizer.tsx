@@ -69,11 +69,11 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
       
       <div className="divider divider-horizontal opacity-30"></div>
       
-      <div className="space-y-4">
+      <div className="space-y-2">
         <div className="text-sm font-medium opacity-80">Quick Presets</div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button 
-            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success h-12" 
             onClick={onOptimizeForSpeed}
             title="Optimize for maximum speed (may be less stable)"
           >
@@ -84,7 +84,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             </div>
           </button>
           <button 
-            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success h-12" 
             onClick={onOptimizeForStability}
             title="Optimize for stability (slower but more reliable)"
           >
@@ -95,7 +95,7 @@ export default function DownloadOptimizer(props: DownloadOptimizerProps) {
             </div>
           </button>
           <button 
-            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success" 
+            className="btn btn-outline gap-2 justify-start hover:btn-success hover:border-success h-12" 
             onClick={onResetToDefaults}
             title="Reset to recommended defaults"
           >

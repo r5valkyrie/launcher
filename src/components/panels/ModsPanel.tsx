@@ -104,178 +104,89 @@ export default function ModsPanel(props: ModsPanelProps) {
 
   return (
     <div className="space-y-6 fade-in pb-6">
-      {/* Main Controls */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          {/* Tab Navigation */}
-          <div className="flex items-center gap-4">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
-              <span className="text-white text-sm">🔧</span>
-            </div>
-            <div className="flex gap-2">
-              <button 
-                className={`btn ${modsSubtab==='installed' ? 'btn-primary' : 'btn-outline'} gap-2`} 
-                onClick={()=>setModsSubtab('installed')}
-              >
-                Installed
-                <div className="badge badge-neutral badge-sm">{(installedMods || []).length}</div>
-              </button>
-              <button 
-                className={`btn ${modsSubtab==='all' ? 'btn-primary' : 'btn-outline'} gap-2`} 
-                onClick={()=>setModsSubtab('all')}
-              >
-                Browse
-                <div className="badge badge-neutral badge-sm">{filteredAndSortedMods.length}</div>
-              </button>
-            </div>
-          </div>
-          
-          {/* View Controls */}
-          <div className="flex items-center gap-3">
-            <div className="flex gap-1 p-1 bg-base-200/50 rounded-lg">
-              <button 
-                className={`btn btn-sm ${modsView === 'grid' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setModsView('grid')}
-                title="Grid View"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7"/>
-                  <rect x="14" y="3" width="7" height="7"/>
-                  <rect x="3" y="14" width="7" height="7"/>
-                  <rect x="14" y="14" width="7" height="7"/>
-                </svg>
-              </button>
-              <button 
-                className={`btn btn-sm ${modsView === 'list' ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setModsView('list')}
-                title="List View"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="8" y1="6" x2="21" y2="6"/>
-                  <line x1="8" y1="12" x2="21" y2="12"/>
-                  <line x1="8" y1="18" x2="21" y2="18"/>
-                  <line x1="3" y1="6" x2="3.01" y2="6"/>
-                  <line x1="3" y1="12" x2="3.01" y2="12"/>
-                  <line x1="3" y1="18" x2="3.01" y2="18"/>
-                </svg>
-              </button>
-            </div>
-            
-            <button 
-              className="btn btn-primary btn-sm gap-2" 
-              onClick={()=> setModsRefreshNonce((x)=>x+1)}
-              title="Refresh mod list"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="23 4 23 10 17 10"/>
-                <polyline points="1 20 1 14 7 14"/>
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-              </svg>
-              Refresh
-            </button>
-          </div>
-        </div>
-
-        {modsSubtab === 'all' && (
-          <>
-            <div className="divider divider-horizontal opacity-30 my-6"></div>
-            
-            {/* Filters Section */}
-            <div className="space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-                  <span className="text-white text-xs">🔍</span>
-                </div>
-                <h3 className="text-lg font-semibold">Filters & Search</h3>
-              </div>
-              
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Category</label>
-                  <select 
-                    className="select select-bordered w-full"
-                    value={modsCategory}
-                    onChange={(e) => setModsCategory(e.target.value as any)}
-                  >
-                    <option value="all">All Categories</option>
-                    <option value="qol">QoL</option>
-                    <option value="animation">Animation</option>
-                    <option value="sound">Sound</option>
-                    <option value="ui">UI</option>
-                    <option value="model">Model</option>
-                    <option value="cosmetic">Cosmetic</option>
-                    <option value="server-side">Server-side</option>
-                    <option value="client-side">Client-side</option>
-                    <option value="modpack">Modpack</option>
-                    <option value="framework">Framework</option>
-                    <option value="map">Map</option>
-                    <option value="gamemode">Gamemode</option>
-                    <option value="weapon">Weapon</option>
-                    <option value="legend">Legend</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Status</label>
-                  <select 
-                    className="select select-bordered w-full"
-                    value={modsFilter}
-                    onChange={(e) => setModsFilter(e.target.value as any)}
-                  >
-                    <option value="all">All Mods</option>
-                    <option value="available">Available</option>
-                    <option value="installed">Installed</option>
-                    <option value="updates">Need Updates</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Sort By</label>
-                  <select 
-                    className="select select-bordered w-full"
-                    value={modsSortBy}
-                    onChange={(e) => setModsSortBy(e.target.value as any)}
-                  >
-                    <option value="name">Name</option>
-                    <option value="date">Date Added</option>
-                    <option value="downloads">Downloads</option>
-                    <option value="rating">Rating</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Search</label>
-                <div className="relative">
-                  <input 
-                    type="text" 
-                    placeholder="Search mods by name, author, or description..." 
-                    className="input input-bordered w-full pr-10"
-                    value={modsQuery}
-                    onChange={(e) => setModsQuery(e.target.value)}
-                  />
-                  <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="11" cy="11" r="8"/>
-                    <path d="M21 21l-4.35-4.35"/>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
 
       {modsSubtab === 'installed' && (
-        <div className="glass rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
-              <span className="text-white text-sm">📦</span>
+        <div className="glass rounded-xl p-4">
+          <div className="relative mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-green-500 to-emerald-500 flex items-center justify-center">
+                <span className="text-white text-sm">📦</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Installed Mods</h3>
+                <p className="text-xs opacity-70">Manage your installed modifications</p>
+              </div>
             </div>
-            <div>
-              <h3 className="text-lg font-semibold">Installed Mods</h3>
-              <p className="text-xs opacity-70">Manage your installed modifications • Drag to reorder</p>
+
+            {/* Centered Tabs */}
+            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+              <div className="flex bg-base-200/30 rounded-lg p-1 border border-white/10">
+                <button 
+                  className="relative px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 bg-primary text-primary-content shadow-sm"
+                  disabled
+                >
+                  Installed
+                  <div className="badge badge-neutral badge-xs ml-2">{(installedMods || []).length}</div>
+                </button>
+                <button 
+                  className="relative px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 text-base-content/70 hover:text-base-content hover:bg-base-300/50"
+                  onClick={()=>setModsSubtab('all')}
+                >
+                  Browse
+                  <div className="badge badge-ghost badge-xs ml-2">{filteredAndSortedMods.length}</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center gap-3">
+              {/* View Controls */}
+              <div className="flex gap-1 p-1 bg-base-200/50 rounded-lg">
+                <button 
+                  className={`btn btn-sm ${modsView === 'grid' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setModsView('grid')}
+                  title="Grid View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                </button>
+                <button 
+                  className={`btn btn-sm ${modsView === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setModsView('list')}
+                  title="List View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <button 
+                className="btn btn-primary btn-sm gap-2" 
+                onClick={()=> setModsRefreshNonce((x)=>x+1)}
+                title="Refresh mod list"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <polyline points="1 20 1 14 7 14"/>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
+                Refresh
+              </button>
             </div>
           </div>
+
+
+          <div className="divider divider-horizontal opacity-30 my-6"></div>
           
           <div className="space-y-3">
             {installedModsLoading && (
@@ -368,14 +279,156 @@ export default function ModsPanel(props: ModsPanelProps) {
       )}
 
       {modsSubtab === 'all' && (
-        <div className="glass rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
-              <span className="text-white text-sm">🌐</span>
+        <div className="glass rounded-xl p-4">
+          <div className="relative mb-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center">
+                <span className="text-white text-sm">🌐</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Browse Mods</h3>
+                <p className="text-xs opacity-70">Discover and install community modifications</p>
+              </div>
             </div>
+
+            {/* Centered Tabs */}
+            <div className="absolute left-1/2 top-1/2 transform -translate-x-1/2 -translate-y-1/2">
+              <div className="flex bg-base-200/30 rounded-lg p-1 border border-white/10">
+                <button 
+                  className="relative px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 text-base-content/70 hover:text-base-content hover:bg-base-300/50"
+                  onClick={()=>setModsSubtab('installed')}
+                >
+                  Installed
+                  <div className="badge badge-ghost badge-xs ml-2">{(installedMods || []).length}</div>
+                </button>
+                <button 
+                  className="relative px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 bg-primary text-primary-content shadow-sm"
+                  disabled
+                >
+                  Browse
+                  <div className="badge badge-neutral badge-xs ml-2">{filteredAndSortedMods.length}</div>
+                </button>
+              </div>
+            </div>
+
+            {/* Controls */}
+            <div className="absolute right-0 top-1/2 transform -translate-y-1/2 flex items-center gap-3">
+              {/* View Controls */}
+              <div className="flex gap-1 p-1 bg-base-200/50 rounded-lg">
+                <button 
+                  className={`btn btn-sm ${modsView === 'grid' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setModsView('grid')}
+                  title="Grid View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="7" height="7"/>
+                    <rect x="14" y="3" width="7" height="7"/>
+                    <rect x="3" y="14" width="7" height="7"/>
+                    <rect x="14" y="14" width="7" height="7"/>
+                  </svg>
+                </button>
+                <button 
+                  className={`btn btn-sm ${modsView === 'list' ? 'btn-primary' : 'btn-ghost'}`}
+                  onClick={() => setModsView('list')}
+                  title="List View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
+                    <line x1="3" y1="6" x2="3.01" y2="6"/>
+                    <line x1="3" y1="12" x2="3.01" y2="12"/>
+                    <line x1="3" y1="18" x2="3.01" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+              
+              <button 
+                className="btn btn-primary btn-sm gap-2" 
+                onClick={()=> setModsRefreshNonce((x)=>x+1)}
+                title="Refresh mod list"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <polyline points="1 20 1 14 7 14"/>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
+                Refresh
+              </button>
+            </div>
+          </div>
+
+          {/* Filters & Search Section */}
+          <div className="space-y-4 mb-6">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Category</label>
+                <select 
+                  className="select select-bordered w-full"
+                  value={modsCategory}
+                  onChange={(e) => setModsCategory(e.target.value as any)}
+                >
+                  <option value="all">All Categories</option>
+                  <option value="qol">QoL</option>
+                  <option value="animation">Animation</option>
+                  <option value="sound">Sound</option>
+                  <option value="ui">UI</option>
+                  <option value="model">Model</option>
+                  <option value="cosmetic">Cosmetic</option>
+                  <option value="server-side">Server-side</option>
+                  <option value="client-side">Client-side</option>
+                  <option value="modpack">Modpack</option>
+                  <option value="framework">Framework</option>
+                  <option value="map">Map</option>
+                  <option value="gamemode">Gamemode</option>
+                  <option value="weapon">Weapon</option>
+                  <option value="legend">Legend</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Status</label>
+                <select 
+                  className="select select-bordered w-full"
+                  value={modsFilter}
+                  onChange={(e) => setModsFilter(e.target.value as any)}
+                >
+                  <option value="all">All Mods</option>
+                  <option value="available">Available</option>
+                  <option value="installed">Installed</option>
+                  <option value="updates">Need Updates</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Sort By</label>
+                <select 
+                  className="select select-bordered w-full"
+                  value={modsSortBy}
+                  onChange={(e) => setModsSortBy(e.target.value as any)}
+                >
+                  <option value="name">Name</option>
+                  <option value="date">Date Added</option>
+                  <option value="downloads">Downloads</option>
+                  <option value="rating">Rating</option>
+                </select>
+              </div>
+            </div>
+
             <div>
-              <h3 className="text-lg font-semibold">Browse Mods</h3>
-              <p className="text-xs opacity-70">Discover and install community modifications</p>
+              <div className="relative">
+                <input 
+                  type="text" 
+                  placeholder="Search mods by name, author, or description..." 
+                  className="input input-bordered w-full pr-10"
+                  value={modsQuery}
+                  onChange={(e) => setModsQuery(e.target.value)}
+                />
+                <svg className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 opacity-50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8"/>
+                  <path d="M21 21l-4.35-4.35"/>
+                </svg>
+              </div>
             </div>
           </div>
 
@@ -526,7 +579,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 className={`btn btn-sm btn-error flex-1 ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
                                 onClick={()=>uninstallFromAll(m)}
                               >
-                                🗑 Uninstall
+                                Uninstall
                               </button>
                             )}
                             {state === 'update' && (
@@ -554,6 +607,17 @@ export default function ModsPanel(props: ModsPanelProps) {
                             >
                               📋 Details
                             </button>
+                            {m.package_url && (
+                              <a
+                                href={`${m.package_url}changelog/`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="btn btn-sm btn-outline gap-1"
+                                title="View changelog"
+                              >
+                                📝 Changelog
+                              </a>
+                            )}
                           </div>
                         </div>
                         
@@ -691,7 +755,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                   className={`btn btn-sm btn-error ${installingMods[key]==='uninstall'?'btn-disabled pointer-events-none opacity-60':''}`} 
                                   onClick={()=>uninstallFromAll(m)}
                                 >
-                                  🗑 Uninstall
+                                  Uninstall
                                 </button>
                               )}
                               {state === 'update' && (
@@ -719,6 +783,17 @@ export default function ModsPanel(props: ModsPanelProps) {
                               >
                                 📋 Details
                               </button>
+                              {m.package_url && (
+                                <a
+                                  href={`${m.package_url}changelog/`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="btn btn-sm btn-outline gap-1"
+                                  title="View changelog"
+                                >
+                                  📝 Changelog
+                                </a>
+                              )}
                             </div>
                           </div>
                         </div>

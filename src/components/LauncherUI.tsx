@@ -227,6 +227,8 @@ export default function LauncherUI() {
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
       if (typeof s?.easterEggDiscovered === 'boolean') setEasterEggDiscovered(Boolean(s.easterEggDiscovered));
       if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
+      if (typeof s?.patchNotesView === 'string') setPatchNotesView(s.patchNotesView as 'grid' | 'timeline');
+      if (typeof s?.modsView === 'string') setModsView(s.modsView as 'grid' | 'list');
       if (s?.channels) {
         // Migrate existing channels to include missing fields
         const migratedChannels = { ...s.channels };
@@ -1852,6 +1854,11 @@ export default function LauncherUI() {
     runIdRef.current = runId;
     try {
       const checksums = await window.electronAPI!.fetchChecksums(target.game_url);
+      if (!checksums || !checksums.files) {
+        setToastMessage('Failed to fetch update information. Please check your connection.');
+        setFinished(true);
+        return;
+      }
       const filtered = (checksums.files || []).filter((f: any) => getIncludeOptional(name) || !f.optional);
       setTotalCount(filtered.length);
       setDoneCount(0);
@@ -1942,23 +1949,58 @@ export default function LauncherUI() {
         });
       }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); }));
-      await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional: getIncludeOptional(name), concurrency, partConcurrency, channelName: name, mode: 'repair' });
-      setToastMessage('Repair completed');
+      
+      // Add error handling for the download process
+      try {
+        await window.electronAPI!.downloadAll({ baseUrl: target.game_url, checksums, installDir: dir, includeOptional: getIncludeOptional(name), concurrency, partConcurrency, channelName: name, mode: 'repair' });
+      } catch (error) {
+        console.error('Download failed during repair/update:', error);
+        setToastMessage('Update failed. Please try again.');
+        setFinished(true);
+        return; // Exit early on download failure
+      }
+      const newVersion = String(checksums?.game_version || '');
+      setToastMessage(isUpdate ? 'Update completed' : 'Repair completed');
       setFinished(true);
-      // Update local install state so primary button flips to Play/reflects new version
-      setInstalledVersion(String(checksums?.game_version || ''));
+      
+      // Update local install state and persist to settings
+      setInstalledVersion(newVersion);
       setIsInstalled(true);
-      setPrimaryAction('play');
+      
+      // Update channel settings both in state and persistent storage
+      const updatedChannelSettings = {
+        installDir: dir,
+        gameVersion: checksums?.game_version || null,
+        gameBaseUrl: target.game_url,
+        lastUpdatedAt: Date.now(),
+      };
+      
       setChannelsSettings((prev) => ({
         ...prev,
         [name]: {
           ...(prev?.[name] || {}),
-          installDir: dir,
-          gameVersion: checksums?.game_version || null,
-          gameBaseUrl: target.game_url,
-          lastUpdatedAt: Date.now(),
+          ...updatedChannelSettings,
         },
       }));
+      
+      // Persist the updated version to settings (fire and forget to avoid blocking)
+      window.electronAPI?.getSettings().then((currentSettings) => {
+        const channels = { ...(currentSettings?.channels || {}) };
+        channels[name] = {
+          ...(channels[name] || {}),
+          ...updatedChannelSettings,
+        };
+        return window.electronAPI?.setSetting('channels', channels);
+      }).catch((error) => {
+        console.error('Failed to save updated version to settings:', error);
+      });
+      
+      // Force primary action to be determined by the updated version state
+      setPrimaryAction('play');
+    } catch (error) {
+      console.error('Error during repair/update:', error);
+      setToastMessage('Update failed. Please try again.');
+      setFinished(true);
     } finally {
       setBusy(false);
       setHasStarted(false);
@@ -2256,7 +2298,10 @@ export default function LauncherUI() {
                   modsSubtab={modsSubtab as any}
                   setModsSubtab={setModsSubtab as any}
                   modsView={modsView as any}
-                  setModsView={setModsView as any}
+                  setModsView={(view) => {
+                    setModsView(view);
+                    window.electronAPI?.setSetting('modsView', view);
+                  }}
                   setModsRefreshNonce={setModsRefreshNonce}
                   installedMods={installedMods as any}
                   installedModsLoading={installedModsLoading}
@@ -2319,9 +2364,12 @@ export default function LauncherUI() {
 
 
             {activeTab === 'general' && (
-              <NewsPanel
-                patchNotesView={patchNotesView as any}
-                setPatchNotesView={setPatchNotesView as any}
+            <NewsPanel
+              patchNotesView={patchNotesView as any}
+              setPatchNotesView={(view) => {
+                setPatchNotesView(view);
+                window.electronAPI?.setSetting('patchNotesView', view);
+              }}
                 patchNotesFilter={patchNotesFilter as any}
                 setPatchNotesFilter={setPatchNotesFilter as any}
                 patchNotesSearch={patchNotesSearch}
