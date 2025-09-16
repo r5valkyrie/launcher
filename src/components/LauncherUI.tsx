@@ -225,6 +225,8 @@ export default function LauncherUI() {
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
+      if (typeof s?.easterEggDiscovered === 'boolean') setEasterEggDiscovered(Boolean(s.easterEggDiscovered));
+      if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
       if (s?.channels) {
         // Migrate existing channels to include missing fields
         const migratedChannels = { ...s.channels };
@@ -360,8 +362,206 @@ export default function LauncherUI() {
   const eulaResolveRef = useRef<null | ((ok: boolean) => void)>(null);
   const [playCooldown, setPlayCooldown] = useState<boolean>(false);
   const launchClickGuardRef = useRef<boolean>(false);
-
   
+  // Easter egg state for emoji letter replacement
+  const [emojiMode, setEmojiMode] = useState<boolean>(false);
+  const [versionClickCount, setVersionClickCount] = useState<number>(0);
+  const [easterEggDiscovered, setEasterEggDiscovered] = useState<boolean>(false);
+  const versionClickTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Letter-to-emoji mapping function - now creates blue square elements
+  const letterToEmoji = (text: string): string => {
+    if (!emojiMode) return text;
+    
+    return text.split('').map(char => {
+      const lowerChar = char.toLowerCase();
+      
+      // Handle letters - create blue square elements
+      if (/[a-z]/.test(lowerChar)) {
+        return `<span class="emoji-letter">${lowerChar.toUpperCase()}</span>`;
+      }
+      
+      // Handle numbers with emoji equivalents
+      const numberMap: Record<string, string> = {
+        '0': '0️⃣', '1': '1️⃣', '2': '2️⃣', '3': '3️⃣', '4': '4️⃣',
+        '5': '5️⃣', '6': '6️⃣', '7': '7️⃣', '8': '8️⃣', '9': '9️⃣'
+      };
+      
+      if (numberMap[char]) {
+        return numberMap[char];
+      }
+      
+      // Handle special characters
+      const specialMap: Record<string, string> = {
+        '!': '❗', '?': '❓', '+': '➕', '-': '➖', '*': '✴️',
+        '@': '📧', '#': '#️⃣', '%': '🔢', '$': '💲'
+      };
+      
+      return specialMap[char] || char;
+    }).join('');
+  };
+
+  // Function to transform all text nodes in the DOM
+  const transformAllText = (element: Element, transform: boolean) => {
+    if (!element) return;
+    
+    if (!transform) {
+      // Restore mode: find all elements with stored original content
+      const elementsWithOriginal = element.querySelectorAll('[data-original-html]');
+      elementsWithOriginal.forEach(el => {
+        const originalHtml = el.getAttribute('data-original-html');
+        if (originalHtml !== null) {
+          el.innerHTML = originalHtml;
+          el.removeAttribute('data-original-html');
+          el.removeAttribute('data-original-text');
+        }
+      });
+      return;
+    }
+
+    // Transform mode: recursively find and transform all text nodes
+    const processElement = (el: Element) => {
+      // Skip if already processed
+      if (el.hasAttribute('data-original-html') || el.classList.contains('emoji-letter')) {
+        return;
+      }
+
+      const childNodes = Array.from(el.childNodes);
+      let needsTransform = false;
+
+      // Check if this element has direct text content that needs transformation
+      childNodes.forEach(node => {
+        if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+          const text = node.nodeValue;
+          if (/[a-zA-Z0-9]/.test(text)) {
+            needsTransform = true;
+          }
+        }
+      });
+
+      if (needsTransform) {
+        // Store original HTML before transformation
+        el.setAttribute('data-original-html', el.innerHTML);
+        
+        // Process each child node
+        childNodes.forEach(node => {
+          if (node.nodeType === Node.TEXT_NODE && node.nodeValue) {
+            const transformedText = letterToEmoji(node.nodeValue);
+            if (transformedText !== node.nodeValue) {
+              // Create a temporary container for the transformed HTML
+              const tempSpan = document.createElement('span');
+              tempSpan.innerHTML = transformedText;
+              
+              // Replace the text node with the transformed content
+              while (tempSpan.firstChild) {
+                el.insertBefore(tempSpan.firstChild, node);
+              }
+              el.removeChild(node);
+            }
+          }
+        });
+      }
+
+      // Recursively process child elements that haven't been processed yet
+      const childElements = Array.from(el.children);
+      childElements.forEach(child => {
+        if (!child.classList.contains('emoji-letter')) {
+          processElement(child);
+        }
+      });
+    };
+
+    processElement(element);
+  };
+
+  // Effect to transform text when emoji mode changes
+  useEffect(() => {
+    const mainContainer = document.querySelector('.launcher-main');
+    if (!mainContainer) return;
+
+    // Use a small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      transformAllText(mainContainer as Element, emojiMode);
+    }, 50);
+
+    let observer: MutationObserver | null = null;
+
+    if (emojiMode) {
+      // Set up MutationObserver to catch dynamically added content
+      observer = new MutationObserver((mutations) => {
+        // Temporarily disconnect to prevent infinite loops
+        observer?.disconnect();
+        
+        let shouldReconnect = false;
+        
+        mutations.forEach((mutation) => {
+          if (mutation.type === 'childList') {
+            mutation.addedNodes.forEach((node) => {
+              // Skip our own emoji-letter spans to prevent loops
+              if (node.nodeType === Node.ELEMENT_NODE) {
+                const element = node as Element;
+                if (!element.classList.contains('emoji-letter') && !element.querySelector('.emoji-letter')) {
+                  transformAllText(element, true);
+                  shouldReconnect = true;
+                }
+              } else if (node.nodeType === Node.TEXT_NODE && node.nodeValue?.trim()) {
+                const parent = node.parentElement;
+                // Only transform if parent doesn't already have emoji letters
+                if (parent && !parent.classList.contains('emoji-letter') && !parent.querySelector('.emoji-letter')) {
+                  transformAllText(parent, true);
+                  shouldReconnect = true;
+                }
+              }
+            });
+          }
+        });
+
+        // Reconnect observer after a short delay
+        if (shouldReconnect) {
+          setTimeout(() => {
+            if (observer && emojiMode) {
+              observer.observe(mainContainer, {
+                childList: true,
+                subtree: true
+              });
+            }
+          }, 100);
+        } else {
+          // Reconnect immediately if no changes were made
+          observer?.observe(mainContainer, {
+            childList: true,
+            subtree: true
+          });
+        }
+      });
+
+      observer.observe(mainContainer, {
+        childList: true,
+        subtree: true
+      });
+    }
+
+    return () => {
+      clearTimeout(timer);
+      if (observer) {
+        observer.disconnect();
+      }
+    };
+  }, [emojiMode]);
+
+  // Re-transform when active tab changes (in case new content appears)
+  useEffect(() => {
+    if (emojiMode) {
+      const timer = setTimeout(() => {
+        const mainContainer = document.querySelector('.launcher-main');
+        if (mainContainer) {
+          transformAllText(mainContainer as Element, true);
+        }
+      }, 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [activeTab, emojiMode]);
 
   async function persistDir(dir: string) {
     setInstallDir(dir);
@@ -1834,9 +2034,53 @@ export default function LauncherUI() {
     doInstall();
   }, [activeTab, allMods, pendingDeepLink]);
 
+  // Easter egg: Version button click handler
+  const handleVersionClick = () => {
+    const newCount = versionClickCount + 1;
+    setVersionClickCount(newCount);
+    
+    // Clear existing timer
+    if (versionClickTimerRef.current) {
+      clearTimeout(versionClickTimerRef.current);
+    }
+    
+    // Check if we've reached 5 clicks
+    if (newCount >= 5) {
+      const newEmojiMode = !emojiMode;
+      setEmojiMode(newEmojiMode);
+      setVersionClickCount(0);
+      
+      // Mark Easter egg as discovered and save settings
+      if (!easterEggDiscovered) {
+        setEasterEggDiscovered(true);
+        window.electronAPI?.setSetting('easterEggDiscovered', true);
+        setToastMessage('🎉 Easter egg discovered! Check settings for emoji toggle.');
+      } else {
+        setToastMessage(newEmojiMode ? 'Emoji letters activated!' : 'Normal letters restored!');
+      }
+      
+      // Save the current emoji mode state
+      window.electronAPI?.setSetting('emojiMode', newEmojiMode);
+      setFinished(true);
+      
+      return;
+    }
+    
+    // Reset click count after 3 seconds of inactivity
+    versionClickTimerRef.current = setTimeout(() => {
+      setVersionClickCount(0);
+    }, 3000);
+  };
+
+  // Function to toggle emoji mode from settings
+  const toggleEmojiMode = async (enabled: boolean) => {
+    setEmojiMode(enabled);
+    await window.electronAPI?.setSetting('emojiMode', enabled);
+  };
+
   return (
-    <div className="h-full grid grid-cols-[88px_1fr] relative">
-      <Sidebar appVersion={appVersion} />
+    <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
+      <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <TabNav activeTab={activeTab as any} onChange={(tab) => setActiveTab(tab as any)} />
@@ -1924,6 +2168,9 @@ export default function LauncherUI() {
             setModsShowDeprecated={setModsShowDeprecated}
             modsShowNsfw={modsShowNsfw}
             setModsShowNsfw={setModsShowNsfw}
+            easterEggDiscovered={easterEggDiscovered}
+            emojiMode={emojiMode}
+            toggleEmojiMode={toggleEmojiMode}
             repairChannel={repairChannel}
             fixChannelPermissions={fixChannelPermissions}
             setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}

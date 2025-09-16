@@ -2,9 +2,10 @@ import React from 'react';
 
 type SidebarProps = {
   appVersion?: string;
+  onVersionClick?: () => void;
 };
 
-export default function Sidebar({ appVersion }: SidebarProps) {
+export default function Sidebar({ appVersion, onVersionClick }: SidebarProps) {
   return (
     <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30">
       <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft hover:glass-bright transition-all duration-300 group cursor-pointer">
@@ -62,7 +63,10 @@ export default function Sidebar({ appVersion }: SidebarProps) {
         </div>
         {appVersion && (
           <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip={`Version ${appVersion}`}>
-            <button className="btn btn-circle btn-ghost btn-sm text-white/50 hover:text-white">
+            <button 
+              className="btn btn-circle btn-ghost btn-sm text-white/50 hover:text-white"
+              onClick={onVersionClick}
+            >
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <circle cx="12" cy="12" r="10" />
                 <path d="M12 16v-4" />

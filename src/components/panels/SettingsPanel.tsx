@@ -18,6 +18,9 @@ type SettingsPanelProps = {
   setModsShowDeprecated: (v: boolean) => void;
   modsShowNsfw: boolean;
   setModsShowNsfw: (v: boolean) => void;
+  easterEggDiscovered: boolean;
+  emojiMode: boolean;
+  toggleEmojiMode: (enabled: boolean) => void;
   repairChannel: (name: string) => void;
   fixChannelPermissions: (name: string) => void;
   setSetting: (key: string, value: any) => Promise<any> | void;
@@ -45,6 +48,9 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     setModsShowDeprecated,
     modsShowNsfw,
     setModsShowNsfw,
+    easterEggDiscovered,
+    emojiMode,
+    toggleEmojiMode,
     repairChannel,
     fixChannelPermissions,
     setSetting,
@@ -109,6 +115,21 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 }}
               />
             </label>
+
+            {easterEggDiscovered && (
+              <label className="flex items-center justify-between p-3 rounded-lg bg-base-200/50 hover:bg-base-200/70 transition-colors cursor-pointer">
+                <div>
+                  <span className="font-medium">Emoji Letters</span>
+                  <p className="text-xs opacity-70">Transform text into blue square emojis</p>
+                </div>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-secondary"
+                  checked={emojiMode}
+                  onChange={(e) => toggleEmojiMode(e.target.checked)}
+                />
+              </label>
+            )}
           </div>
         </div>
 
