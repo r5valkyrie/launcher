@@ -90,9 +90,20 @@ app.on('open-url', (event, url) => {
 });
 
 async function createWindow() {
-  mainWindow = new BrowserWindow({
+  // Get saved window size or use defaults
+  const savedWindowState = getSetting('windowState', {
     width: 1150,
     height: 800,
+    x: undefined,
+    y: undefined,
+    isMaximized: false
+  });
+
+  mainWindow = new BrowserWindow({
+    width: savedWindowState.width,
+    height: savedWindowState.height,
+    x: savedWindowState.x,
+    y: savedWindowState.y,
     minWidth: 1150,
     minHeight: 800,
     frame: false,
@@ -131,10 +142,36 @@ async function createWindow() {
     if (!mainWindow.isVisible()) mainWindow.show();
     if (!mainWindow.isFocused()) mainWindow.focus();
   };
+  // Restore maximized state
+  if (savedWindowState.isMaximized) {
+    mainWindow.maximize();
+  }
+
   mainWindow.once('ready-to-show', ensureShown);
   mainWindow.webContents.once('did-finish-load', ensureShown);
   const safetyShow = setTimeout(ensureShown, 1000);
   mainWindow.on('show', () => clearTimeout(safetyShow));
+
+  // Save window state when it changes
+  function saveWindowState() {
+    if (!mainWindow) return;
+    const bounds = mainWindow.getBounds();
+    const isMaximized = mainWindow.isMaximized();
+    
+    setSetting('windowState', {
+      width: bounds.width,
+      height: bounds.height,
+      x: bounds.x,
+      y: bounds.y,
+      isMaximized
+    });
+  }
+
+  // Save window state on resize, move, and maximize/unmaximize
+  mainWindow.on('resize', saveWindowState);
+  mainWindow.on('move', saveWindowState);
+  mainWindow.on('maximize', saveWindowState);
+  mainWindow.on('unmaximize', saveWindowState);
   const isDev = !!process.env.VITE_DEV_SERVER_URL || process.env.NODE_ENV === 'development';
   if (isDev) {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -721,25 +758,81 @@ ipcMain.handle('eula:get', async () => {
   }
 });
 
+
 ipcMain.handle('video:cache', async (_e, { filename }) => {
-  const base = 'https://blaze.playvalkyrie.org/video_backgrounds';
-  const url = `${base}/${filename}`;
-  const root = path.join(path.resolve(app.getAppPath(), '..'), 'cache');
-  const cacheDir = path.join(root, 'videos');
-  const dest = path.join(cacheDir, filename);
-  await fs.promises.mkdir(cacheDir, { recursive: true });
-  // If exists, return immediately
-  try { await fs.promises.access(dest); return `r5v://videos/${filename}`; } catch {}
-  // Download
-  await new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest);
-    https.get(url, (res) => {
-      if (res.statusCode !== 200) { file.close(() => {}); fs.unlink(dest, () => {}); reject(new Error(`HTTP ${res.statusCode} video`)); res.resume(); return; }
-      res.pipe(file);
-      file.on('finish', () => file.close(resolve));
-    }).on('error', (err) => { fs.unlink(dest, () => reject(err)); });
-  });
-  return `r5v://videos/${filename}`;
+  try {
+    const base = 'https://blaze.playvalkyrie.org/video_backgrounds';
+    const url = `${base}/${filename}`;
+    const root = path.join(path.resolve(app.getAppPath(), '..'), 'cache');
+    const cacheDir = path.join(root, 'videos');
+    const dest = path.join(cacheDir, filename);
+    
+    // Also create path in dist directory for serving
+    const distDir = path.join(__dirname, '..', 'dist');
+    const distVideoDest = path.join(distDir, filename);
+    
+    await fs.promises.mkdir(cacheDir, { recursive: true });
+    
+    // If exists in cache, verify it's a valid file
+    try { 
+      const stat = await fs.promises.stat(dest);
+      if (stat.size > 0) {
+        // Copy to dist directory if not already there
+        try {
+          await fs.promises.access(distVideoDest);
+        } catch {
+          await fs.promises.copyFile(dest, distVideoDest);
+        }
+        // Return relative URL to the file in dist
+        return `./${filename}`;
+      } else {
+        // File exists but is empty, delete it and re-download
+        await fs.promises.unlink(dest);
+      }
+    } catch {}
+    
+    // Download with better error handling
+    await new Promise((resolve, reject) => {
+      const file = fs.createWriteStream(dest);
+      const request = https.get(url, (res) => {
+        if (res.statusCode !== 200) { 
+          file.close(() => {});
+          fs.unlink(dest, () => {});
+          reject(new Error(`HTTP ${res.statusCode} for video ${filename}`));
+          res.resume();
+          return;
+        }
+        res.pipe(file);
+        file.on('finish', () => file.close(resolve));
+        file.on('error', (err) => {
+          fs.unlink(dest, () => reject(err));
+        });
+      });
+      
+      request.on('error', (err) => {
+        file.close(() => {});
+        fs.unlink(dest, () => {});
+        reject(err);
+      });
+      
+      // Add timeout
+      request.setTimeout(30000, () => {
+        request.destroy();
+        file.close(() => {});
+        fs.unlink(dest, () => {});
+        reject(new Error(`Video download timeout for ${filename}`));
+      });
+    });
+    
+    // Copy to dist directory for serving
+    await fs.promises.copyFile(dest, distVideoDest);
+    
+    // Return relative URL to the file in dist
+    return `./${filename}`;
+  } catch (error) {
+    console.error(`Video cache error for ${filename}:`, error);
+    throw error;
+  }
 });
 
 ipcMain.handle('fs:is-installed-in-dir', async (_e, { path: targetPath }) => {

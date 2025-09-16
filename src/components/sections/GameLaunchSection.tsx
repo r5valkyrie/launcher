@@ -113,7 +113,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
   } = props;
 
   return (
-    <div key="content-launch" className="mx-6 space-y-6 overflow-y-auto pb-6 fade-in">
+    <div key="content-launch" className="launch-panels mx-6 space-y-6 overflow-y-auto pb-6 fade-in">
       {/* Settings Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         

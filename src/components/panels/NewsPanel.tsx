@@ -41,7 +41,7 @@ export default function NewsPanel(props: NewsPanelProps) {
   return (
     <div className="xl:col-span-2">
       {/* Combined Panel */}
-      <div className="glass rounded-xl p-6 min-h-[600px]">
+      <div className="glass rounded-xl p-4 min-h-[600px]">
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 mb-6">
           {/* Info Section */}
           <div className="flex items-center gap-4">

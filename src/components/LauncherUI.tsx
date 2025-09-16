@@ -2278,7 +2278,7 @@ export default function LauncherUI() {
         {activeTab !== 'settings' && (
           <div
             key={`content-main-${activeTab}`}
-            className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-4 items-start pb-6 fade-in"
+            className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-0 items-start pb-6 fade-in"
           >
             <UpdateBanner
               updateAvailable={updateAvailable}
@@ -2344,25 +2344,21 @@ export default function LauncherUI() {
                   modProgress={modProgress}
                 />
               )}
-        <DownloadProgress
-          visible={activeTab === 'general' && busy}
-          progressItems={progressItems as any}
-          exitingItems={exitingItems}
-        />
+
+              <DownloadProgress
+                visible={activeTab === 'general' && busy}
+                progressItems={progressItems as any}
+                exitingItems={exitingItems}
+              />
 
               {false && activeTab === 'general' && fileProgress && (
                 <div className="text-sm opacity-80 font-mono">
                   {(fileProgress?.path || '')} — {Math.floor(((fileProgress?.received || 0) / ((fileProgress?.total||1))) * 100)}%
-          </div>
-        )}
+              </div>
+              )}
 
 
         </div>
-
-
-            
-
-
             {activeTab === 'general' && (
             <NewsPanel
               patchNotesView={patchNotesView as any}
