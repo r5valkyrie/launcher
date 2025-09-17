@@ -193,6 +193,86 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   animation-delay: 800ms;
 }
 
+/* App opening animations */
+@keyframes appOpen {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(8px);
+  }
+  40% {
+    opacity: 0.6;
+    transform: scale(0.98);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes sidebarSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-100%);
+  }
+  60% {
+    opacity: 0.8;
+    transform: translateX(-10%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes contentSlideIn {
+  0% {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* App opening classes */
+.app-opening {
+  animation: appOpen 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.sidebar-opening {
+  animation: sidebarSlideIn 600ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.content-opening {
+  animation: contentSlideIn 700ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+  animation-delay: 200ms;
+}
+
+/* Enhanced opening effects */
+.app-opening::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at center, rgba(59, 130, 246, 0.1) 0%, transparent 70%);
+  pointer-events: none;
+  opacity: 0;
+  animation: openingGlow 800ms ease-out both;
+  z-index: 1000;
+}
+
+@keyframes openingGlow {
+  0% { opacity: 0.3; }
+  50% { opacity: 0.1; }
+  100% { opacity: 0; }
+}
+
 /* Page transition animations */
 @keyframes pageSlideIn {
   0% { 
@@ -298,7 +378,54 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   animation: listItemSlideIn 400ms ease-out both;
 }
 
-/* Toast notification */
+/* Modern Toast Notifications */
+@keyframes modernToastEnter {
+  0% { 
+    opacity: 0; 
+    transform: translate(40px, -20px) rotate(8deg) scale(0.8);
+    filter: blur(4px);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(20px, -10px) rotate(4deg) scale(0.95);
+    filter: blur(2px);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translate(0, 0) rotate(0deg) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes modernToastExit {
+  0% { 
+    opacity: 1; 
+    transform: translate(0, 0) scale(1);
+  }
+  100% { 
+    opacity: 0; 
+    transform: translate(20px, -10px) scale(0.95);
+  }
+}
+
+@keyframes toastProgressBar {
+  0% { width: 100%; }
+  100% { width: 0%; }
+}
+
+.modern-toast-enter {
+  animation: modernToastEnter 600ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.modern-toast-exit {
+  animation: modernToastExit 300ms ease-in both;
+}
+
+.modern-toast-progress-bar {
+  animation: toastProgressBar 3000ms linear both;
+}
+
+/* Legacy toast animations (keeping for compatibility) */
 @keyframes toastSlideIn {
   0% { opacity: 0; transform: translateY(12px); }
   100% { opacity: 1; transform: translateY(0); }

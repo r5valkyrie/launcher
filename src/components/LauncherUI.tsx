@@ -127,6 +127,7 @@ export default function LauncherUI() {
   const [totalCount, setTotalCount] = useState(0);
   const [finished, setFinished] = useState(false);
   const [toastMessage, setToastMessage] = useState<string>('Completed');
+  const [toastType, setToastType] = useState<'success' | 'error' | 'warning' | 'info'>('success');
   const [bytesTotal, setBytesTotal] = useState<number>(0);
   const [bytesReceived, setBytesReceived] = useState<number>(0);
   const [speedBps, setSpeedBps] = useState<number>(0);
@@ -158,6 +159,7 @@ export default function LauncherUI() {
     const t = setTimeout(() => setFinished(false), 3000);
     return () => clearTimeout(t);
   }, [finished]);
+
   const bytesTotalRef = useRef<number>(0);
   const bytesReceivedRef = useRef<number>(0);
   const busyRef = useRef<boolean>(false);
@@ -840,6 +842,7 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional: getIncludeOptional(selectedChannel), concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
+      setToastType('success');
       setFinished(true);
       // Update local install state so primary button flips to Play
       setInstalledVersion(String(checksums?.game_version || ''));
@@ -1857,6 +1860,7 @@ export default function LauncherUI() {
       const checksums = await window.electronAPI!.fetchChecksums(target.game_url);
       if (!checksums || !checksums.files) {
         setToastMessage('Failed to fetch update information. Please check your connection.');
+        setToastType('error');
         setFinished(true);
         return;
       }
@@ -1957,11 +1961,13 @@ export default function LauncherUI() {
       } catch (error) {
         console.error('Download failed during repair/update:', error);
         setToastMessage('Update failed. Please try again.');
+        setToastType('error');
         setFinished(true);
         return; // Exit early on download failure
       }
       const newVersion = String(checksums?.game_version || '');
       setToastMessage(isUpdate ? 'Update completed' : 'Repair completed');
+      setToastType('success');
       setFinished(true);
       
       // Update local install state and persist to settings
@@ -2098,8 +2104,10 @@ export default function LauncherUI() {
         setEasterEggDiscovered(true);
         window.electronAPI?.setSetting('easterEggDiscovered', true);
         setToastMessage('🎉 Easter egg discovered! Check settings for emoji toggle.');
+        setToastType('info');
       } else {
         setToastMessage(newEmojiMode ? 'Emoji letters activated!' : 'Normal letters restored!');
+        setToastType('info');
       }
       
       // Save the current emoji mode state
@@ -2389,7 +2397,7 @@ export default function LauncherUI() {
       <ToastNotification
         visible={finished}
         message={toastMessage}
-        type="success"
+        type={toastType}
       />
       <InstallPromptModal
         open={installPromptOpen}
