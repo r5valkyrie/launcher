@@ -16,6 +16,7 @@ import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
 import UpdateBanner from './ui/UpdateBanner';
 import MainProgressBar from './ui/MainProgressBar';
+import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
 import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible } from './common/modUtils';
 import { buildLaunchParameters } from './common/launchUtils';
@@ -2195,7 +2196,8 @@ export default function LauncherUI() {
 
         {activeTab === 'general' && null}
         {activeTab === 'settings' && (
-          <SettingsPanel
+          <PageTransition pageKey="settings" className="mx-6 mb-6" staggerContent>
+            <SettingsPanel
             busy={busy}
             channel={channel as any}
             enabledChannels={enabledChannels as any}
@@ -2223,10 +2225,12 @@ export default function LauncherUI() {
             installHdTextures={installHdTextures}
             uninstallHdTextures={uninstallHdTextures}
           />
+          </PageTransition>
         )}
 
         {activeTab === 'launch' && (
-          <GameLaunchSection
+          <PageTransition pageKey="launch" className="mx-6 mb-6" staggerContent>
+            <GameLaunchSection
             launchMode={launchMode as any}
             setLaunchMode={setLaunchMode as any}
             hostname={hostname}
@@ -2273,13 +2277,12 @@ export default function LauncherUI() {
             setCustomCmd={setCustomCmd}
             buildLaunchParameters={buildLaunchParametersLocal}
           />
+          </PageTransition>
         )}
 
         {activeTab !== 'settings' && (
-          <div
-            key={`content-main-${activeTab}`}
-            className="mx-6 mt-4 grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-0 items-start pb-6 fade-in"
-          >
+          <PageTransition pageKey={activeTab} className="mx-6 mt-4" staggerContent>
+            <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-0 items-start pb-6">
             <UpdateBanner
               updateAvailable={updateAvailable}
               updateDownloaded={updateDownloaded}
@@ -2379,7 +2382,8 @@ export default function LauncherUI() {
                 getPostCategory={getPostCategory as any}
               />
             )}
-        </div>
+            </div>
+          </PageTransition>
         )}
       </section>
       <ToastNotification

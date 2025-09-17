@@ -169,7 +169,133 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   100% { opacity: 1; transform: translateY(0); }
 }
 .fade-in {
-  animation: fadeSlideIn 200ms ease-out both;
+  animation: fadeSlideIn 400ms ease-out both;
+}
+
+/* Hero banner specific animations */
+.hero-logo {
+  animation: fadeSlideIn 500ms ease-out both;
+  animation-delay: 200ms;
+}
+
+.hero-text {
+  animation: fadeSlideIn 500ms ease-out both;
+  animation-delay: 400ms;
+}
+
+.hero-buttons {
+  animation: fadeSlideIn 500ms ease-out both;
+  animation-delay: 600ms;
+}
+
+.hero-selector {
+  animation: fadeSlideIn 500ms ease-out both;
+  animation-delay: 800ms;
+}
+
+/* Page transition animations */
+@keyframes pageSlideIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(20px) scale(0.98);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes pageSlideOut {
+  0% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+  }
+  100% { 
+    opacity: 0; 
+    transform: translateY(-10px) scale(0.99);
+  }
+}
+
+.page-enter {
+  animation: pageSlideIn 350ms ease-out both;
+}
+
+.page-exit {
+  animation: pageSlideOut 200ms ease-in both;
+}
+
+/* Staggered content animations for pages */
+.content-stagger > * {
+  animation: fadeSlideIn 400ms ease-out both;
+}
+
+.content-stagger > *:nth-child(1) { animation-delay: 50ms; }
+.content-stagger > *:nth-child(2) { animation-delay: 100ms; }
+.content-stagger > *:nth-child(3) { animation-delay: 150ms; }
+.content-stagger > *:nth-child(4) { animation-delay: 200ms; }
+.content-stagger > *:nth-child(5) { animation-delay: 250ms; }
+.content-stagger > *:nth-child(6) { animation-delay: 300ms; }
+
+/* List item animations for dynamic content */
+@keyframes listItemSlideIn {
+  0% { 
+    opacity: 0; 
+    transform: translateY(15px) scale(0.95);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+  50% {
+    opacity: 0.7;
+    transform: translateY(5px) scale(0.98);
+  }
+  100% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+    max-height: 1000px;
+    padding-top: var(--original-padding-top, 0);
+    padding-bottom: var(--original-padding-bottom, 0);
+    margin-top: var(--original-margin-top, 0);
+    margin-bottom: var(--original-margin-bottom, 0);
+  }
+}
+
+@keyframes listItemSlideOut {
+  0% { 
+    opacity: 1; 
+    transform: translateY(0) scale(1);
+    max-height: 1000px;
+  }
+  100% { 
+    opacity: 0; 
+    transform: translateY(-10px) scale(0.95);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-top: 0;
+    margin-bottom: 0;
+  }
+}
+
+.list-item-enter {
+  animation: listItemSlideIn 500ms ease-out both;
+}
+
+.list-item-exit {
+  animation: listItemSlideOut 300ms ease-in both;
+  overflow: hidden;
+}
+
+/* News item specific animations */
+.news-item-enter {
+  animation: listItemSlideIn 600ms ease-out both;
+}
+
+/* Mod item specific animations */
+.mod-item-enter {
+  animation: listItemSlideIn 400ms ease-out both;
 }
 
 /* Toast notification */

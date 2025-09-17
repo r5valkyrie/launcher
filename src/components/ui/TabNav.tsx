@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { animations } from '../common/animations';
 
 export type ActiveTab = 'general' | 'mods' | 'launch' | 'settings';
 
@@ -8,13 +9,25 @@ type TabNavProps = {
 };
 
 export default function TabNav({ activeTab, onChange }: TabNavProps) {
+  const tabNavRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tabNavRef.current) {
+      animations.slideInRight(tabNavRef.current, 200);
+    }
+  }, []);
+
+  const handleTabClick = (tab: ActiveTab) => {
+    onChange(tab);
+  };
+
   return (
     <div className="mx-6 mt-4 mb-8 flex justify-center">
-      <nav className="glass-soft rounded-[2.3vw] p-2 backdrop-blur-sm min-w-fit">
+      <nav ref={tabNavRef} className="glass-soft rounded-[2.3vw] p-2 backdrop-blur-sm min-w-fit" style={{ opacity: 0 }}>
         <div className="flex items-center">
           <button
             className={`nav-tab ${activeTab === 'general' ? 'nav-tab-active' : ''}`}
-            onClick={() => onChange('general')}
+            onClick={() => handleTabClick('general')}
           >
             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
@@ -25,7 +38,7 @@ export default function TabNav({ activeTab, onChange }: TabNavProps) {
           <div className="nav-separator"></div>
           <button
             className={`nav-tab ${activeTab === 'mods' ? 'nav-tab-active' : ''}`}
-            onClick={() => onChange('mods')}
+            onClick={() => handleTabClick('mods')}
           >
             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -38,7 +51,7 @@ export default function TabNav({ activeTab, onChange }: TabNavProps) {
           <div className="nav-separator"></div>
           <button
             className={`nav-tab ${activeTab === 'launch' ? 'nav-tab-active' : ''}`}
-            onClick={() => onChange('launch')}
+            onClick={() => handleTabClick('launch')}
           >
             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/>
@@ -49,7 +62,7 @@ export default function TabNav({ activeTab, onChange }: TabNavProps) {
           <div className="nav-separator"></div>
           <button
             className={`nav-tab ${activeTab === 'settings' ? 'nav-tab-active' : ''}`}
-            onClick={() => onChange('settings')}
+            onClick={() => handleTabClick('settings')}
           >
             <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="3"/>

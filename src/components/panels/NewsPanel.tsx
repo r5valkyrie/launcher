@@ -1,4 +1,5 @@
 import React from 'react';
+import ListItemWrapper from '../ui/ListItemWrapper';
 
 type NewsPanelProps = {
   // View and filter state
@@ -165,13 +166,14 @@ export default function NewsPanel(props: NewsPanelProps) {
           <>
             {patchNotesView === 'grid' ? (
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                {filteredPatchPosts.map((post) => {
+                {filteredPatchPosts.map((post, index) => {
                   const category = getPostCategory(post);
                   const isRead = readPosts.has(post.url);
                   const isFavorite = favoritePosts.has(post.url);
                   
                   return (
-                    <div key={post.url} className={`group rounded-xl overflow-hidden glass border transition-all hover:shadow-lg ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/40'}`}>
+                    <ListItemWrapper key={post.url} itemKey={post.url} type="news" delay={index * 50}>
+                      <div className={`group rounded-xl overflow-hidden glass border transition-all hover:shadow-lg ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/40'}`}>
                       <div className="relative w-full pb-[40%] bg-base-300">
                         {post.feature_image ? (
                           <img loading="lazy" src={post.feature_image} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -234,7 +236,8 @@ export default function NewsPanel(props: NewsPanelProps) {
                           {isFavorite && <span className="text-xs opacity-50">⭐ Favorited</span>}
                         </div>
                       </div>
-                    </div>
+                      </div>
+                    </ListItemWrapper>
                   );
                 })}
               </div>
@@ -246,7 +249,8 @@ export default function NewsPanel(props: NewsPanelProps) {
                   const isFavorite = favoritePosts.has(post.url);
                   
                   return (
-                    <div key={post.url} className={`flex gap-4 p-4 rounded-xl glass border transition-all hover:shadow-md ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/30'}`}>
+                    <ListItemWrapper key={post.url} itemKey={post.url} type="news" delay={index * 50}>
+                      <div className={`flex gap-4 p-4 rounded-xl glass border transition-all hover:shadow-md ${isRead ? 'border-white/5 opacity-75' : 'border-white/10 hover:border-primary/30'}`}>
                       {/* Timeline Indicator */}
                       <div className="flex flex-col items-center">
                         <div className={`w-3 h-3 rounded-full ${category === 'patch-notes' ? 'bg-primary' : category === 'community' ? 'bg-secondary' : 'bg-accent'}`}></div>
@@ -302,7 +306,8 @@ export default function NewsPanel(props: NewsPanelProps) {
                           Read Full Article →
                         </a>
                       </div>
-                    </div>
+                      </div>
+                    </ListItemWrapper>
                   );
                 })}
               </div>

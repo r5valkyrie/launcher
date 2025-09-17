@@ -63,7 +63,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
   } = props;
 
   return (
-    <div key="content-settings" className="mx-6 space-y-6 fade-in pb-6">
+    <div key="content-settings" className="space-y-6 fade-in pb-6">
       {/* Settings Grid */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         

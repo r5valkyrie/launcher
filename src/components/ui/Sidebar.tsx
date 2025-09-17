@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { animations } from '../common/animations';
 
 type SidebarProps = {
   appVersion?: string;
@@ -6,9 +7,31 @@ type SidebarProps = {
 };
 
 export default function Sidebar({ appVersion, onVersionClick }: SidebarProps) {
+  const sidebarRef = useRef<HTMLElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
+  const linksRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Animate sidebar entrance
+    if (sidebarRef.current) {
+      animations.slideInLeft(sidebarRef.current);
+    }
+
+    // Animate logo with delay
+    if (logoRef.current) {
+      animations.scaleIn(logoRef.current, 300);
+    }
+
+    // Animate social links
+    if (linksRef.current) {
+      const links = linksRef.current.querySelectorAll('.tooltip');
+      animations.staggerFadeIn(links, 100);
+    }
+  }, []);
+
   return (
-    <aside className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30">
-      <div className="w-16 h-16 grid place-items-center overflow-hidden glass-soft hover:glass-bright transition-all duration-300 group cursor-pointer">
+    <aside ref={sidebarRef} className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30" style={{ opacity: 0 }}>
+      <div ref={logoRef} className="w-16 h-16 grid place-items-center overflow-hidden glass-soft hover:glass-bright transition-all duration-300 group cursor-pointer" style={{ opacity: 0 }}>
         <img
           src="logo.png"
           alt="R5 Valkyrie"
@@ -16,7 +39,7 @@ export default function Sidebar({ appVersion, onVersionClick }: SidebarProps) {
         />
       </div>
       <div className="flex-1" />
-      <div className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
+      <div ref={linksRef} className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Discord">
           <a className="btn btn-circle btn-ghost btn-sm text-white"
             href='https://discord.gg/69V7aNPSzg'

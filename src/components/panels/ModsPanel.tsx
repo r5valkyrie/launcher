@@ -1,4 +1,5 @@
 import React from 'react';
+import ListItemWrapper from '../ui/ListItemWrapper';
 
 type ModsPanelProps = {
   // Tabs and view
@@ -195,10 +196,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                 <div className="text-sm opacity-70">Loading installed mods...</div>
               </div>
             )}
-            {!installedModsLoading && (installedModsAugmented||[]).filter(isInstalledModVisible).map((m) => (
-            <div
-              key={m.name}
-              className={`glass-soft rounded-lg border border-white/10 relative transition-transform duration-150 ${dragOverModName===m.name?'ring-1 ring-primary scale-[1.01]':''} ${draggingModName===m.name?'opacity-60':''}`}
+            {!installedModsLoading && (installedModsAugmented||[]).filter(isInstalledModVisible).map((m, index) => (
+            <ListItemWrapper key={m.name} itemKey={m.name} type="mod" delay={index * 50}>
+              <div
+                className={`glass-soft rounded-lg border border-white/10 relative transition-transform duration-150 ${dragOverModName===m.name?'ring-1 ring-primary scale-[1.01]':''} ${draggingModName===m.name?'opacity-60':''}`}
               draggable
               onDragStart={(e)=>{ setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed='move'; }}
               onDragEnd={()=>{ setDraggingModName(null); setDragOverModName(null); }}
@@ -259,7 +260,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                   ); })()}
                 </div>
               ); return null; })()}
-            </div>
+              </div>
+            </ListItemWrapper>
             ))}
             {!installedModsLoading && (installedModsAugmented||[]).length===0 && (
               <div className="text-center py-12">
@@ -458,7 +460,7 @@ export default function ModsPanel(props: ModsPanelProps) {
             <>
               {modsView === 'grid' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {filteredAndSortedMods.slice(0, 60).map((m: any) => {
+                  {filteredAndSortedMods.slice(0, 60).map((m: any, index: number) => {
                     const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
                     const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
                     const title = String(rawTitle).replace(/_/g, ' ');
@@ -472,7 +474,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                     const tags = getModTags(m);
                     
                     return (
-                      <div key={modId} className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg flex flex-col h-full">
+                      <ListItemWrapper key={modId} itemKey={modId} type="mod" delay={index * 30}>
+                        <div className="group glass-soft rounded-lg border border-white/10 relative hover:border-primary/30 transition-all hover:shadow-lg flex flex-col h-full">
                         <div className="relative w-full pb-[50%] bg-base-300/40 overflow-hidden rounded-t-lg">
                           {m?.versions?.[0]?.icon ? (
                             <img src={m.versions[0].icon} alt="" className="absolute inset-0 w-full h-full object-cover" />
@@ -639,13 +642,14 @@ export default function ModsPanel(props: ModsPanelProps) {
                             })()}
                           </div>
                         )}
-                      </div>
+                        </div>
+                      </ListItemWrapper>
                     );
                   })}
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {filteredAndSortedMods.slice(0, 60).map((m: any) => {
+                  {filteredAndSortedMods.slice(0, 60).map((m: any, index: number) => {
                     const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
                     const rawTitle = m?.name || (m?.full_name?.split('-')?.[0]) || 'Unknown';
                     const title = String(rawTitle).replace(/_/g, ' ');
@@ -659,7 +663,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                     const tags = getModTags(m);
                     
                     return (
-                      <div key={modId} className="flex gap-4 p-4 glass-soft rounded-lg border border-white/10 hover:border-primary/30 transition-all hover:shadow-md relative">
+                      <ListItemWrapper key={modId} itemKey={modId} type="mod" delay={index * 30}>
+                        <div className="flex gap-4 p-4 glass-soft rounded-lg border border-white/10 hover:border-primary/30 transition-all hover:shadow-md relative">
                         <div className="w-16 h-16 bg-base-300/40 rounded-lg overflow-hidden flex-shrink-0">
                           {m?.versions?.[0]?.icon ? (
                             <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
@@ -816,7 +821,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                             })()}
                           </div>
                         )}
-                      </div>
+                        </div>
+                      </ListItemWrapper>
                     );
                   })}
                 </div>

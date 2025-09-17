@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
+import { animations } from '../common/animations';
 
 type Channel = { name: string };
 
@@ -41,9 +42,41 @@ export default function HeroBanner(props: HeroBannerProps) {
     onOpenLaunchOptions,
   } = props;
 
+  const bannerRef = useRef<HTMLDivElement>(null);
+  const logoRef = useRef<HTMLImageElement>(null);
+  const buttonsRef = useRef<HTMLDivElement>(null);
+  const channelSelectorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    // Enhanced animations with anime.js (CSS fallback already applied via classes)
+    const timer = setTimeout(() => {
+      try {
+        // Add floating animation to logo after initial fade-in
+        if (logoRef.current) {
+          animations.logoFloat(logoRef.current);
+        }
+      } catch (error) {
+        console.warn('Logo float animation error:', error);
+      }
+    }, 800);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // Add button hover animations
+  const handleButtonHover = (e: React.MouseEvent<HTMLButtonElement>) => {
+    animations.buttonHover(e.currentTarget);
+  };
+
+  const handleButtonLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
+    animations.buttonHoverOut(e.currentTarget);
+  };
+
   return (
     <div className="relative mx-6 mt-12 mb-6 overflow-visible">
-      <div className="relative h-[250px] rounded-[2.3vw] overflow-hidden will-change-auto">
+      <div ref={bannerRef} className="relative h-[250px] rounded-[2.3vw] overflow-hidden will-change-auto">
         <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
         {bgVideo && (
           <video
@@ -62,12 +95,17 @@ export default function HeroBanner(props: HeroBannerProps) {
         <div className="relative z-10 h-full w-full flex flex-col items-start justify-start p-9">
           <div className="flex flex-col h-full w-full">
             <div>
-              <img src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto" />
-              <div className="text-md opacity-80 mt-2">Pilots. Legends. One Frontier. One Battle.</div>
+              <img ref={logoRef} src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto hero-logo" />
+              <div className="text-md opacity-80 mt-2 hero-text">Pilots. Legends. One Frontier. One Battle.</div>
             </div>
-            <div className="mt-auto flex items-center gap-3 pb-1">
+            <div ref={buttonsRef} className="mt-auto flex items-center gap-3 pb-1 hero-buttons">
               {primaryAction === 'install' && (
-                <button className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" disabled={busy} onClick={openInstallPrompt}>
+                <button 
+                  className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" 
+                  disabled={busy} 
+                  onClick={openInstallPrompt}
+                  onMouseEnter={handleButtonHover}
+                  onMouseLeave={handleButtonLeave}>
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7,10 12,15 17,10"/>
@@ -77,7 +115,12 @@ export default function HeroBanner(props: HeroBannerProps) {
                 </button>
               )}
               {primaryAction === 'update' && (
-                <button className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" disabled={busy} onClick={() => repairChannel(selectedChannel, true)}>
+                <button 
+                  className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" 
+                  disabled={busy} 
+                  onClick={() => repairChannel(selectedChannel, true)}
+                  onMouseEnter={handleButtonHover}
+                  onMouseLeave={handleButtonLeave}>
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M1 4v6h6"/>
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
@@ -86,7 +129,10 @@ export default function HeroBanner(props: HeroBannerProps) {
                 </button>
               )}
               {primaryAction === 'play' && (
-                <button className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] min-w-[6rem] gap-2 ${playCooldown?'btn-disabled opacity-70':''}`} disabled={busy || playCooldown} onClick={async ()=>{
+                <button 
+                  className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] min-w-[6rem] gap-2 ${playCooldown?'btn-disabled opacity-70':''}`} 
+                  disabled={busy || playCooldown} 
+                  onClick={async ()=>{
                   if (busy || launchClickGuardRef.current) return;
                   launchClickGuardRef.current = true;
                   setPlayCooldown(true);
@@ -94,14 +140,21 @@ export default function HeroBanner(props: HeroBannerProps) {
                   if (!ok) { setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 300); return; }
                   await getSettingsAndLaunch();
                   setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
-                }}>
+                }}
+                  onMouseEnter={handleButtonHover}
+                  onMouseLeave={handleButtonLeave}>
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polygon points="5,3 19,12 5,21"/>
                   </svg>
                   {busy ? 'Working…' : 'Play'}
                 </button>
               )}
-              <button className="btn btn-lg rounded-[1.5vw] min-w-[3rem]" title="Launch Options" onClick={onOpenLaunchOptions}>
+              <button 
+                className="btn btn-lg rounded-[1.5vw] min-w-[3rem]" 
+                title="Launch Options" 
+                onClick={onOpenLaunchOptions}
+                onMouseEnter={handleButtonHover}
+                onMouseLeave={handleButtonLeave}>
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -110,7 +163,7 @@ export default function HeroBanner(props: HeroBannerProps) {
             </div>
           </div>
           {enabledChannels.length > 0 && (
-            <div className="absolute bottom-[40px] right-6 text-right">
+            <div ref={channelSelectorRef} className="absolute bottom-[40px] right-6 text-right hero-selector">
               <div className="text-xs text-white/60 mb-2 font-medium">Release Channel</div>
               <div className="glass rounded-xl p-1 border border-white/20 backdrop-blur-md">
                 <div className="flex gap-1">
