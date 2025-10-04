@@ -27,11 +27,9 @@ Example:
   "channels": [
     {
       "name": "PTU",
-      "game_url": "https://blaze.playvalkyrie.org/ptu_game",
-      "dedi_url": "https://blaze.playvalkyrie.org/dedi_game/server_PTC_v2.71.2-250907.7z",
-      "enabled": true,
-      "requires_key": false,
-      "allow_updates": true
+      "game_url": "https://blaze.example.org/game_files",
+      "dedi_url": "https://blaze.example.org/dedi_files/server_PTC_v2.71.2-250907.7z",
+      "enabled": true
     }
   ]
 }
