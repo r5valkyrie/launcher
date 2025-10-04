@@ -17,7 +17,7 @@ Modern game launcher for R5 Valkyrie built with Electron + Astro + React.
 ## Configuration
 
 The launcher fetches a JSON config at startup (default):
-`https://blaze.playvalkyrie.org/config.json`
+`https://example.com/config.json`
 
 Example:
 
@@ -27,15 +27,15 @@ Example:
   "channels": [
     {
       "name": "PTU",
-      "game_url": "https://blaze.example.org/game_files",
-      "dedi_url": "https://blaze.example.org/dedi_files/server_PTC_v2.71.2-250907.7z",
+      "game_url": "https://example.com/game_files",
+      "dedi_url": "https://example.com/dedi_files/server_PTC_v2.71.2-250907.7z",
       "enabled": true
     }
   ]
 }
 ```
 
-- `backgroundVideo`: optional; loaded and cached (`r5v://`) with PNG fallback
+- `backgroundVideo`: optional; loaded and cached with PNG fallback
 - `channels[*].game_url`: base path containing `checksums.json`
 - `channels[*].dedi_url`: optional link in Settings to download the dedicated server
 
