@@ -11,24 +11,6 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
   const outDir = path.join(projectRoot, 'electron');
   ensureDir(outDir);
   ensureDir(path.join(outDir, 'services'));
-  ensureDir(path.join(outDir, 'modules'));
-
-  // Common external modules for Node.js
-  const nodeExternals = [
-    'electron',
-    'fs', 'node:fs',
-    'path', 'node:path',
-    'https', 'node:https',
-    'http', 'node:http',
-    'child_process', 'node:child_process',
-    'os', 'node:os',
-    'zlib', 'node:zlib',
-    'crypto', 'node:crypto',
-    'stream', 'node:stream',
-    'util', 'node:util',
-    'url', 'node:url',
-    'module', 'node:module',
-  ];
 
   // Bundle main (ESM)
   await build({
@@ -40,13 +22,13 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
     minify: true,
     sourcemap: false,
     logLevel: 'silent',
-    external: nodeExternals,
+    external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
   });
   // Avoid obfuscating main to keep Node/Electron semantics intact
 
   // Bundle preload (CJS maintained if needed)
   const preloadSrc = path.join(projectRoot, 'js', 'preload.cjs');
-  if (fs.existsSync(preloadSrc)) {
+  if (fs.existsSync(projectRoot, 'electron')) {
     await build({
       entryPoints: [preloadSrc],
       outfile: path.join(outDir, 'preload.cjs'),
@@ -56,7 +38,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
       minify: true,
       sourcemap: false,
       logLevel: 'silent',
-      external: nodeExternals,
+      external: ['electron', 'fs', 'path', 'node:fs', 'node:path'],
     });
     // Avoid obfuscating preload for stability
   }
@@ -76,38 +58,8 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
       minify: true,
       sourcemap: false,
       logLevel: 'silent',
-      external: nodeExternals,
+      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
     });
+    // Avoid obfuscating services to preserve ESM exports
   }
-
-  // Bundle modules (ESM)
-  const modules = [
-    'window.js',
-    'deeplinks.js', 
-    'updater.js',
-    'mods.js',
-    'downloads.js',
-    'game.js',
-    'permissions.js',
-    'protocols.js',
-    'ipc-handlers.js'
-  ];
-  for (const m of modules) {
-    const src = path.join(projectRoot, 'js', 'modules', m);
-    if (!fs.existsSync(src)) continue;
-    const out = path.join(outDir, 'modules', m);
-    await build({
-      entryPoints: [src],
-      outfile: out,
-      bundle: true,
-      platform: 'node',
-      format: 'esm',
-      minify: true,
-      sourcemap: false,
-      logLevel: 'silent',
-      external: nodeExternals,
-    });
-  }
-
-  console.log('✅ Bundled main.js, preload.cjs, services, and modules successfully');
 })();
