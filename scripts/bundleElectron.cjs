@@ -44,7 +44,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
   }
 
   // Bundle services (ESM)
-  const services = ['downloader.js', 'store.js'];
+  const services = ['downloader.js', 'store.js', 'window.js', 'deeplink.js', 'updater.js', 'mods.js', 'game.js', 'ipc-handlers.js', 'protocol.js'];
   for (const s of services) {
     const src = path.join(projectRoot, 'js', 'services', s);
     if (!fs.existsSync(src)) continue;
