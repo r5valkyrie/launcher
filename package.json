@@ -8,7 +8,7 @@
     "web": "astro dev",
     "dev": "node scripts/bundleElectron.cjs && concurrently \"astro dev\" \"wait-on http://localhost:4321 && cross-env VITE_DEV_SERVER_URL=http://localhost:4321 electron .\"",
     "build:web": "astro build",
-    "build": "npm run build:web && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder ",
+    "build": "npm run build:web && node scripts/bundleElectron.cjs && node scripts/downloadUmu.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder ",
     "preview": "astro preview",
     "astro": "astro",
     "release": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --win nsis --publish always",
@@ -81,7 +81,16 @@
       "icon": "build/icon.png"
     },
     "linux": {
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraFiles": [
+        {
+          "from": "bin/linux",
+          "to": "",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
     },
     "protocols": [
       {
