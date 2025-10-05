@@ -58,6 +58,8 @@ type GameLaunchSectionProps = {
   setDiscordRichPresence: (enable: boolean) => void;
   customCmd: string;
   setCustomCmd: (cmd: string) => void;
+  linuxWinePfx: string;
+  setLinuxWinePfx: (cmd: string) => void;
 
   // Helper function
   buildLaunchParameters: () => string;
@@ -109,6 +111,8 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
     setDiscordRichPresence,
     customCmd,
     setCustomCmd,
+    linuxWinePfx,
+    setLinuxWinePfx,
     buildLaunchParameters,
   } = props;
 
@@ -442,6 +446,18 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
             />
             <p className="text-xs opacity-60 mt-1">Additional command line arguments</p>
           </div>
+          {!window.navigator.userAgent.toLowerCase().includes('win') && (
+            <div>
+              <label className="block text-sm font-medium mb-2">Wine Prefix</label>
+              <input 
+                className="input input-bordered w-full font-mono" 
+                value={linuxWinePfx} 
+                onChange={(e)=>setLinuxWinePfx(e.target.value)} 
+                placeholder="~/Games/R5Library/wineprefix" 
+              />
+              <p className="text-xs opacity-60 mt-1">Additional command line arguments</p>
+            </div>
+          )}
         </div>
       </div>
 

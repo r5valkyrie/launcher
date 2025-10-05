@@ -37,7 +37,7 @@ export function compareVersions(a?: string|null, b?: string|null): number {
 export function deriveBaseFromDir(dir: string, channelName: string): string {
   if (!dir) return '';
   const norm = dir.replace(/\\+$/,'');
-  if (norm.endsWith(`\\${channelName}`)) {
+  if (norm.endsWith(`\\${channelName}`) || norm.endsWith(`/${channelName}`)) {
     return norm.slice(0, -channelName.length - 1);
   }
   return norm;

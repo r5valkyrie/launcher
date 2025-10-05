@@ -714,8 +714,16 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
   // Default to %LOCALAPPDATA%\Programs\R5VLibrary\<channel>
-  const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-  const base = path.join(localAppData, 'Programs', 'R5VLibrary');
+  let base = '';
+
+  if (process.platform === "win32") {
+    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+    base = path.join(localAppData, 'Programs', 'R5VLibrary');
+  } else if (process.platform === "linux") {
+    const gamesDir = path.join(app.getPath('home'), 'Games');
+    base = path.join(gamesDir, 'R5VLibrary');
+  }
+
   return channelName ? path.join(base, channelName) : base;
 });
 
@@ -874,7 +882,7 @@ ipcMain.handle('select-file', async (_e, { filters }) => {
   return res.filePaths[0];
 });
 
-ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsString }) => {
+ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsString, winePrefix }) => {
   try {
     if (!installDir) throw new Error('Missing installDir');
     const exeName = String(mode).toUpperCase() === 'SERVER' ? 'r5apex_ds.exe' : 'r5apex.exe';
@@ -886,7 +894,17 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
       return tokens.map((t) => t.replace(/^\"|\"$/g, ''));
     };
     const args = parseArgs(argsString);
-    const child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
+
+    let child;
+
+    if (process.platform === "win32") {
+      child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
+    } else if (process.platform === "linux") {
+      const prefix = winePrefix ? winePrefix : path.join(app.getPath('home'), 'Games', 'R5VLibrary', 'wineprefix');
+      args.unshift(exePath);
+      console.log(prefix);
+      child = spawn("umu-run", args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env, WINEPREFIX: prefix } });
+    }
     child.unref();
     return { ok: true };
   } catch (err) {

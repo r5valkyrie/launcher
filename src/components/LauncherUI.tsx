@@ -56,7 +56,7 @@ declare global {
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
       selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
-      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string }) => Promise<{ok:boolean; error?:string}>;
+      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string, winePrefix: String }) => Promise<{ok:boolean; error?:string}>;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
@@ -355,6 +355,7 @@ export default function LauncherUI() {
   const [noAsync, setNoAsync] = useState<boolean>(false);
   const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
   const [customCmd, setCustomCmd] = useState<string>('');
+  const [linuxWinePfx, setLinuxWinePfx] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
@@ -612,7 +613,7 @@ export default function LauncherUI() {
 
   async function confirmInstallWithDir() {
     const base = (installBaseDir || '').replace(/\\+$/,'');
-    const finalPath = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    const finalPath = base ? (window.navigator.userAgent.toLowerCase().includes('win') ? `${base}\\${selectedChannel}` : `${base}/${selectedChannel}`) : `${selectedChannel}`;
     try {
       const root = await window.electronAPI?.getLauncherInstallRoot?.();
       if (root) {
@@ -2151,7 +2152,8 @@ export default function LauncherUI() {
             const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
-            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
+            const wp = linuxWinePfx;
+            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode, winePrefix: wp || launchMode, argsString: args });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
             }
@@ -2284,6 +2286,8 @@ export default function LauncherUI() {
             customCmd={customCmd}
             setCustomCmd={setCustomCmd}
             buildLaunchParameters={buildLaunchParametersLocal}
+            linuxWinePfx={linuxWinePfx}
+            setLinuxWinePfx={setLinuxWinePfx}
           />
           </PageTransition>
         )}
