@@ -56,7 +56,8 @@ declare global {
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
       selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
-      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string, winePrefix: String }) => Promise<{ok:boolean; error?:string}>;
+      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string, winePrefix: string, protonVersion: string, }) => Promise<{ok:boolean; error?:string}>;
+      listProtonVersions: () => Promise<{versions: Array<{name: string; path: string;}>; error?:string}>;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
@@ -356,6 +357,7 @@ export default function LauncherUI() {
   const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
   const [customCmd, setCustomCmd] = useState<string>('');
   const [linuxWinePfx, setLinuxWinePfx] = useState<string>('');
+  const [selectedProtonVersion, setSelectedProtonVersion] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
@@ -1197,6 +1199,7 @@ export default function LauncherUI() {
           setDiscordRichPresence(lo.discordRichPresence !== false); // Default to true
           setCustomCmd(String(lo.customCmd || ''));
           setLinuxWinePfx(String(lo.linuxWinePfx || ''));
+          setSelectedProtonVersion(String(lo.selectedProtonVersion || ''));
         }
       } catch {}
     })();
@@ -1518,11 +1521,12 @@ export default function LauncherUI() {
       discordRichPresence,
       customCmd,
       linuxWinePfx,
+      selectedProtonVersion,
     });
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx };
+    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -1537,7 +1541,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx]);
+  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion]);
 
   useEffect(() => {
     // Decide primary action
@@ -2132,6 +2136,13 @@ export default function LauncherUI() {
     await window.electronAPI?.setSetting('emojiMode', enabled);
   };
 
+  const [versions, setVersions] = useState<Array<{name: string, path: string}>>([]);
+  useEffect(() => {
+    (async () => {
+      setVersions((await window.electronAPI?.listProtonVersions())?.versions ?? []);
+  })()
+  }, []);
+
   return (
     <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
       <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
@@ -2154,7 +2165,7 @@ export default function LauncherUI() {
             const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
-            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, winePrefix: lo?.linuxWinePfx, argsString: args });
+            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, winePrefix: lo?.linuxWinePfx, protonVersion: lo?.selectedProtonVersion, argsString: args });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
             }
@@ -2289,6 +2300,9 @@ export default function LauncherUI() {
             buildLaunchParameters={buildLaunchParametersLocal}
             linuxWinePfx={linuxWinePfx}
             setLinuxWinePfx={setLinuxWinePfx}
+            protonVersions={versions}
+            selectedProtonVersion={selectedProtonVersion}
+            setSelectedProtonVersion={setSelectedProtonVersion}
           />
           </PageTransition>
         )}

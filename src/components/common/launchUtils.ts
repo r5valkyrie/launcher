@@ -29,6 +29,7 @@ type LaunchOptions = {
   discordRichPresence: boolean;
   customCmd: string;
   linuxWinePfx: string;
+  selectedProtonVersion: string;
 };
 
 export function buildLaunchParameters(options: LaunchOptions): string {
@@ -59,6 +60,7 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     discordRichPresence,
     customCmd,
     linuxWinePfx,
+    selectedProtonVersion,
   } = options;
 
   const params: string[] = [];
