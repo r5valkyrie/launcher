@@ -28,6 +28,7 @@ type LaunchOptions = {
   noAsync: boolean;
   discordRichPresence: boolean;
   customCmd: string;
+  linuxWinePfx: string;
 };
 
 export function buildLaunchParameters(options: LaunchOptions): string {
@@ -57,6 +58,7 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     noAsync,
     discordRichPresence,
     customCmd,
+    linuxWinePfx,
   } = options;
 
   const params: string[] = [];

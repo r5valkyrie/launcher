@@ -1196,6 +1196,7 @@ export default function LauncherUI() {
           setNoAsync(Boolean(lo.noAsync));
           setDiscordRichPresence(lo.discordRichPresence !== false); // Default to true
           setCustomCmd(String(lo.customCmd || ''));
+          setLinuxWinePfx(String(lo.linuxWinePfx || ''));
         }
       } catch {}
     })();
@@ -1516,11 +1517,12 @@ export default function LauncherUI() {
       noAsync,
       discordRichPresence,
       customCmd,
+      linuxWinePfx,
     });
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
+    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -1535,7 +1537,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx]);
 
   useEffect(() => {
     // Decide primary action
@@ -2152,8 +2154,7 @@ export default function LauncherUI() {
             const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
-            const wp = linuxWinePfx;
-            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode, winePrefix: wp || launchMode, argsString: args });
+            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, winePrefix: lo?.linuxWinePfx, argsString: args });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
             }
