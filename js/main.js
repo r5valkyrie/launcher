@@ -900,9 +900,36 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
     if (process.platform === "win32") {
       child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
     } else if (process.platform === "linux") {
+      // grab wine prefix
       const prefix = winePrefix ? winePrefix : path.join(app.getPath('home'), 'Games', 'R5VLibrary', 'wineprefix');
+      // place exe in args
       args.unshift(exePath);
-      console.log(prefix);
+      // copy needed files
+      let srcDir = path.join(app.getPath('home'), '.local', 'share', 'Steam');
+      let destDir = path.join(prefix, 'drive_c', 'Program Files (x86)', 'Steam');
+      // make sure destination exists
+      fs.mkdirSync(destDir, { recursive: true });
+      const steamFiles = [
+        'GameOverlayRenderer64.dll',
+        'steamclient64.dll',
+        'steamclient.dll'
+      ];
+      steamFiles.forEach(file => {
+        const srcPath = path.join(srcDir, file);
+        const destPath = path.join(destDir, file);
+        // throw error in frontend about steam not being installed with the proper files.
+        if (!fs.existsSync(srcPath)) {
+          const error = new Error(`Steam is not installed correctly!\nSource file not found: ${srcPath}`);
+          throw error;
+        }
+        if (!fs.existsSync(destPath)) {
+          fs.copyFileSync(srcPath, destPath);
+          console.log(`Copied: ${file}`);
+        } else {
+          console.log(`Skipped (exists): ${file}`);
+        }
+      });
+      // launch game using umu-launcher
       child = spawn("umu-run", args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env, WINEPREFIX: prefix } });
     }
     child.unref();

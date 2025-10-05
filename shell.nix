@@ -21,6 +21,7 @@ in pkgs.mkShell {
     python3
     clang
     umu-launcher
+    winetricks
   ];
 
   inherit NPM_CONFIG_PREFIX;
