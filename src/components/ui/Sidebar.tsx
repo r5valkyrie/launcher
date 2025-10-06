@@ -31,12 +31,22 @@ export default function Sidebar({ appVersion, onVersionClick }: SidebarProps) {
 
   return (
     <aside ref={sidebarRef} className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30" style={{ opacity: 0 }}>
-      <div ref={logoRef} className="w-16 h-16 grid place-items-center overflow-hidden glass-soft hover:glass-bright transition-all duration-300 group cursor-pointer" style={{ opacity: 0 }}>
-        <img
-          src="logo.png"
-          alt="R5 Valkyrie"
-          className="w-12 h-12 object-contain transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] animate-pulse-subtle"
-        />
+      <div ref={logoRef} className="relative w-16 h-16 grid place-items-center group cursor-pointer" style={{ opacity: 0 }}>
+        {/* Glow effect background */}
+        <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-blue-500/20 via-purple-500/20 to-pink-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 blur-xl"></div>
+
+        {/* Glass container */}
+        <div className="relative w-full h-full rounded-xl bg-base-100/30 backdrop-blur-sm border border-white/10 overflow-hidden transition-all duration-300 group-hover:border-blue-400/50 group-hover:bg-base-100/40 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.3)]">
+          {/* Animated gradient overlay */}
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/0 via-purple-500/0 to-pink-500/0 group-hover:from-blue-500/10 group-hover:via-purple-500/10 group-hover:to-pink-500/10 transition-all duration-500"></div>
+
+          {/* Logo image */}
+          <img
+            src="logo.png"
+            alt="R5 Valkyrie"
+            className="relative w-full h-full object-contain p-2 transition-all duration-300 group-hover:scale-110 group-hover:brightness-110 animate-pulse-subtle"
+          />
+        </div>
       </div>
       <div className="flex-1" />
       <div ref={linksRef} className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
