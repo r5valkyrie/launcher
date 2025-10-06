@@ -26,8 +26,8 @@ export function registerProtocolHandlers() {
   });
 
   // Fix absolute asset paths like /_astro/* when loading from file://
-  // When bundled, __dirname is electron/, so go up one level to reach dist/
-  const distDir = path.join(__dirname, '..', 'dist');
+  // When bundled, __dirname is electron/services/handlers/, so go up to electron/ then to dist/
+  const distDir = path.join(__dirname, '..', '..', '..', 'dist');
 
   protocol.interceptFileProtocol('file', (request, callback) => {
     try {

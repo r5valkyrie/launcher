@@ -1,7 +1,7 @@
 import { BrowserWindow, shell } from 'electron';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { getSetting, setSetting } from './store.js';
+import { getSetting, setSetting } from './settings-store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
