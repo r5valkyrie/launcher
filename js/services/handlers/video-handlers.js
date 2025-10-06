@@ -20,8 +20,9 @@ export function registerVideoHandlers() {
       const dest = path.join(cacheDir, filename);
 
       // Also create path in dist directory for serving
-      // When bundled, __dirname is electron/services/handlers, so go up to electron/ then to dist/
-      const distDir = path.join(__dirname, '..', '..', '..', 'dist');
+      // When bundled by esbuild, all code is in electron/main.js, so __dirname is electron/
+      // We need to go up from electron/ to project root, then into dist/
+      const distDir = path.join(__dirname, '..', 'dist');
       const distVideoDest = path.join(distDir, filename);
 
       await fs.promises.mkdir(cacheDir, { recursive: true });

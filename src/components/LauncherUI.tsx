@@ -233,6 +233,7 @@ export default function LauncherUI() {
       if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
       if (typeof s?.patchNotesView === 'string') setPatchNotesView(s.patchNotesView as 'grid' | 'timeline');
       if (typeof s?.modsView === 'string') setModsView(s.modsView as 'grid' | 'list');
+      if (Array.isArray(s?.favoriteMods)) setFavoriteMods(new Set(s.favoriteMods));
       if (s?.channels) {
         // Migrate existing channels to include missing fields
         const migratedChannels = { ...s.channels };
@@ -288,7 +289,7 @@ export default function LauncherUI() {
   const [modsView, setModsView] = useState<'grid' | 'list'>('grid');
   const [modsCategory, setModsCategory] = useState<'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio'>('all');
   const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('name');
-  const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates'>('all');
+  const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates' | 'favorites'>('all');
   const [favoriteMods, setFavoriteMods] = useState<Set<string>>(new Set());
   const [draggingModName, setDraggingModName] = useState<string | null>(null);
   const [dragOverModName, setDragOverModName] = useState<string | null>(null);
@@ -1351,6 +1352,8 @@ export default function LauncherUI() {
       } else {
         newSet.add(modId);
       }
+      // Save to settings
+      window.electronAPI?.setSetting('favoriteMods', Array.from(newSet));
       return newSet;
     });
   };
@@ -1429,10 +1432,13 @@ export default function LauncherUI() {
       if (modsCategory !== 'all' && getModCategory(m) !== modsCategory) return false;
       
       // Status filter
-      const installed = (installedMods || []).find((im) => 
+      const installed = (installedMods || []).find((im) =>
         String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase()
       );
-      
+
+      // Check favorites using the same ID format as when saving
+      const modId = m?.uuid4 || m?.full_name || (m?.name ? String(m.name).replace(/_/g, ' ') : 'Unknown');
+      if (modsFilter === 'favorites' && !favoriteMods.has(modId)) return false;
       if (modsFilter === 'installed' && !installed) return false;
       if (modsFilter === 'available' && installed) return false;
       if (modsFilter === 'updates') {
@@ -1441,7 +1447,7 @@ export default function LauncherUI() {
         const ver = latest?.version_number || '';
         if (!ver || compareVersions(installed?.version || null, ver) >= 0) return false;
       }
-      
+
       return true;
     });
 
