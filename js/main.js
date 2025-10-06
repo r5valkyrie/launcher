@@ -24,6 +24,11 @@ app.whenReady().then(async () => {
   // Register the OS protocol client so r5v:// links open the app
   registerProtocolClient();
 
+  // Register protocol handlers BEFORE creating window
+  // This must happen before loadFile/loadURL is called
+  const { registerProtocolHandlers } = await import('./services/handlers/protocol-handlers.js');
+  registerProtocolHandlers();
+
   // Create the main window
   mainWindow = await createWindow();
 

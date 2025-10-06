@@ -26,8 +26,9 @@ export function registerProtocolHandlers() {
   });
 
   // Fix absolute asset paths like /_astro/* when loading from file://
-  // When bundled, __dirname is electron/services/handlers/, so go up to electron/ then to dist/
-  const distDir = path.join(__dirname, '..', '..', '..', 'dist');
+  // When bundled by esbuild, all code is in electron/main.js, so __dirname is electron/
+  // We need to go up from electron/ to project root, then into dist/
+  const distDir = path.join(__dirname, '..', 'dist');
 
   protocol.interceptFileProtocol('file', (request, callback) => {
     try {
