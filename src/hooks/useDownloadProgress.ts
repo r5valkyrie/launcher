@@ -43,7 +43,7 @@ export function useDownloadProgress() {
     handleProgress('progress:bytes', (p: any) => {
       const delta = Number(p?.delta || 0);
       if (delta !== 0) {
-        setBytesReceived(prev => prev + delta);
+        setBytesReceived(bytesReceivedRef.current + delta);
         setReceivedAnyBytes(true);
       }
     });

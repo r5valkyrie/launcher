@@ -1,4 +1,4 @@
-import React, { useState, useEffect, ReactNode } from 'react';
+import React, { useState, useEffect, type ReactNode } from 'react';
 
 interface ProgressiveLoaderProps {
   isLoading: boolean;

@@ -4,7 +4,7 @@ import {
   ErrorSeverity,
   retryAsync,
   getUserMessage,
-  AppError,
+  type AppError,
 } from '../utils/errorHandler';
 
 /**
