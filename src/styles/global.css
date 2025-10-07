@@ -550,3 +550,47 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   box-shadow: 0 2px 4px rgba(0,0,0,0.2);
   border: 1px solid rgba(255,255,255,0.1);
 }
+
+/* Progressive loading animations */
+@keyframes animate-in-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes animate-in-slide-bottom {
+  from { transform: translateY(8px); }
+  to { transform: translateY(0); }
+}
+
+.animate-in {
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fade-in {
+  animation-name: animate-in-fade;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: animate-in-slide-bottom;
+}
+
+/* Skeleton shimmer animation */
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.skeleton-shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.05) 25%,
+    rgba(255, 255, 255, 0.15) 50%,
+    rgba(255, 255, 255, 0.05) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 2s infinite;
+}

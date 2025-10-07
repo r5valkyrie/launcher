@@ -1,14 +1,15 @@
 import { ipcMain } from 'electron';
 import https from 'node:https';
+import { getSetting, setSetting } from '../settings-store.js';
 
 /**
  * Registers network-related IPC handlers
  */
 export function registerNetworkHandlers() {
-  // Launcher config
+  // Launcher config with offline mode support
   ipcMain.handle('network:getLauncherConfig', async (_e, { url }) => {
     const fetchJson = (targetUrl) => new Promise((resolve, reject) => {
-      https.get(targetUrl, (res) => {
+      const request = https.get(targetUrl, (res) => {
         if (res.statusCode !== 200) {
           reject(new Error(`HTTP ${res.statusCode} for ${targetUrl}`));
           res.resume();
@@ -21,8 +22,38 @@ export function registerNetworkHandlers() {
           try { resolve(JSON.parse(data)); } catch (e) { reject(e); }
         });
       }).on('error', reject);
+
+      // Set timeout for network requests
+      request.setTimeout(10000, () => {
+        request.destroy();
+        reject(new Error('Network timeout'));
+      });
     });
-    return fetchJson(url);
+
+    try {
+      // Try to fetch config from network
+      const config = await fetchJson(url);
+
+      // Cache the successful config
+      setSetting('cachedLauncherConfig', {
+        config,
+        url,
+        cachedAt: Date.now()
+      });
+
+      return { ...config, _offline: false };
+    } catch (err) {
+      // Network failed - try to use cached config
+      const cached = getSetting('cachedLauncherConfig');
+
+      if (cached && cached.config && cached.url === url) {
+        console.log('[Offline Mode] Using cached launcher config from', new Date(cached.cachedAt));
+        return { ...cached.config, _offline: true, _cachedAt: cached.cachedAt };
+      }
+
+      // No cache available, throw the error
+      throw err;
+    }
   });
 
   // EULA

@@ -37,6 +37,8 @@ type LauncherConfig = {
   allowUpdates: boolean;
   backgroundVideo?: string;
   channels: Channel[];
+  _offline?: boolean;
+  _cachedAt?: number;
 };
 
 declare global {
@@ -100,6 +102,8 @@ export default function LauncherUI() {
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
   const [currentOperation, setCurrentOperation] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('');
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
+  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
   // Helper function to get per-channel includeOptional setting
   const getIncludeOptional = (channelName?: string) => {
     const channel = channelName || selectedChannel;
@@ -187,10 +191,23 @@ export default function LauncherUI() {
         const json: LauncherConfig = await (window.electronAPI?.fetchLauncherConfig
           ? window.electronAPI.fetchLauncherConfig(CONFIG_URL)
           : fetch(CONFIG_URL).then((r) => r.json()));
+
+        // Check if running in offline mode
+        if (json._offline) {
+          setIsOfflineMode(true);
+          setOfflineCachedAt(json._cachedAt || null);
+          console.log('[Offline Mode] Using cached config from', json._cachedAt ? new Date(json._cachedAt) : 'unknown');
+        } else {
+          setIsOfflineMode(false);
+          setOfflineCachedAt(null);
+        }
+
         setConfig(json);
         const first = json.channels.find((c) => c.enabled);
         if (first) setSelectedChannel(first.name);
-      } catch {}
+      } catch (err) {
+        console.error('[Config] Failed to load launcher config:', err);
+      }
     })();
   }, []);
 
@@ -2155,6 +2172,22 @@ export default function LauncherUI() {
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <TabNav activeTab={activeTab as any} onChange={(tab) => setActiveTab(tab as any)} />
+
+        {/* Offline Mode Indicator */}
+        {isOfflineMode && (
+          <div className="mx-4 mt-4 mb-2 px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-3">
+            <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-yellow-200">Offline Mode</div>
+              <div className="text-xs text-yellow-300/80 mt-0.5">
+                Using cached configuration{offlineCachedAt ? ` from ${new Date(offlineCachedAt).toLocaleString()}` : ''}. Network unavailable.
+              </div>
+            </div>
+          </div>
+        )}
+
         <HeroBanner
           bgVideo={bgVideo}
           videoFilename={videoFilename || null}
