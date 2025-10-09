@@ -492,32 +492,6 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
             />
             <p className="text-xs opacity-60 mt-1">Additional command line arguments</p>
           </div>
-          {!window.navigator.userAgent.toLowerCase().includes('win') && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Wine Prefix</label>
-              <input 
-                className="input input-bordered w-full font-mono" 
-                value={linuxWinePfx} 
-                onChange={(e)=>setLinuxWinePfx(e.target.value)} 
-                placeholder="~/Games/R5Library/wineprefix" 
-              />
-              <p className="text-xs opacity-60 mt-1">Additional command line arguments</p>
-            </div>
-          )}
-          {!window.navigator.userAgent.toLowerCase().includes('win') && (
-            <div>
-              <label className="block text-sm font-medium mb-2">Proton Version</label>
-              <select 
-                className="select select-bordered w-full"
-                value={selectedProtonVersion}
-                onChange={(e) => setSelectedProtonVersion(e.target.value)}
-              >
-                {
-                  protonVersions.map(({name, path}) => <option key={name} value={path}>{name}</option>)
-                }
-              </select>
-            </div>
-          )}
         </div>
       </div>
 
