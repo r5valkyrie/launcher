@@ -23,7 +23,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
     minify: true,
     sourcemap: false,
     logLevel: 'silent',
-    external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
+    external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'extract-zip'],
   });
   // Avoid obfuscating main to keep Node/Electron semantics intact
 
@@ -59,7 +59,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
       minify: true,
       sourcemap: false,
       logLevel: 'silent',
-      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
+      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'extract-zip'],
     });
     // Avoid obfuscating services to preserve ESM exports
   }
@@ -79,7 +79,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
       minify: true,
       sourcemap: false,
       logLevel: 'silent',
-      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'os', 'node:os'],
+      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'os', 'node:os', 'extract-zip'],
     });
   }
 })();

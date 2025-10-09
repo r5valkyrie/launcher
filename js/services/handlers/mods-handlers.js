@@ -3,8 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
 import zlib from 'node:zlib';
-import { Unzip, AsyncUnzipInflate } from 'fflate';
-import { spawn } from 'node:child_process';
+import extract from 'extract-zip';
 import {
   readModsVdf,
   readModsVdfOrdered,
@@ -212,111 +211,15 @@ export function registerModHandlers(mainWindow) {
         req.on('error', (err) => { try { fs.unlinkSync(tempZip); } catch {} reject(err); });
       });
       await downloadWithRedirects(downloadUrl);
-      // Extract using PowerShell Expand-Archive (Windows)
+      // Extract ZIP (cross-platform)
       try { e?.sender?.send('mods:progress', { key: name, phase: 'extracting' }); } catch {}
       const dest = path.join(modsDir, name);
       try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
       fs.mkdirSync(dest, { recursive: true });
-      await new Promise((resolve, reject) => {
-        const unzip = new Unzip();
-
-        unzip.register(AsyncUnzipInflate);
-
-        let errorOccurred = false;
-        const filesPending = new Set();
-
-        unzip.onfile = (file) => {
-          const filePath = path.join(dest, file.name);
-          const dir = path.dirname(filePath);
-
-          if (!fs.existsSync(dir)) {
-            fs.mkdirSync(dir, { recursive: true });
-          }
-
-          const writeStream = fs.createWriteStream(filePath);
-          filesPending.add(file.name);
-
-          writeStream.on('finish', () => {
-            filesPending.delete(file.name);
-            if (filesPending.size === 0 && !errorOccurred) {
-              resolve();
-            }
-          });
-
-          writeStream.on('error', (err) => {
-            if (!errorOccurred) {
-              errorOccurred = true;
-              
-              reject(new Error(`Write error for ${file.name}: ${err.message}`));
-            }
-          });
-
-
-          file.ondata = (err, chunk, final) => {
-            if (errorOccurred) return;
-
-            if (err) {
-              errorOccurred = true;
-
-              console.error('**File processing error details:**', err);
-
-              if (err.message.includes('unknown compression type 9')) {
-                reject(new Error(
-                  `Unsupported compression type 9 in ${file.name}. ` +
-                  `This can occur with files >4GB. Download the mod manually from Thunderstore and unzip into a folder in the mods/ directory.`
-                ));
-              } else {
-                reject(new Error(`Extraction error for ${file.name}: ${err.message}`));
-              }
-              return;
-            }
-
-            writeStream.write(chunk);
-
-            if (final) {
-              writeStream.end();
-            }
-          };
-
-          file.start();
-        };
-
-        unzip.onend = () => {
-          if (!errorOccurred && filesPending.size === 0) {
-            resolve();
-          }
-        };
-
-        unzip.onerr = (err) => {
-          if (!errorOccurred) {
-            errorOccurred = true;
-            console.error('**Unzip stream error details:**', err);
-            reject(new Error(`Unzip stream error: ${err.message}`));
-          }
-        };
-
-        const readStream = fs.createReadStream(tempZip);
-
-        readStream.on('data', (chunk) => {
-          if (!errorOccurred) {
-            unzip.push(chunk);
-          }
-        });
-
-        readStream.on('end', () => {
-          if (!errorOccurred) {
-            unzip.push(undefined, true);
-          }
-        });
-
-        readStream.on('error', (err) => {
-          if (!errorOccurred) {
-            errorOccurred = true;
-            console.error('**ZIP file read error details:**', err);
-            reject(new Error(`ZIP file read error: ${err.message}`));
-          }
-        });
-      });
+      
+      // Extract using extract-zip (cross-platform)
+      await extract(tempZip, { dir: dest });
+      
       try { fs.unlinkSync(tempZip); } catch {}
       // Determine mod ID from mod.vdf
       let modId = null;
