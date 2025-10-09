@@ -390,6 +390,46 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         </div>
       </div>
 
+     {/* Linux Options */}
+     {!window.navigator.userAgent.toLowerCase().includes('win') && (
+        <div className="glass rounded-xl p-6 space-y-4">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/80 to-purple-600 flex items-center justify-center">
+              <span className="text-white text-sm">🔧</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Linux Options</h3>
+              <p className="text-xs opacity-70">Wine settings and wrapper command</p>
+            </div>
+          </div>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Wine Prefix</label>
+              <input 
+                className="input input-bordered w-full font-mono" 
+                value={linuxWinePfx} 
+                onChange={(e)=>setLinuxWinePfx(e.target.value)} 
+                placeholder="~/Games/R5Library/wineprefix" 
+              />
+              <p className="text-xs opacity-60 mt-1">Path to wineprefix used by Proton</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Proton Version</label>
+              <select 
+                className="select select-bordered w-full"
+                value={selectedProtonVersion}
+                onChange={(e) => setSelectedProtonVersion(e.target.value)}
+              >
+                {
+                  protonVersions.map(({name, path}) => <option key={name} value={path}>{name}</option>)
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Advanced Options */}
       <div className="glass rounded-xl p-6 space-y-4">
         <div className="flex items-center gap-3 mb-4">
