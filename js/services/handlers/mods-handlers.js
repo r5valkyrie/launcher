@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import https from 'node:https';
 import zlib from 'node:zlib';
+import { Unzip, AsyncUnzipInflate } from 'fflate';
 import { spawn } from 'node:child_process';
 import {
   readModsVdf,
@@ -217,9 +218,104 @@ export function registerModHandlers(mainWindow) {
       try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
       fs.mkdirSync(dest, { recursive: true });
       await new Promise((resolve, reject) => {
-        const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath "${tempZip}" -DestinationPath "${dest}" -Force`], { stdio: 'ignore' });
-        ps.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive failed ${code}`)));
-        ps.on('error', reject);
+        const unzip = new Unzip();
+
+        unzip.register(AsyncUnzipInflate);
+
+        let errorOccurred = false;
+        const filesPending = new Set();
+
+        unzip.onfile = (file) => {
+          const filePath = path.join(dest, file.name);
+          const dir = path.dirname(filePath);
+
+          if (!fs.existsSync(dir)) {
+            fs.mkdirSync(dir, { recursive: true });
+          }
+
+          const writeStream = fs.createWriteStream(filePath);
+          filesPending.add(file.name);
+
+          writeStream.on('finish', () => {
+            filesPending.delete(file.name);
+            if (filesPending.size === 0 && !errorOccurred) {
+              resolve();
+            }
+          });
+
+          writeStream.on('error', (err) => {
+            if (!errorOccurred) {
+              errorOccurred = true;
+              
+              reject(new Error(`Write error for ${file.name}: ${err.message}`));
+            }
+          });
+
+
+          file.ondata = (err, chunk, final) => {
+            if (errorOccurred) return;
+
+            if (err) {
+              errorOccurred = true;
+
+              console.error('**File processing error details:**', err);
+
+              if (err.message.includes('unknown compression type 9')) {
+                reject(new Error(
+                  `Unsupported compression type 9 in ${file.name}. ` +
+                  `This can occur with files >4GB. Download the mod manually from Thunderstore and unzip into a folder in the mods/ directory.`
+                ));
+              } else {
+                reject(new Error(`Extraction error for ${file.name}: ${err.message}`));
+              }
+              return;
+            }
+
+            writeStream.write(chunk);
+
+            if (final) {
+              writeStream.end();
+            }
+          };
+
+          file.start();
+        };
+
+        unzip.onend = () => {
+          if (!errorOccurred && filesPending.size === 0) {
+            resolve();
+          }
+        };
+
+        unzip.onerr = (err) => {
+          if (!errorOccurred) {
+            errorOccurred = true;
+            console.error('**Unzip stream error details:**', err);
+            reject(new Error(`Unzip stream error: ${err.message}`));
+          }
+        };
+
+        const readStream = fs.createReadStream(tempZip);
+
+        readStream.on('data', (chunk) => {
+          if (!errorOccurred) {
+            unzip.push(chunk);
+          }
+        });
+
+        readStream.on('end', () => {
+          if (!errorOccurred) {
+            unzip.push(undefined, true);
+          }
+        });
+
+        readStream.on('error', (err) => {
+          if (!errorOccurred) {
+            errorOccurred = true;
+            console.error('**ZIP file read error details:**', err);
+            reject(new Error(`ZIP file read error: ${err.message}`));
+          }
+        });
       });
       try { fs.unlinkSync(tempZip); } catch {}
       // Determine mod ID from mod.vdf
