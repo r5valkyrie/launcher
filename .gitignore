@@ -3,6 +3,8 @@ dist/
 # generated types
 .astro/
 
+.claude/
+
 # dependencies
 node_modules/
 
@@ -25,3 +27,8 @@ pnpm-debug.log*
 
 # jetbrains setting folder
 .idea/
+
+# Extra release binaries
+bin/
+
+electron/

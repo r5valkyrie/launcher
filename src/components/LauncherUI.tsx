@@ -37,6 +37,8 @@ type LauncherConfig = {
   allowUpdates: boolean;
   backgroundVideo?: string;
   channels: Channel[];
+  _offline?: boolean;
+  _cachedAt?: number;
 };
 
 declare global {
@@ -56,7 +58,8 @@ declare global {
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
       selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
-      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string }) => Promise<{ok:boolean; error?:string}>;
+      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string, winePrefix: string, protonVersion: string, }) => Promise<{ok:boolean; error?:string}>;
+      listProtonVersions: () => Promise<{versions: Array<{name: string; path: string;}>; error?:string}>;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
@@ -99,6 +102,8 @@ export default function LauncherUI() {
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
   const [currentOperation, setCurrentOperation] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('');
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
+  const [offlineCachedAt, setOfflineCachedAt] = useState<number | null>(null);
   // Helper function to get per-channel includeOptional setting
   const getIncludeOptional = (channelName?: string) => {
     const channel = channelName || selectedChannel;
@@ -186,10 +191,23 @@ export default function LauncherUI() {
         const json: LauncherConfig = await (window.electronAPI?.fetchLauncherConfig
           ? window.electronAPI.fetchLauncherConfig(CONFIG_URL)
           : fetch(CONFIG_URL).then((r) => r.json()));
+
+        // Check if running in offline mode
+        if (json._offline) {
+          setIsOfflineMode(true);
+          setOfflineCachedAt(json._cachedAt || null);
+          console.log('[Offline Mode] Using cached config from', json._cachedAt ? new Date(json._cachedAt) : 'unknown');
+        } else {
+          setIsOfflineMode(false);
+          setOfflineCachedAt(null);
+        }
+
         setConfig(json);
         const first = json.channels.find((c) => c.enabled);
         if (first) setSelectedChannel(first.name);
-      } catch {}
+      } catch (err) {
+        console.error('[Config] Failed to load launcher config:', err);
+      }
     })();
   }, []);
 
@@ -232,6 +250,7 @@ export default function LauncherUI() {
       if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
       if (typeof s?.patchNotesView === 'string') setPatchNotesView(s.patchNotesView as 'grid' | 'timeline');
       if (typeof s?.modsView === 'string') setModsView(s.modsView as 'grid' | 'list');
+      if (Array.isArray(s?.favoriteMods)) setFavoriteMods(new Set(s.favoriteMods));
       if (s?.channels) {
         // Migrate existing channels to include missing fields
         const migratedChannels = { ...s.channels };
@@ -287,7 +306,7 @@ export default function LauncherUI() {
   const [modsView, setModsView] = useState<'grid' | 'list'>('grid');
   const [modsCategory, setModsCategory] = useState<'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio'>('all');
   const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('name');
-  const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates'>('all');
+  const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates' | 'favorites'>('all');
   const [favoriteMods, setFavoriteMods] = useState<Set<string>>(new Set());
   const [draggingModName, setDraggingModName] = useState<string | null>(null);
   const [dragOverModName, setDragOverModName] = useState<string | null>(null);
@@ -355,6 +374,8 @@ export default function LauncherUI() {
   const [noAsync, setNoAsync] = useState<boolean>(false);
   const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
   const [customCmd, setCustomCmd] = useState<string>('');
+  const [linuxWinePfx, setLinuxWinePfx] = useState<string>('');
+  const [selectedProtonVersion, setSelectedProtonVersion] = useState<string>('');
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
@@ -612,7 +633,7 @@ export default function LauncherUI() {
 
   async function confirmInstallWithDir() {
     const base = (installBaseDir || '').replace(/\\+$/,'');
-    const finalPath = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    const finalPath = base ? (window.navigator.userAgent.toLowerCase().includes('win') ? `${base}\\${selectedChannel}` : `${base}/${selectedChannel}`) : `${selectedChannel}`;
     try {
       const root = await window.electronAPI?.getLauncherInstallRoot?.();
       if (root) {
@@ -1195,6 +1216,8 @@ export default function LauncherUI() {
           setNoAsync(Boolean(lo.noAsync));
           setDiscordRichPresence(lo.discordRichPresence !== false); // Default to true
           setCustomCmd(String(lo.customCmd || ''));
+          setLinuxWinePfx(String(lo.linuxWinePfx || ''));
+          setSelectedProtonVersion(String(lo.selectedProtonVersion || ''));
         }
       } catch {}
     })();
@@ -1346,6 +1369,8 @@ export default function LauncherUI() {
       } else {
         newSet.add(modId);
       }
+      // Save to settings
+      window.electronAPI?.setSetting('favoriteMods', Array.from(newSet));
       return newSet;
     });
   };
@@ -1424,10 +1449,13 @@ export default function LauncherUI() {
       if (modsCategory !== 'all' && getModCategory(m) !== modsCategory) return false;
       
       // Status filter
-      const installed = (installedMods || []).find((im) => 
+      const installed = (installedMods || []).find((im) =>
         String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase()
       );
-      
+
+      // Check favorites using the same ID format as when saving
+      const modId = m?.uuid4 || m?.full_name || (m?.name ? String(m.name).replace(/_/g, ' ') : 'Unknown');
+      if (modsFilter === 'favorites' && !favoriteMods.has(modId)) return false;
       if (modsFilter === 'installed' && !installed) return false;
       if (modsFilter === 'available' && installed) return false;
       if (modsFilter === 'updates') {
@@ -1436,7 +1464,7 @@ export default function LauncherUI() {
         const ver = latest?.version_number || '';
         if (!ver || compareVersions(installed?.version || null, ver) >= 0) return false;
       }
-      
+
       return true;
     });
 
@@ -1515,11 +1543,13 @@ export default function LauncherUI() {
       noAsync,
       discordRichPresence,
       customCmd,
+      linuxWinePfx,
+      selectedProtonVersion,
     });
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
+    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -1534,7 +1564,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion]);
 
   useEffect(() => {
     // Decide primary action
@@ -2129,12 +2159,35 @@ export default function LauncherUI() {
     await window.electronAPI?.setSetting('emojiMode', enabled);
   };
 
+  const [versions, setVersions] = useState<Array<{name: string, path: string}>>([]);
+  useEffect(() => {
+    (async () => {
+      setVersions((await window.electronAPI?.listProtonVersions())?.versions ?? []);
+  })()
+  }, []);
+
   return (
     <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
       <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <TabNav activeTab={activeTab as any} onChange={(tab) => setActiveTab(tab as any)} />
+
+        {/* Offline Mode Indicator */}
+        {isOfflineMode && (
+          <div className="mx-4 mt-4 mb-2 px-4 py-3 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center gap-3">
+            <svg className="w-5 h-5 text-yellow-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+            <div className="flex-1">
+              <div className="text-sm font-medium text-yellow-200">Offline Mode</div>
+              <div className="text-xs text-yellow-300/80 mt-0.5">
+                Using cached configuration{offlineCachedAt ? ` from ${new Date(offlineCachedAt).toLocaleString()}` : ''}. Network unavailable.
+              </div>
+            </div>
+          </div>
+        )}
+
         <HeroBanner
           bgVideo={bgVideo}
           videoFilename={videoFilename || null}
@@ -2151,7 +2204,7 @@ export default function LauncherUI() {
             const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
-            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
+            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, winePrefix: lo?.linuxWinePfx, protonVersion: lo?.selectedProtonVersion, argsString: args });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
             }
@@ -2284,6 +2337,11 @@ export default function LauncherUI() {
             customCmd={customCmd}
             setCustomCmd={setCustomCmd}
             buildLaunchParameters={buildLaunchParametersLocal}
+            linuxWinePfx={linuxWinePfx}
+            setLinuxWinePfx={setLinuxWinePfx}
+            protonVersions={versions}
+            selectedProtonVersion={selectedProtonVersion}
+            setSelectedProtonVersion={setSelectedProtonVersion}
           />
           </PageTransition>
         )}

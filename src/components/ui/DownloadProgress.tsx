@@ -23,7 +23,7 @@ export default function DownloadProgress(props: DownloadProgressProps) {
 
   return (
     <div>
-      <div className="glass rounded-xl p-6 border border-info/20 overflow-y-auto" style={{ maxHeight: '400px' }}>
+      <div className="glass rounded-xl p-6 mb-6 border border-info/20 overflow-y-auto" style={{ maxHeight: '400px' }}>
         {/* Header */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-info to-cyan-500 flex items-center justify-center">

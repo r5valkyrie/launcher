@@ -54,7 +54,7 @@ export default function InstallPromptModal(props: InstallPromptModalProps) {
             <button className="btn btn-sm" onClick={async()=>{ const picked = await onBrowse(); if (picked) setInstallBaseDir(picked); }}>Browse</button>
           </div>
           <div className="mt-3 text-xs opacity-70">Final path</div>
-          <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">{(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? `\\${selectedChannel}` : selectedChannel}</div>
+          <div className="mt-1 p-2 rounded bg-base-300/40 font-mono text-xs break-all">{(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? (window.navigator.userAgent.toLowerCase().includes('win') ? `\\${selectedChannel}` : `/${selectedChannel}`) : selectedChannel}</div>
 
           {baseGameSize > 0 && (
             <div className="mt-4 p-3 rounded-lg bg-base-100/50 border border-base-300/30">

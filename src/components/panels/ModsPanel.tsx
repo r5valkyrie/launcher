@@ -27,7 +27,7 @@ type ModsPanelProps = {
   filteredAndSortedMods: any[];
   modsCategory: 'all' | 'qol' | 'animation' | 'sound' | 'ui' | 'model' | 'cosmetic' | 'server-side' | 'client-side' | 'modpack' | 'framework' | 'map' | 'gamemode' | 'weapon' | 'legend';
   setModsCategory: (v: ModsPanelProps['modsCategory']) => void;
-  modsFilter: 'all' | 'installed' | 'available' | 'updates';
+  modsFilter: 'all' | 'installed' | 'available' | 'updates' | 'favorites';
   setModsFilter: (v: ModsPanelProps['modsFilter']) => void;
   modsSortBy: 'name' | 'date' | 'downloads' | 'rating';
   setModsSortBy: (v: ModsPanelProps['modsSortBy']) => void;
@@ -390,12 +390,13 @@ export default function ModsPanel(props: ModsPanelProps) {
 
               <div>
                 <label className="block text-sm font-medium mb-2">Status</label>
-                <select 
+                <select
                   className="select select-bordered w-full"
                   value={modsFilter}
                   onChange={(e) => setModsFilter(e.target.value as any)}
                 >
                   <option value="all">All Mods</option>
+                  <option value="favorites">Favorites</option>
                   <option value="available">Available</option>
                   <option value="installed">Installed</option>
                   <option value="updates">Need Updates</option>

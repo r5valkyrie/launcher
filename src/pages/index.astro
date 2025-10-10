@@ -17,10 +17,35 @@ import LauncherUI from "../components/LauncherUI";
 		<div class="fixed inset-0 -z-10 bg-animated"></div>
 
 		<!-- Window controls header -->
-		<header class="drag-region h-10 flex items-center justify-end px-2 gap-2 bg-base-100/10 backdrop-blur border-b border-white/5">
-			<button class="btn btn-xs btn-ghost no-drag" onclick="window.electronAPI?.minimize()">_</button>
-			<button class="btn btn-xs btn-ghost no-drag" onclick="window.electronAPI?.maximize()">▢</button>
-			<button class="btn btn-xs btn-error no-drag" onclick="window.electronAPI?.close()">✕</button>
+		<header class="drag-region h-10 flex items-center justify-end px-2 gap-1 bg-base-100/10 backdrop-blur border-b border-white/5">
+			<button
+				class="no-drag w-10 h-8 flex items-center justify-center hover:bg-base-content/10 transition-colors rounded group"
+				onclick="window.electronAPI?.minimize()"
+				aria-label="Minimize"
+			>
+				<svg class="w-4 h-4 group-hover:opacity-100 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" />
+				</svg>
+			</button>
+			<button
+				class="no-drag w-10 h-8 flex items-center justify-center hover:bg-base-content/10 transition-colors rounded group"
+				onclick="window.electronAPI?.maximize()"
+				aria-label="Maximize"
+			>
+				<svg class="w-3.5 h-3.5 group-hover:opacity-100 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V6a2 2 0 012-2h12a2 2 0 012 2v2M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2" />
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 12h16" />
+				</svg>
+			</button>
+			<button
+				class="no-drag w-10 h-8 flex items-center justify-center hover:bg-red-600 transition-colors rounded group"
+				onclick="window.electronAPI?.close()"
+				aria-label="Close"
+			>
+				<svg class="w-4 h-4 group-hover:opacity-100 opacity-60" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+				</svg>
+			</button>
 		</header>
 
 		<!-- Full-bleed launcher surface -->
