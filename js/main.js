@@ -719,6 +719,85 @@ ipcMain.handle('default-install-dir', (_e, { channelName }) => {
   return channelName ? path.join(base, channelName) : base;
 });
 
+ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames }) => {
+  try {
+    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+    const libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
+    
+    // Check if the R5VLibrary directory exists
+    try {
+      await fs.promises.access(libraryBase);
+    } catch {
+      return []; // Directory doesn't exist, no custom channels
+    }
+    
+    // Get all directories in R5VLibrary
+    const entries = await fs.promises.readdir(libraryBase, { withFileTypes: true });
+    const customChannels = [];
+    
+    // Set of official channel names for quick lookup
+    const officialNames = new Set((officialChannelNames || []).map(name => name.toLowerCase()));
+    
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      
+      const channelName = entry.name;
+      const channelPath = path.join(libraryBase, channelName);
+      
+      // Skip if it matches an official channel name
+      if (officialNames.has(channelName.toLowerCase())) continue;
+      
+      // Check if this directory contains r5apex.exe or r5apex_ds.exe
+      let hasGameFiles = false;
+      try {
+        await fs.promises.access(path.join(channelPath, 'r5apex.exe'));
+        hasGameFiles = true;
+      } catch {
+        try {
+          await fs.promises.access(path.join(channelPath, 'r5apex_ds.exe'));
+          hasGameFiles = true;
+        } catch { }
+      }
+      
+      if (hasGameFiles) {
+        // This is a custom channel
+        customChannels.push({
+          name: channelName,
+          installDir: channelPath,
+          isCustom: true
+        });
+      }
+    }
+    
+    return customChannels;
+  } catch (error) {
+    console.error('Error scanning for custom channels:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('open-folder', async (_e, { folderPath }) => {
+  try {
+    if (!folderPath) {
+      return { ok: false, error: 'No folder path provided' };
+    }
+    
+    // Check if the folder exists
+    try {
+      await fs.promises.access(folderPath);
+    } catch {
+      return { ok: false, error: 'Folder does not exist' };
+    }
+    
+    // Open the folder in the system file explorer
+    await shell.openPath(folderPath);
+    return { ok: true };
+  } catch (error) {
+    console.error('Error opening folder:', error);
+    return { ok: false, error: String(error) };
+  }
+});
+
 ipcMain.handle('launcher:config', async (_e, { url }) => {
   const fetchJson = (targetUrl) => new Promise((resolve, reject) => {
     https.get(targetUrl, (res) => {

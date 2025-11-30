@@ -1,7 +1,7 @@
 import React from 'react';
 import DownloadOptimizer from '../ui/DownloadOptimizer';
 
-type Channel = { name: string; game_url: string };
+type Channel = { name: string; game_url: string; isCustom?: boolean; installDir?: string };
 
 type SettingsPanelProps = {
   busy: boolean;
@@ -25,6 +25,7 @@ type SettingsPanelProps = {
   fixChannelPermissions: (name: string) => void;
   setSetting: (key: string, value: any) => Promise<any> | void;
   openExternal: (url: string) => void;
+  openFolder: (folderPath: string) => void;
   optimizeForSpeed: () => void;
   optimizeForStability: () => void;
   resetDownloadDefaults: () => void;
@@ -55,6 +56,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     fixChannelPermissions,
     setSetting,
     openExternal,
+    openFolder,
     optimizeForSpeed,
     optimizeForStability,
     resetDownloadDefaults,
@@ -183,45 +185,75 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         </div>
       </div>
 
-      {/* Channel Management */}
-      <div className="glass rounded-xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center">
-            <span className="text-white text-sm">⚙️</span>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold">Channel Management</h3>
-            <p className="text-xs opacity-70">Manage installed game channels and versions</p>
-          </div>
-        </div>
+      {/* Channel Management - Each channel in its own panel */}
+      {enabledChannels.map((c) => {
+        const ch = channelsSettings?.[c.name];
+        const dir = c.isCustom ? c.installDir : ch?.installDir;
+        const ver = ch?.gameVersion;
+        const isInstalled = !!dir;
+        const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
+        const isCustom = !!c.isCustom;
         
-        <div className="space-y-3">
-          {enabledChannels.map((c) => {
-            const ch = channelsSettings?.[c.name];
-            const dir = ch?.installDir;
-            const ver = ch?.gameVersion;
-            const isInstalled = !!dir;
-            const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
-            
-            return (
-              <div key={c.name} className="p-4 rounded-lg bg-base-200/30 border border-base-300/50">
-                <div className="flex items-center gap-4 mb-3">
-                  <div className={`badge ${isInstalled ? 'badge-success' : 'badge-ghost'} font-semibold`}>
-                    {c.name}
-                  </div>
-                  {ver && (
+        return (
+          <div key={c.name} className="glass rounded-xl p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/80 to-primary flex items-center justify-center">
+                <span className="text-white text-sm">
+                  {isCustom ? '📁' : '⚙️'}
+                </span>
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h3 className="text-lg font-semibold">{c.name}</h3>
+                  {isCustom && (
+                    <div className="badge badge-primary badge-sm gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+                      </svg>
+                      Custom Channel
+                    </div>
+                  )}
+                  {ver && !isCustom && (
                     <div className="badge badge-outline badge-sm">
                       v{ver}
                     </div>
                   )}
-                  <div className={`ml-auto w-2 h-2 rounded-full ${isInstalled ? 'bg-success' : 'bg-base-300'}`}></div>
+                  {isCustom && (
+                    <div className="text-xs opacity-60">
+                      Local installation only
+                    </div>
+                  )}
                 </div>
-                
-                <div className="text-xs opacity-70 mb-3 font-mono bg-base-300/30 p-2 rounded">
-                  {dir || 'Not installed'}
-                </div>
-                
-                <div className="flex flex-wrap gap-2">
+                <p className="text-xs opacity-70 mt-1">
+                  {isCustom 
+                    ? 'Custom local game installation' 
+                    : 'Official release channel'}
+                </p>
+              </div>
+              <div className={`w-2 h-2 rounded-full ${isInstalled ? 'bg-success' : 'bg-base-300'}`}></div>
+            </div>
+            
+            <div className="text-xs opacity-70 mb-4 font-mono bg-base-200/30 p-3 rounded break-all">
+              {dir || 'Not installed'}
+            </div>
+            
+            <div className="flex flex-wrap gap-2">
+              {/* Browse Files button - available for all channels with a directory */}
+              <button 
+                className="btn btn-sm btn-outline btn-accent gap-1" 
+                disabled={!dir} 
+                onClick={() => dir && openFolder(dir)}
+                title="Open folder in file explorer"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Browse Files
+              </button>
+              
+              {/* Official channel buttons - not available for custom channels */}
+              {!isCustom && (
+                <>
                   <button 
                     className="btn btn-sm btn-outline btn-primary" 
                     disabled={!dir || busy} 
@@ -255,12 +287,12 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                       </a>
                     );
                   })()}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                </>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

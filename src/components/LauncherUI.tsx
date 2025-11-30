@@ -28,6 +28,8 @@ type Channel = {
   enabled: boolean;
   requires_key?: boolean;
   allow_updates?: boolean;
+  isCustom?: boolean; // Custom local channels don't have remote URLs
+  installDir?: string; // For custom channels, store the install directory
 };
 
 type LauncherConfig = {
@@ -50,6 +52,8 @@ declare global {
       onProgress: (channel: string, listener: (payload: any) => void) => void;
       getDefaultInstallDir: (channelName?: string) => Promise<string | null>;
       fetchLauncherConfig: (url: string) => Promise<LauncherConfig>;
+      scanCustomChannels: (officialChannelNames: string[]) => Promise<Array<{name: string; installDir: string; isCustom: boolean}>>;
+      openFolder: (folderPath: string) => Promise<{ok: boolean; error?: string}>;
       cacheBackgroundVideo: (filename: string) => Promise<string>;
       isInstalledInDir: (path: string) => Promise<boolean>;
       pauseDownload?: () => Promise<boolean>;
@@ -186,8 +190,33 @@ export default function LauncherUI() {
         const json: LauncherConfig = await (window.electronAPI?.fetchLauncherConfig
           ? window.electronAPI.fetchLauncherConfig(CONFIG_URL)
           : fetch(CONFIG_URL).then((r) => r.json()));
-        setConfig(json);
-        const first = json.channels.find((c) => c.enabled);
+        
+        // Scan for custom local channels
+        let customChannels: Channel[] = [];
+        if (window.electronAPI?.scanCustomChannels) {
+          try {
+            const officialNames = json.channels.map(c => c.name);
+            const scannedCustomChannels = await window.electronAPI.scanCustomChannels(officialNames);
+            
+            // Convert scanned channels to Channel type
+            customChannels = scannedCustomChannels.map(cc => ({
+              name: cc.name,
+              game_url: '', // Custom channels don't have remote URLs
+              enabled: true,
+              isCustom: true,
+              installDir: cc.installDir
+            }));
+          } catch (error) {
+            console.warn('Failed to scan custom channels:', error);
+          }
+        }
+        
+        // Merge official and custom channels
+        const mergedChannels = [...json.channels, ...customChannels];
+        const updatedConfig = { ...json, channels: mergedChannels };
+        
+        setConfig(updatedConfig);
+        const first = updatedConfig.channels.find((c) => c.enabled);
         if (first) setSelectedChannel(first.name);
       } catch {}
     })();
@@ -580,8 +609,34 @@ export default function LauncherUI() {
 
 
   async function openInstallPrompt() {
+    // Custom channels can't be installed, only repaired
+    if (channel?.isCustom) {
+      alert('Custom channels cannot be installed from remote sources. You can only repair or play existing installations.');
+      return;
+    }
+    
     const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
+    const targetInstallDir = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    
+    // Check if r5apex.exe already exists in the target directory
+    // If it does, repair instead of showing install prompt
+    try {
+      const isAlreadyInstalled = await window.electronAPI?.isInstalledInDir(targetInstallDir);
+      if (isAlreadyInstalled) {
+        // Game files detected - repair instead of install
+        const shouldRepair = confirm('Game files detected in the target directory. Would you like to repair/verify the installation instead?');
+        if (shouldRepair) {
+          await repairChannel(selectedChannel, false);
+          return;
+        }
+        // If user cancels, fall through to normal install prompt
+      }
+    } catch (error) {
+      console.warn('Error checking for existing installation:', error);
+      // Continue with normal install if check fails
+    }
+    
     setInstallBaseDir(base || '');
     setInstallIncludeOptional(getIncludeOptional(selectedChannel)); // Initialize with current channel setting
     
@@ -681,6 +736,12 @@ export default function LauncherUI() {
   }
 
   async function startInstall() {
+    // Custom channels cannot be installed
+    if (channel?.isCustom) {
+      alert('Custom channels cannot be installed from remote sources.');
+      return;
+    }
+    
     const actualInstallDir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
     if (!channel || !actualInstallDir) return;
     // Require EULA
@@ -895,12 +956,17 @@ export default function LauncherUI() {
   useEffect(() => {
     (async () => {
       if (!channel) return;
+      // Custom channels don't have remote versions
+      if (channel.isCustom) {
+        setRemoteVersion(null);
+        return;
+      }
       try {
         const j = await window.electronAPI!.fetchChecksums(channel.game_url);
         setRemoteVersion(String(j?.game_version || ''));
       } catch { setRemoteVersion(null); }
     })();
-  }, [channel?.game_url]);
+  }, [channel?.game_url, channel?.isCustom]);
 
   // Load installed mods when Mods tab opens or installDir changes
   useEffect(() => {
@@ -1160,13 +1226,23 @@ export default function LauncherUI() {
         const s: any = await window.electronAPI?.getSettings();
         const ch = s?.channels?.[selectedChannel];
         setChannelsSettings(s?.channels || {});
-        if (ch?.installDir) setInstallDir(ch.installDir);
-        setInstalledVersion(ch?.gameVersion || null);
-        if (ch?.installDir) {
-          setIsInstalled(Boolean(await window.electronAPI?.isInstalledInDir(ch.installDir)));
+        
+        // For custom channels, use the installDir from the channel config
+        const currentChannel = channel;
+        let effectiveInstallDir = ch?.installDir;
+        if (currentChannel?.isCustom && currentChannel.installDir) {
+          effectiveInstallDir = currentChannel.installDir;
+        }
+        
+        if (effectiveInstallDir) {
+          setInstallDir(effectiveInstallDir);
+          setIsInstalled(Boolean(await window.electronAPI?.isInstalledInDir(effectiveInstallDir)));
         } else {
+          setInstallDir('');
           setIsInstalled(false);
         }
+        
+        setInstalledVersion(ch?.gameVersion || null);
         // Load launch options per channel
         const lo = s?.launchOptions?.[selectedChannel];
         if (lo) {
@@ -1538,10 +1614,17 @@ export default function LauncherUI() {
 
   useEffect(() => {
     // Decide primary action
-    if (!isInstalled) setPrimaryAction('install');
-    else if (remoteVersion && installedVersion && remoteVersion !== installedVersion) setPrimaryAction('update');
-    else setPrimaryAction('play');
-  }, [isInstalled, installedVersion, remoteVersion]);
+    // Custom channels can only be played or repaired, never freshly installed or updated
+    if (channel?.isCustom) {
+      setPrimaryAction('play');
+    } else if (!isInstalled) {
+      setPrimaryAction('install');
+    } else if (remoteVersion && installedVersion && remoteVersion !== installedVersion) {
+      setPrimaryAction('update');
+    } else {
+      setPrimaryAction('play');
+    }
+  }, [isInstalled, installedVersion, remoteVersion, channel]);
 
   async function fixChannelPermissions(ch: string) {
     setBusy(true);
@@ -1836,6 +1919,13 @@ export default function LauncherUI() {
   async function repairChannel(name: string, isUpdate = false) {
     const target = config?.channels.find((c) => c.name === name);
     if (!target) return;
+    
+    // Custom channels cannot be repaired from remote sources
+    if (target.isCustom) {
+      alert('Custom channels cannot be repaired from remote sources. Your local installation can only be launched.');
+      return;
+    }
+    
     let dir = channelsSettings?.[name]?.installDir;
     if (!dir) {
       dir = (await window.electronAPI?.getDefaultInstallDir(name)) || '';
@@ -2227,6 +2317,12 @@ export default function LauncherUI() {
             fixChannelPermissions={fixChannelPermissions}
             setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}
             openExternal={(url) => { window.electronAPI?.openExternal?.(url); }}
+            openFolder={async (folderPath) => { 
+              const result = await window.electronAPI?.openFolder?.(folderPath);
+              if (result && !result.ok) {
+                alert(`Failed to open folder: ${result.error || 'Unknown error'}`);
+              }
+            }}
             optimizeForSpeed={optimizeForSpeed}
             optimizeForStability={optimizeForStability}
             resetDownloadDefaults={resetDownloadDefaults}

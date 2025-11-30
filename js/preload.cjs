@@ -9,6 +9,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onProgress: (channel, listener) => ipcRenderer.on(channel, (_e, payload) => listener(payload)),
   getDefaultInstallDir: (channelName) => ipcRenderer.invoke('default-install-dir', { channelName }),
   fetchLauncherConfig: (url) => ipcRenderer.invoke('launcher:config', { url }),
+  scanCustomChannels: (officialChannelNames) => ipcRenderer.invoke('scan-custom-channels', { officialChannelNames }),
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', { folderPath }),
   cacheBackgroundVideo: (filename) => ipcRenderer.invoke('video:cache', { filename }),
   isInstalledInDir: (path) => ipcRenderer.invoke('fs:is-installed-in-dir', { path }),
   openExternal: (url) => ipcRenderer.invoke('open-external', { url }),
