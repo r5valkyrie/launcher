@@ -40,10 +40,6 @@ class RateLimiter {
     this.tokens = this.maxBytesPerSecond;
   }
 
-  isEnabled() {
-    return this.maxBytesPerSecond > 0;
-  }
-
   async consumeTokens(bytes) {
     if (this.maxBytesPerSecond <= 0) {
       return; // unlimited speed
@@ -172,31 +168,21 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         : (resumeFrom > 0 ? (resumeFrom + contentLen) : contentLen);
       let received = 0;
       let lastProgressAt = Date.now();
-      let lastDataReceived = Date.now();
       // More aggressive stall timeout to detect and recover from slow connections faster
       const stallMs = attempt <= 2 ? 30000 : 45000;
       const watchdog = setInterval(() => {
         if (token?.cancelled) return;
-        // Use lastDataReceived instead of lastProgressAt to avoid false positives during rate limiting
-        if (Date.now() - lastDataReceived > stallMs) {
+        if (Date.now() - lastProgressAt > stallMs) {
           try { const err = new Error('stalled'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {}
         }
       }, 10000);
-      // Handle data with proper backpressure for rate limiting
       res.on('data', async (chunk) => {
-        // Update immediately when data arrives (prevents false stall detection)
-        lastDataReceived = Date.now();
+        // Apply global rate limiting
+        await globalRateLimiter.consumeTokens(chunk.length);
+        
         received += chunk.length;
         lastProgressAt = Date.now();
-        
         if (onProgress) onProgress(Math.min(resumeFrom + received, total || (resumeFrom + received)), total || 0);
-        
-        // Apply rate limiting with backpressure only if rate limiting is enabled
-        if (globalRateLimiter.isEnabled()) {
-          res.pause();
-          await globalRateLimiter.consumeTokens(chunk.length);
-          res.resume();
-        }
       });
       res.on('aborted', async () => {
         const fileClosed = new Promise((r) => file.close(() => r()));

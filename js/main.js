@@ -719,53 +719,134 @@ ipcMain.handle('default-install-dir', (_e, { channelName }) => {
   return channelName ? path.join(base, channelName) : base;
 });
 
-ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames }) => {
+ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channelsSettings }) => {
   try {
+    const customChannels = [];
+    const officialNames = new Set((officialChannelNames || []).map(name => name.toLowerCase()));
+    const scannedPaths = new Set(); // Track already scanned paths to avoid duplicates
+    
+    // Helper function to check if a directory has game files
+    const hasGameExecutables = async (dirPath) => {
+      try {
+        await fs.promises.access(path.join(dirPath, 'r5apex.exe'));
+        return true;
+      } catch {
+        try {
+          await fs.promises.access(path.join(dirPath, 'r5apex_ds.exe'));
+          return true;
+        } catch {
+          return false;
+        }
+      }
+    };
+    
+    // 1. Scan default R5VLibrary location
     const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
     const libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
     
-    // Check if the R5VLibrary directory exists
     try {
       await fs.promises.access(libraryBase);
+      const entries = await fs.promises.readdir(libraryBase, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        
+        const channelName = entry.name;
+        const channelPath = path.join(libraryBase, channelName);
+        const normalizedPath = channelPath.toLowerCase();
+        
+        // Skip if already scanned or matches official channel name
+        if (scannedPaths.has(normalizedPath) || officialNames.has(channelName.toLowerCase())) {
+          continue;
+        }
+        
+        if (await hasGameExecutables(channelPath)) {
+          customChannels.push({
+            name: channelName,
+            installDir: channelPath,
+            isCustom: true
+          });
+          scannedPaths.add(normalizedPath);
+        }
+      }
     } catch {
-      return []; // Directory doesn't exist, no custom channels
+      // Directory doesn't exist, continue to next scan
     }
     
-    // Get all directories in R5VLibrary
-    const entries = await fs.promises.readdir(libraryBase, { withFileTypes: true });
-    const customChannels = [];
+    // 2. Scan custom install directories from channelsSettings
+    if (channelsSettings && typeof channelsSettings === 'object') {
+      for (const [channelName, settings] of Object.entries(channelsSettings)) {
+        if (!settings || typeof settings !== 'object') continue;
+        
+        const installDir = settings.installDir;
+        if (!installDir || typeof installDir !== 'string') continue;
+        
+        const normalizedPath = installDir.toLowerCase();
+        
+        // Skip if already scanned or matches official channel name
+        if (scannedPaths.has(normalizedPath) || officialNames.has(channelName.toLowerCase())) {
+          continue;
+        }
+        
+        // Check if this is a valid game directory
+        if (await hasGameExecutables(installDir)) {
+          // Extract a meaningful name from the path
+          const dirName = path.basename(installDir);
+          
+          // Only add if the directory name doesn't match an official channel
+          if (!officialNames.has(dirName.toLowerCase())) {
+            customChannels.push({
+              name: dirName,
+              installDir: installDir,
+              isCustom: true
+            });
+            scannedPaths.add(normalizedPath);
+          }
+        }
+      }
+    }
     
-    // Set of official channel names for quick lookup
-    const officialNames = new Set((officialChannelNames || []).map(name => name.toLowerCase()));
-    
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
+    // 3. Scan parent directories of custom installs for siblings
+    if (channelsSettings && typeof channelsSettings === 'object') {
+      const parentDirs = new Set();
       
-      const channelName = entry.name;
-      const channelPath = path.join(libraryBase, channelName);
-      
-      // Skip if it matches an official channel name
-      if (officialNames.has(channelName.toLowerCase())) continue;
-      
-      // Check if this directory contains r5apex.exe or r5apex_ds.exe
-      let hasGameFiles = false;
-      try {
-        await fs.promises.access(path.join(channelPath, 'r5apex.exe'));
-        hasGameFiles = true;
-      } catch {
-        try {
-          await fs.promises.access(path.join(channelPath, 'r5apex_ds.exe'));
-          hasGameFiles = true;
-        } catch { }
+      // Collect unique parent directories
+      for (const settings of Object.values(channelsSettings)) {
+        if (settings && typeof settings === 'object' && settings.installDir) {
+          const parentDir = path.dirname(settings.installDir);
+          parentDirs.add(parentDir);
+        }
       }
       
-      if (hasGameFiles) {
-        // This is a custom channel
-        customChannels.push({
-          name: channelName,
-          installDir: channelPath,
-          isCustom: true
-        });
+      // Scan each parent directory for sibling installations
+      for (const parentDir of parentDirs) {
+        try {
+          const entries = await fs.promises.readdir(parentDir, { withFileTypes: true });
+          
+          for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            
+            const channelName = entry.name;
+            const channelPath = path.join(parentDir, channelName);
+            const normalizedPath = channelPath.toLowerCase();
+            
+            // Skip if already scanned or matches official channel name
+            if (scannedPaths.has(normalizedPath) || officialNames.has(channelName.toLowerCase())) {
+              continue;
+            }
+            
+            if (await hasGameExecutables(channelPath)) {
+              customChannels.push({
+                name: channelName,
+                installDir: channelPath,
+                isCustom: true
+              });
+              scannedPaths.add(normalizedPath);
+            }
+          }
+        } catch {
+          // Failed to scan this parent directory, continue
+        }
       }
     }
     
