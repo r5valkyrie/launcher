@@ -145,10 +145,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                     onClick={async () => {
                       setCustomBaseDir('');
                       await setSetting('customBaseDir', '');
-                      // Suggest page reload to revert to default location
-                      if (confirm('Reset to default location! Reload launcher to apply changes?')) {
-                        window.location.reload();
-                      }
+                      // Reload the page to apply the change
+                      window.location.reload();
                     }}
                   >
                     Reset
