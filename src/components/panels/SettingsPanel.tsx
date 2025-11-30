@@ -12,6 +12,8 @@ type SettingsPanelProps = {
   setConcurrency: (n: number) => void;
   partConcurrency: number;
   setPartConcurrency: (n: number) => void;
+  downloadSpeedLimit: number;
+  setDownloadSpeedLimit: (n: number) => void;
   bannerVideoEnabled: boolean;
   setBannerVideoEnabled: (v: boolean) => void;
   modsShowDeprecated: boolean;
@@ -43,6 +45,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     setConcurrency,
     partConcurrency,
     setPartConcurrency,
+    downloadSpeedLimit,
+    setDownloadSpeedLimit,
     bannerVideoEnabled,
     setBannerVideoEnabled,
     modsShowDeprecated,
@@ -86,6 +90,82 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             onOptimizeForStability={optimizeForStability}
             onResetToDefaults={resetDownloadDefaults}
           />
+        </div>
+
+        {/* Download Speed Limit */}
+        <div className="xl:col-span-2 glass rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-warning/80 to-warning flex items-center justify-center">
+              <span className="text-white text-sm">⚡</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Download Speed Limit</h3>
+              <p className="text-xs opacity-70">Cap maximum download speed across all downloads</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Maximum Speed: {downloadSpeedLimit === 0 ? 'Unlimited' : `${(downloadSpeedLimit / 1024 / 1024).toFixed(1)} MB/s`}
+              </label>
+              <input
+                type="range"
+                min="0"
+                max="104857600"
+                step="1048576"
+                value={downloadSpeedLimit}
+                onChange={async (e) => {
+                  const value = Number(e.target.value);
+                  setDownloadSpeedLimit(value);
+                  await setSetting('downloadSpeedLimit', value);
+                  // Apply the limit immediately
+                  if (window.electronAPI?.setDownloadSpeedLimit) {
+                    await window.electronAPI.setDownloadSpeedLimit(value);
+                  }
+                }}
+                className="range range-warning w-full"
+              />
+              <div className="flex justify-between text-xs opacity-60 mt-1">
+                <span>Unlimited</span>
+                <span>25 MB/s</span>
+                <span>50 MB/s</span>
+                <span>75 MB/s</span>
+                <span>100 MB/s</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-5 gap-2">
+              {[0, 5, 10, 25, 50].map((mbps) => (
+                <button
+                  key={mbps}
+                  className={`btn btn-sm ${downloadSpeedLimit === mbps * 1024 * 1024 ? 'btn-warning' : 'btn-outline'}`}
+                  onClick={async () => {
+                    const value = mbps * 1024 * 1024;
+                    setDownloadSpeedLimit(value);
+                    await setSetting('downloadSpeedLimit', value);
+                    if (window.electronAPI?.setDownloadSpeedLimit) {
+                      await window.electronAPI.setDownloadSpeedLimit(value);
+                    }
+                  }}
+                >
+                  {mbps === 0 ? '∞' : `${mbps}`}
+                </button>
+              ))}
+            </div>
+
+            <div className="bg-base-200/30 border border-white/10 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-neutral/40 to-neutral/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-xs">💡</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium mb-1 text-base-content/90">Global Speed Cap</div>
+                  <p className="text-xs text-base-content/70 leading-relaxed">This limit applies to all downloads (game files, mods, etc.). Set to unlimited for maximum speed.</p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Appearance Settings */}

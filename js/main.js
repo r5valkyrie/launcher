@@ -11,7 +11,7 @@ import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
 // Preload is CommonJS to avoid ESM named export issues
-import { fetchChecksums, downloadAll, createCancelToken, cancelToken } from './services/downloader.js';
+import { fetchChecksums, downloadAll, createCancelToken, cancelToken, setGlobalDownloadSpeed } from './services/downloader.js';
 import { getSetting, setSetting, getAllSettings } from './services/store.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -794,6 +794,17 @@ ipcMain.handle('open-folder', async (_e, { folderPath }) => {
     return { ok: true };
   } catch (error) {
     console.error('Error opening folder:', error);
+    return { ok: false, error: String(error) };
+  }
+});
+
+ipcMain.handle('set-download-speed-limit', async (_e, { bytesPerSecond }) => {
+  try {
+    const limit = Number(bytesPerSecond) || 0;
+    setGlobalDownloadSpeed(limit);
+    return { ok: true };
+  } catch (error) {
+    console.error('Error setting download speed limit:', error);
     return { ok: false, error: String(error) };
   }
 });

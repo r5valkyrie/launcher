@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fetchLauncherConfig: (url) => ipcRenderer.invoke('launcher:config', { url }),
   scanCustomChannels: (officialChannelNames) => ipcRenderer.invoke('scan-custom-channels', { officialChannelNames }),
   openFolder: (folderPath) => ipcRenderer.invoke('open-folder', { folderPath }),
+  setDownloadSpeedLimit: (bytesPerSecond) => ipcRenderer.invoke('set-download-speed-limit', { bytesPerSecond }),
   cacheBackgroundVideo: (filename) => ipcRenderer.invoke('video:cache', { filename }),
   isInstalledInDir: (path) => ipcRenderer.invoke('fs:is-installed-in-dir', { path }),
   openExternal: (url) => ipcRenderer.invoke('open-external', { url }),

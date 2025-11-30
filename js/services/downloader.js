@@ -27,6 +27,52 @@ const keepAliveAgent = new https.Agent({
   scheduling: 'fifo'     // Better connection reuse strategy
 });
 
+// Global download speed limiter using token bucket algorithm
+class RateLimiter {
+  constructor() {
+    this.maxBytesPerSecond = 0; // 0 = unlimited
+    this.tokens = 0;
+    this.lastRefill = Date.now();
+  }
+
+  setMaxSpeed(bytesPerSecond) {
+    this.maxBytesPerSecond = Math.max(0, bytesPerSecond);
+    this.tokens = this.maxBytesPerSecond;
+  }
+
+  async consumeTokens(bytes) {
+    if (this.maxBytesPerSecond <= 0) {
+      return; // unlimited speed
+    }
+
+    const now = Date.now();
+    const timePassed = (now - this.lastRefill) / 1000;
+    
+    // Refill tokens based on time passed
+    this.tokens = Math.min(
+      this.maxBytesPerSecond,
+      this.tokens + timePassed * this.maxBytesPerSecond
+    );
+    this.lastRefill = now;
+
+    // If we don't have enough tokens, wait
+    if (bytes > this.tokens) {
+      const deficit = bytes - this.tokens;
+      const waitMs = (deficit / this.maxBytesPerSecond) * 1000;
+      await delay(waitMs);
+      this.tokens = 0;
+    } else {
+      this.tokens -= bytes;
+    }
+  }
+}
+
+const globalRateLimiter = new RateLimiter();
+
+export function setGlobalDownloadSpeed(bytesPerSecond) {
+  globalRateLimiter.setMaxSpeed(bytesPerSecond);
+}
+
 function sha256File(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash('sha256');
@@ -130,7 +176,10 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
           try { const err = new Error('stalled'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {}
         }
       }, 10000);
-      res.on('data', (chunk) => {
+      res.on('data', async (chunk) => {
+        // Apply global rate limiting
+        await globalRateLimiter.consumeTokens(chunk.length);
+        
         received += chunk.length;
         lastProgressAt = Date.now();
         if (onProgress) onProgress(Math.min(resumeFrom + received, total || (resumeFrom + received)), total || 0);

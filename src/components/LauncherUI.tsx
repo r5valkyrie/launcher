@@ -54,6 +54,7 @@ declare global {
       fetchLauncherConfig: (url: string) => Promise<LauncherConfig>;
       scanCustomChannels: (officialChannelNames: string[]) => Promise<Array<{name: string; installDir: string; isCustom: boolean}>>;
       openFolder: (folderPath: string) => Promise<{ok: boolean; error?: string}>;
+      setDownloadSpeedLimit: (bytesPerSecond: number) => Promise<{ok: boolean; error?: string}>;
       cacheBackgroundVideo: (filename: string) => Promise<string>;
       isInstalledInDir: (path: string) => Promise<boolean>;
       pauseDownload?: () => Promise<boolean>;
@@ -121,6 +122,7 @@ export default function LauncherUI() {
   };
   const [concurrency, setConcurrency] = useState<number>(8);
   const [partConcurrency, setPartConcurrency] = useState<number>(6);
+  const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
@@ -254,6 +256,11 @@ export default function LauncherUI() {
       else window.electronAPI?.getDefaultInstallDir(selectedChannel || undefined).then((d) => { if (d) setInstallDir(d); });
       if (s?.concurrency) setConcurrency(Number(s.concurrency));
       if (s?.partConcurrency) setPartConcurrency(Number(s.partConcurrency));
+      if (typeof s?.downloadSpeedLimit === 'number') {
+        const limit = Number(s.downloadSpeedLimit);
+        setDownloadSpeedLimit(limit);
+        window.electronAPI?.setDownloadSpeedLimit?.(limit);
+      }
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
@@ -2304,6 +2311,8 @@ export default function LauncherUI() {
             setConcurrency={setConcurrency}
             partConcurrency={partConcurrency}
             setPartConcurrency={setPartConcurrency}
+            downloadSpeedLimit={downloadSpeedLimit}
+            setDownloadSpeedLimit={setDownloadSpeedLimit}
             bannerVideoEnabled={bannerVideoEnabled}
             setBannerVideoEnabled={setBannerVideoEnabled}
             modsShowDeprecated={modsShowDeprecated}
