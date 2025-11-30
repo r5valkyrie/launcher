@@ -786,17 +786,34 @@ export default function LauncherUI() {
         let windowBytes = 0;
         let lastTick = Date.now();
         let lastUIUpdate = Date.now();
+        let lastBytesUpdate = Date.now();
         const tick = () => {
           if (runIdRef.current !== runId) return;
           const now = Date.now();
           const dt = (now - lastTick) / 1000;
-          if (dt >= 0.5) {
-            const speed = windowBytes / dt; // bytes per sec
-            setSpeedBps(speed);
-            const remain = Math.max(0, bytesTotalRef.current - (bytesReceivedRef.current));
-            setEtaSeconds(speed > 0 ? Math.ceil(remain / speed) : 0);
+          const timeSinceLastBytes = (now - lastBytesUpdate) / 1000;
+          
+          // Reset speed to 0 if no bytes received in last 2 seconds
+          if (timeSinceLastBytes > 2) {
+            setSpeedBps(0);
+            setEtaSeconds(0);
             windowBytes = 0;
             lastTick = now;
+          } else if (dt >= 0.5 && dt < 30) { // Only calculate speed if delta is reasonable (0.5s - 30s)
+            const speed = windowBytes / dt; // bytes per sec
+            // Cap maximum realistic speed at 500 MB/s to prevent display of impossible values
+            const cappedSpeed = Math.min(speed, 500 * 1024 * 1024);
+            setSpeedBps(cappedSpeed);
+            const remain = Math.max(0, bytesTotalRef.current - (bytesReceivedRef.current));
+            setEtaSeconds(cappedSpeed > 0 ? Math.ceil(remain / cappedSpeed) : 0);
+            windowBytes = 0;
+            lastTick = now;
+          } else if (dt >= 30) {
+            // If too much time has passed, reset the calculation window
+            windowBytes = 0;
+            lastTick = now;
+            setSpeedBps(0);
+            setEtaSeconds(0);
           }
           if (busyRef.current && !pausedRef.current) requestAnimationFrame(tick);
         };
@@ -810,7 +827,12 @@ export default function LauncherUI() {
               const capped = bytesTotalRef.current > 0 ? Math.min(tentative, bytesTotalRef.current) : tentative;
               bytesReceivedRef.current = capped;
             
-            if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
+            if (d > 0) {
+              windowBytes += d;
+              lastBytesUpdate = now; // Track when we last received bytes
+            } else {
+              windowBytes = Math.max(0, windowBytes + d);
+            }
             if (d > 0) setReceivedAnyBytes(true);
             
             // Throttle UI updates to max 10 times per second to reduce React overhead
@@ -905,8 +927,16 @@ export default function LauncherUI() {
           setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
         }, 240);
       }));
-      window.electronAPI!.onProgress('progress:paused', guard(() => { setIsPaused(true); }));
-      window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
+      window.electronAPI!.onProgress('progress:paused', guard(() => { 
+        setIsPaused(true); 
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+      }));
+      window.electronAPI!.onProgress('progress:resumed', guard(() => { 
+        setIsPaused(false); 
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+      }));
       window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional: getIncludeOptional(selectedChannel), concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
       setToastMessage('Install completed');
@@ -1830,8 +1860,16 @@ export default function LauncherUI() {
         setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); 
         setDoneCount((x) => x + 1); 
       }));
-      window.electronAPI!.onProgress('progress:paused', guard(() => { setIsPaused(true); }));
-      window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
+      window.electronAPI!.onProgress('progress:paused', guard(() => { 
+        setIsPaused(true); 
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+      }));
+      window.electronAPI!.onProgress('progress:resumed', guard(() => { 
+        setIsPaused(false); 
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+      }));
       window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
 
       // Download all files with includeOptional: true (this will download missing optional files)
@@ -1982,16 +2020,33 @@ export default function LauncherUI() {
       {
         let windowBytes = 0;
         let lastTick = Date.now();
+        let lastBytesUpdate = Date.now();
         const tick = () => {
           const now = Date.now();
           const dt = (now - lastTick) / 1000;
-          if (dt >= 0.5) {
-            const speed = windowBytes / dt;
-            setSpeedBps(speed);
-            const remain = Math.max(0, bytesTotal - (bytesReceived));
-            setEtaSeconds(speed > 0 ? Math.ceil(remain / speed) : 0);
+          const timeSinceLastBytes = (now - lastBytesUpdate) / 1000;
+          
+          // Reset speed to 0 if no bytes received in last 2 seconds
+          if (timeSinceLastBytes > 2) {
+            setSpeedBps(0);
+            setEtaSeconds(0);
             windowBytes = 0;
             lastTick = now;
+          } else if (dt >= 0.5 && dt < 30) { // Only calculate speed if delta is reasonable (0.5s - 30s)
+            const speed = windowBytes / dt;
+            // Cap maximum realistic speed at 500 MB/s to prevent display of impossible values
+            const cappedSpeed = Math.min(speed, 500 * 1024 * 1024);
+            setSpeedBps(cappedSpeed);
+            const remain = Math.max(0, bytesTotal - (bytesReceived));
+            setEtaSeconds(cappedSpeed > 0 ? Math.ceil(remain / cappedSpeed) : 0);
+            windowBytes = 0;
+            lastTick = now;
+          } else if (dt >= 30) {
+            // If too much time has passed, reset the calculation window
+            windowBytes = 0;
+            lastTick = now;
+            setSpeedBps(0);
+            setEtaSeconds(0);
           }
           if (busy && !isPaused) requestAnimationFrame(tick);
         };
@@ -1999,8 +2054,14 @@ export default function LauncherUI() {
         window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
+            const now = Date.now();
             setBytesReceived((x) => Math.max(0, x + d));
-            if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
+            if (d > 0) {
+              windowBytes += d;
+              lastBytesUpdate = now; // Track when we last received bytes
+            } else {
+              windowBytes = Math.max(0, windowBytes + d);
+            }
           }
         }));
       }
