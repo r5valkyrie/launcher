@@ -14,6 +14,8 @@ type SettingsPanelProps = {
   setPartConcurrency: (n: number) => void;
   downloadSpeedLimit: number;
   setDownloadSpeedLimit: (n: number) => void;
+  customBaseDir: string;
+  setCustomBaseDir: (dir: string) => void;
   bannerVideoEnabled: boolean;
   setBannerVideoEnabled: (v: boolean) => void;
   modsShowDeprecated: boolean;
@@ -47,6 +49,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     setPartConcurrency,
     downloadSpeedLimit,
     setDownloadSpeedLimit,
+    customBaseDir,
+    setCustomBaseDir,
     bannerVideoEnabled,
     setBannerVideoEnabled,
     modsShowDeprecated,
@@ -90,6 +94,84 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             onOptimizeForStability={optimizeForStability}
             onResetToDefaults={resetDownloadDefaults}
           />
+        </div>
+
+        {/* Custom Base Directory */}
+        <div className="xl:col-span-2 glass rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-info/80 to-info flex items-center justify-center">
+              <span className="text-white text-sm">📂</span>
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold">Default Install Location</h3>
+              <p className="text-xs opacity-70">Set a custom base directory for game installations</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">Base Directory</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  className="input input-bordered flex-1 font-mono text-sm"
+                  value={customBaseDir}
+                  onChange={(e) => setCustomBaseDir(e.target.value)}
+                  onBlur={async (e) => {
+                    // Save when user finishes typing
+                    await setSetting('customBaseDir', e.target.value);
+                  }}
+                  placeholder="%LOCALAPPDATA%\Programs\R5VLibrary (default)"
+                />
+                <button
+                  className="btn btn-outline btn-info"
+                  onClick={async () => {
+                    const dir = await window.electronAPI?.selectDirectory?.();
+                    if (dir) {
+                      setCustomBaseDir(dir);
+                      await setSetting('customBaseDir', dir);
+                      // Suggest page reload to detect new channels
+                      if (confirm('Custom base directory set! Reload launcher to detect channels in the new location?')) {
+                        window.location.reload();
+                      }
+                    }
+                  }}
+                >
+                  Browse
+                </button>
+                {customBaseDir && (
+                  <button
+                    className="btn btn-outline"
+                    onClick={async () => {
+                      setCustomBaseDir('');
+                      await setSetting('customBaseDir', '');
+                      // Suggest page reload to revert to default location
+                      if (confirm('Reset to default location! Reload launcher to apply changes?')) {
+                        window.location.reload();
+                      }
+                    }}
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-base-200/30 border border-white/10 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-neutral/40 to-neutral/60 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-white text-xs">💡</span>
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium mb-1 text-base-content/90">About Custom Directory</div>
+                  <p className="text-xs text-base-content/70 leading-relaxed">
+                    Set a custom location where game channels will be installed. Each channel will create a subfolder (e.g., LIVE, BETA). 
+                    Custom builds in this location will be automatically detected. Leave empty to use the default location.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Download Speed Limit */}

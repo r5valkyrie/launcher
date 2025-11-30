@@ -93,7 +93,7 @@ declare global {
   }
 }
 
-const CONFIG_URL = 'https://blaze.playvalkyrie.org/config.json';
+const CONFIG_URL = 'https://playvalkyrie.org/api/client/launcherConfig';
 
 export default function LauncherUI() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -123,6 +123,7 @@ export default function LauncherUI() {
   const [concurrency, setConcurrency] = useState<number>(8);
   const [partConcurrency, setPartConcurrency] = useState<number>(6);
   const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
+  const [customBaseDir, setCustomBaseDir] = useState<string>(''); // Custom base directory for game installations
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
@@ -265,6 +266,7 @@ export default function LauncherUI() {
         setDownloadSpeedLimit(limit);
         window.electronAPI?.setDownloadSpeedLimit?.(limit);
       }
+      if (typeof s?.customBaseDir === 'string') setCustomBaseDir(s.customBaseDir);
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
@@ -2317,6 +2319,8 @@ export default function LauncherUI() {
             setPartConcurrency={setPartConcurrency}
             downloadSpeedLimit={downloadSpeedLimit}
             setDownloadSpeedLimit={setDownloadSpeedLimit}
+            customBaseDir={customBaseDir}
+            setCustomBaseDir={setCustomBaseDir}
             bannerVideoEnabled={bannerVideoEnabled}
             setBannerVideoEnabled={setBannerVideoEnabled}
             modsShowDeprecated={modsShowDeprecated}

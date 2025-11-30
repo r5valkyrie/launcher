@@ -713,9 +713,19 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 });
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
-  // Default to %LOCALAPPDATA%\Programs\R5VLibrary\<channel>
-  const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-  const base = path.join(localAppData, 'Programs', 'R5VLibrary');
+  // Check if user has set a custom base directory
+  const settings = getAllSettings();
+  const customBase = settings?.customBaseDir;
+  
+  let base;
+  if (customBase && typeof customBase === 'string' && customBase.trim()) {
+    base = customBase;
+  } else {
+    // Default to %LOCALAPPDATA%\Programs\R5VLibrary\<channel>
+    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+    base = path.join(localAppData, 'Programs', 'R5VLibrary');
+  }
+  
   return channelName ? path.join(base, channelName) : base;
 });
 
@@ -740,9 +750,18 @@ ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channe
       }
     };
     
-    // 1. Scan default R5VLibrary location
-    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-    const libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
+    // Get custom base directory from settings
+    const settings = getAllSettings();
+    const customBase = settings?.customBaseDir;
+    
+    // 1. Scan base library location (custom or default)
+    let libraryBase;
+    if (customBase && typeof customBase === 'string' && customBase.trim()) {
+      libraryBase = customBase;
+    } else {
+      const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+      libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
+    }
     
     try {
       await fs.promises.access(libraryBase);
@@ -783,17 +802,18 @@ ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channe
         
         const normalizedPath = installDir.toLowerCase();
         
-        // Skip if already scanned or matches official channel name
-        if (scannedPaths.has(normalizedPath) || officialNames.has(channelName.toLowerCase())) {
+        // Skip if already scanned
+        if (scannedPaths.has(normalizedPath)) {
           continue;
         }
         
         // Check if this is a valid game directory
         if (await hasGameExecutables(installDir)) {
-          // Extract a meaningful name from the path
+          // Extract directory name from the path
           const dirName = path.basename(installDir);
           
           // Only add if the directory name doesn't match an official channel
+          // Note: We don't skip based on channelName from settings, only the actual directory name
           if (!officialNames.has(dirName.toLowerCase())) {
             customChannels.push({
               name: dirName,
