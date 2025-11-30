@@ -2251,7 +2251,16 @@ export default function LauncherUI() {
           requireEula={requireEula}
           getSettingsAndLaunch={async () => {
             const s: any = await window.electronAPI?.getSettings();
-            const dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+            
+            // For custom channels, use the installDir from the channel object
+            // For official channels, use the installDir from settings
+            let dir: string;
+            if (channel?.isCustom && channel.installDir) {
+              dir = channel.installDir;
+            } else {
+              dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+            }
+            
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
             const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
