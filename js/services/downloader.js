@@ -126,38 +126,100 @@ export function cancelToken(token) {
 const RETRYABLE_ERROR_CODES = new Set([
   'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'ECONNABORTED', 'ENETRESET', 'EHOSTUNREACH', 'ENETUNREACH', 'EPIPE',
   'ENOTFOUND', 'ECONNREFUSED', 'EHOSTDOWN', 'ENETDOWN', // Additional network error codes
+  'EPERM', 'EBUSY', 'EACCES', // Windows file permission/locking errors
 ]);
 
 async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeFrom = 0, expectedTotal = 0) {
   return new Promise((resolve, reject) => {
     ensureDir(path.dirname(dest));
-    const file = fs.createWriteStream(dest, { flags: resumeFrom > 0 ? 'a' : 'w' });
+    
+    let file;
+    try {
+      file = fs.createWriteStream(dest, { flags: resumeFrom > 0 ? 'a' : 'w' });
+    } catch (e) {
+      // File might be locked, retry after delay
+      if (attempt < 8 && (e.code === 'EPERM' || e.code === 'EBUSY' || e.code === 'EACCES')) {
+        const backoff = Math.min(1000 * attempt, 5000);
+        return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom, expectedTotal)));
+      }
+      return reject(e);
+    }
+    
     if (token?.cancelled) { file.close(() => {}); return reject(new Error('cancelled')); }
+    
+    // Prevent double-settling of the promise
+    let settled = false;
+    const safeResolve = (v) => { if (!settled) { settled = true; resolve(v); } };
+    const safeReject = (e) => { if (!settled) { settled = true; reject(e); } };
+    
     const reqOptions = { agent: keepAliveAgent };
     if (resumeFrom > 0) {
       reqOptions.headers = { Range: `bytes=${resumeFrom}-` };
     }
+    
+    let received = 0;
+    let watchdog = null;
+    
+    const closeFileAsync = () => new Promise((r) => { 
+      try { file.close(() => r()); } catch { r(); } 
+    });
+    
+    const cleanupAndRetry = async (newResumeFrom, deleteFile = false) => {
+      try { if (watchdog) clearInterval(watchdog); } catch {}
+      try { await closeFileAsync(); } catch {}
+      // Small delay to let Windows release file handles
+      await delay(100);
+      if (deleteFile) {
+        try { fs.unlinkSync(dest); } catch {}
+      }
+      if (attempt < 8) {
+        const baseBackoff = Math.min(1000 * Math.pow(1.5, attempt), 15000);
+        const jitter = Math.random() * 1000;
+        const backoff = baseBackoff + jitter;
+        await delay(backoff);
+        safeResolve(downloadToFile(url, dest, onProgress, attempt + 1, token, newResumeFrom, expectedTotal));
+        return true;
+      }
+      return false; // Could not retry
+    };
+    
     const req = https.get(url, reqOptions, (res) => {
       if (res.statusCode !== 200) {
         if (resumeFrom > 0 && res.statusCode === 206) {
           // ok partial content
         } else {
-          file.close(() => {});
+          // Mark as settled before handling to prevent error handler from double-handling
+          settled = true;
+          
           // If server ignored Range and returned 200 for a resume request, fallback to full restart
           if (resumeFrom > 0 && res.statusCode === 200) {
-            try { fs.unlinkSync(dest); } catch {}
-            const backoff = Math.min(2000 * attempt, 10000);
             res.resume();
-            try { req.destroy(new Error('restart:range-ignored')); } catch {}
-            return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, 0, expectedTotal)));
+            cleanupAndRetry(0, true).then((retried) => {
+              if (!retried) reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            });
+            return;
           }
-          fs.unlink(dest, () => {});
+          // Handle 416 Range Not Satisfiable - delete partial file and restart from scratch
+          if (resumeFrom > 0 && res.statusCode === 416) {
+            res.resume();
+            cleanupAndRetry(0, true).then((retried) => {
+              if (!retried) reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            });
+            return;
+          }
+          // Retryable server errors
           if (res.statusCode && [429,500,502,503,504].includes(res.statusCode) && attempt < 5) {
-            const backoff = Math.min(2000 * attempt, 10000);
             res.resume();
-            return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom, expectedTotal)));
+            cleanupAndRetry(resumeFrom, false).then((retried) => {
+              if (!retried) reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+            });
+            return;
           }
-          reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+          // Non-retryable error
+          closeFileAsync().then(() => {
+            fs.unlink(dest, () => {});
+            reject(new Error(`HTTP ${res.statusCode} for ${url}`));
+          });
           res.resume();
           return;
         }
@@ -166,11 +228,10 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
       const total = expectedTotal > 0
         ? expectedTotal
         : (resumeFrom > 0 ? (resumeFrom + contentLen) : contentLen);
-      let received = 0;
       let lastProgressAt = Date.now();
       // More aggressive stall timeout to detect and recover from slow connections faster
       const stallMs = attempt <= 2 ? 30000 : 45000;
-      const watchdog = setInterval(() => {
+      watchdog = setInterval(() => {
         if (token?.cancelled) return;
         if (Date.now() - lastProgressAt > stallMs) {
           try { const err = new Error('stalled'); err.code = 'ETIMEDOUT'; req.destroy(err); } catch {}
@@ -185,18 +246,22 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
         if (onProgress) onProgress(Math.min(resumeFrom + received, total || (resumeFrom + received)), total || 0);
       });
       res.on('aborted', async () => {
-        const fileClosed = new Promise((r) => file.close(() => r()));
-        try { clearInterval(watchdog); } catch {}
-        try { await fileClosed; } catch {}
-        if (attempt < 5) {
-          const backoff = Math.min(2000 * attempt, 10000);
-          return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, resumeFrom + received, expectedTotal)));
-        }
-        reject(new Error('response aborted'));
+        const retried = await cleanupAndRetry(resumeFrom + received);
+        if (!retried) safeReject(new Error('response aborted'));
       });
       streamPipeline(res, file)
-        .then(() => { try { clearInterval(watchdog); } catch {}; resolve(); })
-        .catch((e) => { try { clearInterval(watchdog); } catch {}; reject(e); });
+        .then(() => { try { if (watchdog) clearInterval(watchdog); } catch {}; safeResolve(); })
+        .catch(async (e) => {
+          try { if (watchdog) clearInterval(watchdog); } catch {};
+          // Handle aborted/socket close errors as retryable
+          const msg = String(e?.message || e || '').toLowerCase();
+          if (msg.includes('aborted') || msg.includes('socket') || msg.includes('closed')) {
+            const retried = await cleanupAndRetry(resumeFrom + received);
+            if (!retried) safeReject(e);
+          } else {
+            safeReject(e);
+          }
+        });
     });
     token?.requests.add(req);
     req.on('socket', (s) => { 
@@ -213,19 +278,20 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
     if (token?.cancelled) { try { req.destroy(new Error('cancelled')); } catch {} }
     req.on('error', async (err) => {
       const code = err?.code;
-      const canRetry = attempt < 8 && (code && RETRYABLE_ERROR_CODES.has(String(code))); // Increased from 5 to 8 attempts
-      const fileClosed = new Promise((r) => { try { file.close(() => r()); } catch { r(); } });
-      try { await fileClosed; } catch {}
+      const msg = String(err?.message || '').toLowerCase();
+      const isAbortError = msg.includes('aborted') || msg.includes('socket') || msg.includes('closed');
+      const canRetry = attempt < 8 && (isAbortError || (code && RETRYABLE_ERROR_CODES.has(String(code))));
+      
       if (canRetry) {
-        // Improved exponential backoff with jitter to avoid thundering herd
-        const baseBackoff = Math.min(1000 * Math.pow(1.5, attempt), 15000);
-        const jitter = Math.random() * 1000;
-        const backoff = baseBackoff + jitter;
         let newResume = resumeFrom;
         try { const st = fs.statSync(dest); newResume = st.size; } catch {}
-        return delay(backoff).then(() => resolve(downloadToFile(url, dest, onProgress, attempt + 1, token, newResume, expectedTotal)));
+        const retried = await cleanupAndRetry(newResume);
+        if (!retried) safeReject(err);
+      } else {
+        const fileClosed = new Promise((r) => { try { file.close(() => r()); } catch { r(); } });
+        try { await fileClosed; } catch {}
+        safeReject(err);
       }
-      reject(err);
     });
   });
 }

@@ -9,13 +9,12 @@ import SettingsPanel from './panels/SettingsPanel';
 import ModsPanel from './panels/ModsPanel';
 import NewsPanel from './panels/NewsPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
-import DownloadProgress from './ui/DownloadProgress';
+import InstallProgress from './ui/InstallProgress';
 import UpdaterModal from './modals/UpdaterModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
 import UpdateBanner from './ui/UpdateBanner';
-import MainProgressBar from './ui/MainProgressBar';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
 import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible } from './common/modUtils';
@@ -861,7 +860,6 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => {
         setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
-        setCurrentOperation('Merging file parts');
         setProgressItems((prev) => ({
           ...prev,
           [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 }
@@ -883,7 +881,6 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:verify', guard((p: any) => { 
         setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); 
-        setCurrentOperation('Verifying files'); 
         // Don't add verify-only files to progress display to reduce visual jumping
       }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
@@ -1820,11 +1817,9 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => {
         setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 });
-        setCurrentOperation('Merging file parts');
         setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } }));
       }));
       window.electronAPI!.onProgress('progress:merge:done', guard((p: any) => {
-        setCurrentOperation('Installing HD textures');
         setProgressItems((prev) => {
           const next = { ...prev };
           delete next[p.path];
@@ -2029,12 +2024,11 @@ export default function LauncherUI() {
           };
         });
       }));
-      window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setCurrentOperation('Merging file parts'); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); }));
+      window.electronAPI!.onProgress('progress:merge:start', guard((p: any) => { setFileProgress({ path: `${p.path} (merging ${p.parts} parts)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.parts} parts`, parts: {}, totalParts: 0 } })); }));
       window.electronAPI!.onProgress('progress:merge:part', guard((p: any) => { setFileProgress({ path: `${p.path} (merging part ${p.part+1}/${p.totalParts})`, received: p.part+1, total: p.totalParts }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: `merging ${p.part+1}/${p.totalParts}`, parts: {}, totalParts: 0 } })); }));
       window.electronAPI!.onProgress('progress:merge:done', guard((p: any) => { setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); setProgressItems((prev) => ({ ...prev, [p.path]: { ...(prev[p.path]||{}), status: 'verifying', parts: {}, totalParts: 0 } })); }));
       window.electronAPI!.onProgress('progress:verify', guard((p: any) => { 
         setFileProgress({ path: `${p.path} (verifying)`, received: 0, total: 1 }); 
-        setCurrentOperation('Verifying files'); 
         // Don't add verify-only files to progress display to reduce visual jumping
       }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
@@ -2275,10 +2269,11 @@ export default function LauncherUI() {
           onOpenLaunchOptions={() => setActiveTab('launch')}
         />
 
-        <MainProgressBar
+        <InstallProgress
           visible={activeTab === 'general' && busy}
           busy={busy}
           hasStarted={hasStarted}
+          isPaused={isPaused}
           currentOperation={currentOperation}
           bytesTotal={bytesTotal}
           bytesReceived={bytesReceived}
@@ -2286,7 +2281,7 @@ export default function LauncherUI() {
           etaSeconds={etaSeconds}
           doneCount={doneCount}
           totalCount={totalCount}
-          isPaused={isPaused}
+          progressItems={progressItems}
           onPause={async () => {
             try {
               await window.electronAPI?.pauseDownload?.();
@@ -2478,17 +2473,7 @@ export default function LauncherUI() {
                 />
               )}
 
-              <DownloadProgress
-                visible={activeTab === 'general' && busy}
-                progressItems={progressItems as any}
-                exitingItems={exitingItems}
-              />
-
-              {false && activeTab === 'general' && fileProgress && (
-                <div className="text-sm opacity-80 font-mono">
-                  {(fileProgress?.path || '')} — {Math.floor(((fileProgress?.received || 0) / ((fileProgress?.total||1))) * 100)}%
-              </div>
-              )}
+{/* Download progress is now shown via InstallProgress */}
 
 
         </div>
