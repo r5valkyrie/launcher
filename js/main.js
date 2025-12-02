@@ -1326,6 +1326,42 @@ ipcMain.handle('fix-folder-permissions', async (_e, { selectedChannel }) => {
   }
 });
 
+// Delete folder handler for uninstalling channels
+ipcMain.handle('fs:delete-folder', async (_e, { folderPath }) => {
+  try {
+    if (!folderPath) {
+      return { ok: false, error: 'No folder path provided' };
+    }
+    
+    const normalizedPath = path.resolve(folderPath);
+    
+    // Safety check: don't allow deleting system folders or root drives
+    const safePath = normalizedPath.toLowerCase();
+    const dangerousPaths = ['c:\\', 'c:\\windows', 'c:\\program files', 'c:\\program files (x86)', 'c:\\users'];
+    if (dangerousPaths.some(p => safePath === p || safePath.startsWith(p + '\\') && safePath.split('\\').length <= 3)) {
+      // Allow deeper paths like C:\Users\Name\Game, but not C:\Users itself
+      if (safePath.split('\\').length <= 3 && dangerousPaths.includes(safePath.split('\\').slice(0, 3).join('\\'))) {
+        return { ok: false, error: 'Cannot delete system folders' };
+      }
+    }
+    
+    // Check if path exists
+    try {
+      await fs.promises.access(normalizedPath);
+    } catch {
+      // Path doesn't exist, consider it already deleted
+      return { ok: true };
+    }
+    
+    // Delete the folder recursively
+    await fs.promises.rm(normalizedPath, { recursive: true, force: true });
+    
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
+});
+
 ipcMain.on('window:minimize', () => { mainWindow?.minimize(); });
 ipcMain.on('window:maximize', () => { if (!mainWindow) return; if (mainWindow.isMaximized()) mainWindow.unmaximize(); else mainWindow.maximize(); });
 ipcMain.on('window:close', () => { mainWindow?.close(); });

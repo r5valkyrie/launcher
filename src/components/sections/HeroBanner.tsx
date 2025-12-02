@@ -183,7 +183,7 @@ export default function HeroBanner(props: HeroBannerProps) {
         </div>
 
         {/* Hero Banner Content */}
-        <div className="relative h-[220px] overflow-hidden">
+        <div className="relative h-[280px] overflow-hidden">
           {/* Background Layers */}
           <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
           {bgVideo && (
@@ -207,7 +207,7 @@ export default function HeroBanner(props: HeroBannerProps) {
           <img 
             src="r5v_bannerCharacters.png" 
             alt="" 
-            className="absolute right-0 bottom-0 h-[240px] w-auto object-contain object-right-bottom pointer-events-none opacity-100" 
+            className="absolute right-0 bottom-0 h-[290px] w-auto object-contain object-right-bottom pointer-events-none opacity-100" 
           />
 
           {/* Content */}
@@ -219,7 +219,7 @@ export default function HeroBanner(props: HeroBannerProps) {
                   ref={logoRef} 
                   src="r5v_tempLogo.png" 
                   alt="R5 Valkyrie" 
-                  className="h-12 w-auto drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)]" 
+                  className="h-16 w-auto drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)]" 
                 />
                 <div className="text-sm text-white/70 mt-1.5 hero-text drop-shadow-md font-medium tracking-wide">
                   Pilots. Legends. One Frontier. One Battle.
@@ -230,7 +230,7 @@ export default function HeroBanner(props: HeroBannerProps) {
               <div ref={buttonsRef} className="flex items-center gap-2.5 hero-buttons">
                 {primaryAction === 'install' && (
                   <button 
-                    className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200 border border-white/10" 
+                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200 border border-white/10" 
                     disabled={busy} 
                     onClick={openInstallPrompt}
                     onMouseEnter={handleButtonHover}
@@ -246,7 +246,7 @@ export default function HeroBanner(props: HeroBannerProps) {
                 )}
                 {primaryAction === 'update' && (
                   <button 
-                    className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-200 border border-white/10" 
+                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-200 border border-white/10" 
                     disabled={busy} 
                     onClick={() => repairChannel(selectedChannel, true)}
                     onMouseEnter={handleButtonHover}
@@ -263,7 +263,7 @@ export default function HeroBanner(props: HeroBannerProps) {
                 )}
                 {primaryAction === 'repair' && (
                   <button 
-                    className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-400 hover:to-violet-400 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-200 border border-white/10" 
+                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-400 hover:to-violet-400 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-200 border border-white/10" 
                     disabled={busy} 
                     onClick={() => repairChannel(selectedChannel, false)}
                     onMouseEnter={handleButtonHover}
@@ -277,7 +277,7 @@ export default function HeroBanner(props: HeroBannerProps) {
                 )}
                 {primaryAction === 'play' && (
                   <button 
-                    className={`group relative flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-400 hover:to-rose-400 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-200 border border-white/10 ${playCooldown ? 'opacity-60 cursor-not-allowed' : ''}`} 
+                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-400 hover:to-rose-400 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-200 border border-white/10 ${playCooldown ? 'opacity-60 cursor-not-allowed' : ''}`} 
                     disabled={busy || playCooldown} 
                     onClick={async () => {
                       if (busy || launchClickGuardRef.current) return;
@@ -294,17 +294,17 @@ export default function HeroBanner(props: HeroBannerProps) {
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                       <polygon points="5,3 19,12 5,21"/>
                     </svg>
-                    <span>{busy ? 'Working...' : 'Play Now'}</span>
+                    <span>{busy ? 'Working...' : 'Play'}</span>
                   </button>
                 )}
                 <button 
-                  className="flex items-center justify-center w-10 h-10 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] backdrop-blur-sm border border-white/[0.08] hover:border-white/[0.15] text-white/60 hover:text-white/90 transition-all duration-200" 
+                  className="flex items-center justify-center w-13.5 h-13.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] backdrop-blur-sm border border-white/[0.08] hover:border-white/[0.15] text-white/60 hover:text-white/90 transition-all duration-200" 
                   title="Launch Options" 
                   onClick={onOpenLaunchOptions}
                   onMouseEnter={handleButtonHover}
                   onMouseLeave={handleButtonLeave}
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="3"/>
                     <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
                   </svg>

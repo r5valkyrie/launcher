@@ -46,6 +46,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onModsChanged: (listener) => ipcRenderer.on('mods:changed', (_e, payload) => listener(payload)),
   // Permissions
   fixFolderPermissions: (payload) => ipcRenderer.invoke('fix-folder-permissions', payload),
+  // Uninstall
+  deleteFolder: (folderPath) => ipcRenderer.invoke('fs:delete-folder', { folderPath }),
 });
 
 

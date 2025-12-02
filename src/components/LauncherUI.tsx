@@ -11,6 +11,7 @@ import ModDetailsModal from './modals/ModDetailsModal';
 import InstallProgress from './ui/InstallProgress';
 import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
+import ConfirmModal from './modals/ConfirmModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
@@ -87,6 +88,8 @@ declare global {
       // Permissions
       fixFolderPermissions?: (payload: { selectedChannel: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
       testWritePermissions?: (folderPath: string) => Promise<{ hasWriteAccess: boolean }>;
+      // Uninstall
+      deleteFolder?: (folderPath: string) => Promise<{ok:boolean; error?: string}>;
     };
   }
 }
@@ -154,6 +157,9 @@ export default function LauncherUI() {
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
   const [launcherRoot, setLauncherRoot] = useState<string>('');
   const [installIncludeOptional, setInstallIncludeOptional] = useState<boolean>(false);
+  // Uninstall confirmation modal state
+  const [uninstallModalOpen, setUninstallModalOpen] = useState<boolean>(false);
+  const [channelToUninstall, setChannelToUninstall] = useState<string | null>(null);
   const [optionalFilesSize, setOptionalFilesSize] = useState<number>(0);
   const [baseGameSize, setBaseGameSize] = useState<number>(0);
   // Permission prompt modal state
@@ -1691,6 +1697,70 @@ export default function LauncherUI() {
     }
   }
 
+  // Uninstall modal handlers
+  const handleUninstallClick = (channelName: string) => {
+    setChannelToUninstall(channelName);
+    setUninstallModalOpen(true);
+  };
+
+  const handleUninstallConfirm = async () => {
+    if (channelToUninstall) {
+      await uninstallChannel(channelToUninstall);
+    }
+    setUninstallModalOpen(false);
+    setChannelToUninstall(null);
+  };
+
+  const handleUninstallCancel = () => {
+    setUninstallModalOpen(false);
+    setChannelToUninstall(null);
+  };
+
+  async function uninstallChannel(channelName: string) {
+    const target = config?.channels.find((c) => c.name === channelName);
+    if (!target) return;
+    
+    const ch = channelsSettings?.[channelName];
+    const dir = target.isCustom ? target.installDir : ch?.installDir;
+    
+    if (!dir) {
+      alert('Channel not installed or directory not found');
+      return;
+    }
+
+    setBusy(true);
+    try {
+      // Delete the game files
+      const result = await window.electronAPI?.deleteFolder?.(dir);
+      
+      if (!result?.ok) {
+        throw new Error(result?.error || 'Failed to delete game files');
+      }
+      
+      // Remove the channel settings
+      const s: any = await window.electronAPI?.getSettings();
+      const channels = { ...(s?.channels || {}) };
+      delete channels[channelName];
+      await window.electronAPI?.setSetting('channels', channels);
+      setChannelsSettings(channels);
+      
+      // Reset install state if this was the selected channel
+      if (selectedChannel === channelName) {
+        setIsInstalled(false);
+        setInstalledVersion(null);
+        setInstallDir('');
+        setNeedsRepair(false);
+      }
+      
+      alert(`${channelName} has been uninstalled successfully.`);
+      
+    } catch (error: any) {
+      alert(`Failed to uninstall: ${error?.message || 'Unknown error'}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function installHdTextures(channelName: string) {
     const target = config?.channels.find((c) => c.name === channelName);
     if (!target) return;
@@ -2392,6 +2462,7 @@ export default function LauncherUI() {
             setSnowEffectEnabled={setSnowEffectEnabled}
             repairChannel={repairChannel}
             fixChannelPermissions={fixChannelPermissions}
+            onUninstallClick={handleUninstallClick}
             setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}
             openExternal={(url) => { window.electronAPI?.openExternal?.(url); }}
             openFolder={async (folderPath) => { 
@@ -2585,6 +2656,18 @@ export default function LauncherUI() {
         updateTransferred={updateTransferred}
         updateError={updateError}
         onRestartToUpdate={() => window.electronAPI?.quitAndInstall?.()}
+      />
+
+      <ConfirmModal
+        open={uninstallModalOpen}
+        onClose={handleUninstallCancel}
+        onConfirm={handleUninstallConfirm}
+        title={`Uninstall ${channelToUninstall || 'Channel'}?`}
+        message={`This will permanently delete all game files for ${channelToUninstall} and remove the installation settings.\n\nThis action cannot be undone.`}
+        confirmText="Uninstall"
+        cancelText="Cancel"
+        variant="danger"
+        busy={busy}
       />
 
       <ModDetailsModal
