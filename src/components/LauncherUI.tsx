@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from './ui/Sidebar';
-import TabNav from './ui/TabNav';
 import HeroBanner from './sections/HeroBanner';
 import InstallPromptModal from './modals/InstallPromptModal';
 import PermissionPromptModal from './modals/PermissionPromptModal';
@@ -2223,7 +2222,6 @@ export default function LauncherUI() {
         <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
-        <TabNav activeTab={activeTab as any} onChange={(tab) => setActiveTab(tab as any)} />
         <HeroBanner
           bgVideo={bgVideo}
           videoFilename={videoFilename || null}
@@ -2259,6 +2257,8 @@ export default function LauncherUI() {
           enabledChannels={enabledChannels}
           setSelectedChannel={setSelectedChannel}
           onOpenLaunchOptions={() => setActiveTab('launch')}
+          activeTab={activeTab as any}
+          onTabChange={(tab) => setActiveTab(tab as any)}
         />
 
         <InstallProgress
