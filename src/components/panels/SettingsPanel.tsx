@@ -304,18 +304,16 @@ export default function SettingsPanel(props: SettingsPanelProps) {
               />
             </label>
 
-            {/* Snow Effect - Only show in December */}
+            {/* Holiday Theme - Only show in December */}
             {new Date().getMonth() === 11 && (
               <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
-                    <svg className="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M12 2v20M17 7l-5 5-5-5M7 17l5-5 5 5M2 12h20M7 7l10 10M17 7L7 17"/>
-                    </svg>
+                  <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
+                    <span className="text-base">🎄</span>
                   </div>
                   <div>
-                    <span className="font-medium text-sm">Holiday Snow Effect</span>
-                    <p className="text-xs text-base-content/40">Festive snowfall animation</p>
+                    <span className="font-medium text-sm">Holiday Theme</span>
+                    <p className="text-xs text-base-content/40">Festive snow, lights & decorations</p>
                   </div>
                 </div>
                 <input
