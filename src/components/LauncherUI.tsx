@@ -1993,7 +1993,16 @@ export default function LauncherUI() {
         setHasStarted(true); 
         setCurrentOperation(operationText); 
       }));
-      window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { const tot = Math.max(0, Number(p.totalBytes || 0)); setBytesTotal(tot); setBytesReceived(0); setSpeedBps(0); setEtaSeconds(0); setHasStarted(true); }));
+      window.electronAPI!.onProgress('progress:bytes:total', guard((p: any) => { 
+        const tot = Math.max(0, Number(p.totalBytes || 0)); 
+        setBytesTotal(tot); 
+        bytesTotalRef.current = tot;
+        setBytesReceived(0); 
+        bytesReceivedRef.current = 0;
+        setSpeedBps(0); 
+        setEtaSeconds(0); 
+        setHasStarted(true); 
+      }));
       {
         let windowBytes = 0;
         let lastTick = Date.now();
@@ -2003,18 +2012,21 @@ export default function LauncherUI() {
           if (dt >= 0.5) {
             const speed = windowBytes / dt;
             setSpeedBps(speed);
-            const remain = Math.max(0, bytesTotal - (bytesReceived));
+            // Use refs to get current values, not stale closure values
+            const remain = Math.max(0, bytesTotalRef.current - bytesReceivedRef.current);
             setEtaSeconds(speed > 0 ? Math.ceil(remain / speed) : 0);
             windowBytes = 0;
             lastTick = now;
           }
-          if (busy && !isPaused) requestAnimationFrame(tick);
+          if (busyRef.current && !pausedRef.current) requestAnimationFrame(tick);
         };
         requestAnimationFrame(tick);
         window.electronAPI!.onProgress('progress:bytes', guard((p: any) => {
           const d = Number(p?.delta || 0);
           if (d !== 0) {
             setBytesReceived((x) => Math.max(0, x + d));
+            // Also update ref directly for tick function
+            bytesReceivedRef.current = Math.max(0, bytesReceivedRef.current + d);
             if (d > 0) windowBytes += d; else windowBytes = Math.max(0, windowBytes + d);
           }
         }));

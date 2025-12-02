@@ -433,26 +433,57 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
       targetPath,
       mergeAndVerifyAsync: async () => {
         emit('progress:merge:start', { path: fileObj.path, parts: partPaths.length });
-        const out = fs.createWriteStream(targetPath);
-        for (let idx = 0; idx < partPaths.length; idx++) {
-          const p = partPaths[idx];
-          emit('progress:merge:part', { path: fileObj.path, part: idx, totalParts: partPaths.length });
-          await new Promise((resolve, reject) => {
-            const read = fs.createReadStream(p);
-            read.on('error', reject);
-            out.on('error', reject);
-            read.on('end', () => {
-              try { fs.unlinkSync(p); } catch {}
-              resolve();
+        
+        // Add timeout wrapper to prevent hanging indefinitely
+        const mergeTimeout = 5 * 60 * 1000; // 5 minutes max for merge
+        const mergeWithTimeout = async () => {
+          const out = fs.createWriteStream(targetPath);
+          let outErrorHandler = null;
+          
+          try {
+            for (let idx = 0; idx < partPaths.length; idx++) {
+              const p = partPaths[idx];
+              if (!p) {
+                throw new Error(`Part ${idx} path is undefined for ${fileObj.path}`);
+              }
+              emit('progress:merge:part', { path: fileObj.path, part: idx, totalParts: partPaths.length });
+              await new Promise((resolve, reject) => {
+                // Check if part file exists
+                if (!fs.existsSync(p)) {
+                  reject(new Error(`Part file missing: ${p}`));
+                  return;
+                }
+                const read = fs.createReadStream(p);
+                read.on('error', reject);
+                // Only add error handler once, not per iteration
+                if (!outErrorHandler) {
+                  outErrorHandler = (e) => reject(e);
+                  out.on('error', outErrorHandler);
+                }
+                read.on('end', () => {
+                  try { fs.unlinkSync(p); } catch {}
+                  resolve();
+                });
+                read.pipe(out, { end: false });
+              });
+            }
+            await new Promise((resolve, reject) => {
+              out.on('finish', resolve);
+              out.end();
             });
-            read.pipe(out, { end: false });
-          });
-        }
-        await new Promise((resolve, reject) => {
-          out.on('error', reject);
-          out.on('finish', resolve);
-          out.end();
-        });
+          } catch (e) {
+            // Clean up write stream on error
+            try { out.destroy(); } catch {}
+            throw e;
+          }
+        };
+        
+        // Race merge against timeout
+        await Promise.race([
+          mergeWithTimeout(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error(`Merge timeout for ${fileObj.path}`)), mergeTimeout))
+        ]);
+        
         try { emit('progress:merge:done', { path: fileObj.path }); } catch {}
         
         // Now verify the merged file
@@ -580,7 +611,7 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
                     emit('progress:done', { index: globalIndex, total, path: verifyResult.filePath, completed });
                   }
                   return verifyResult;
-                }).catch((err) => {
+                }).catch(async (err) => {
                   const message = String(err?.message || err || 'error');
                   if (message.includes('cancelled')) throw err;
                   try {
@@ -596,16 +627,21 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
                         }
                       });
                     } catch {}
-                    return doOnce().then(r => r.mergeAndVerifyAsync ? r.mergeAndVerifyAsync().then((retryResult) => {
+                    const retryResult = await doOnce();
+                    if (retryResult.mergeAndVerifyAsync) {
+                      const verifyResult = await retryResult.mergeAndVerifyAsync();
                       // Emit progress:done for successful retry
-                      if (retryResult?.filePath) {
+                      if (verifyResult?.filePath) {
                         completed += 1;
-                        emit('progress:done', { index: globalIndex, total, path: retryResult.filePath, completed });
+                        emit('progress:done', { index: globalIndex, total, path: verifyResult.filePath, completed });
                       }
-                      return retryResult;
-                    }) : r);
+                      return verifyResult;
+                    }
+                    return retryResult;
                   } catch (err2) {
+                    // Emit error AND done so the UI removes the item
                     try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                    try { emit('progress:done', { index: globalIndex, total, path: f.path, completed, error: true }); } catch {}
                     throw err2;
                   }
                 });
@@ -644,7 +680,9 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
                         }
                       });
                     } catch {}
+                    // Emit error AND done so the UI removes the item
                     try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                    try { emit('progress:done', { index: globalIndex, total, path: f.path, completed, error: true }); } catch {}
                     throw err2;
                   });
                   pendingVerifications.push(mergeVerifyPromise);
@@ -653,7 +691,9 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
                 
                 return retryResult;
               } catch (err2) {
+                // Emit error AND done so the UI removes the item
                 try { emit('progress:error', { path: f.path, message: String(err2?.message || err2) }); } catch {}
+                try { emit('progress:done', { index: globalIndex, total, path: f.path, completed, error: true }); } catch {}
                 throw err2;
               }
             }
@@ -682,8 +722,16 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
     await Promise.all(pool);
     
     // Wait for all pending verifications to complete
+    // Use allSettled to ensure all complete even if some fail, then check for failures
     if (pendingVerifications.length > 0) {
-      await Promise.all(pendingVerifications);
+      const results = await Promise.allSettled(pendingVerifications);
+      const failures = results.filter(r => r.status === 'rejected');
+      if (failures.length > 0) {
+        // Log failures but don't throw - they were already emitted as progress:error
+        for (const f of failures) {
+          console.error('Verification failed:', f.reason?.message || f.reason);
+        }
+      }
     }
   }
 

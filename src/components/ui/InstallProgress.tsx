@@ -306,24 +306,53 @@ export default function InstallProgress(props: InstallProgressProps) {
               {showDetails && (
                 <div className="space-y-2 mt-3">
                   {activeItems.map(([path, info]) => {
-                    const percent = info.total ? Math.floor(((info.received || 0) / (info.total || 1)) * 100) : 0;
                     const filename = path.split(/[/\\]/).pop() || path;
                     const isMultipart = (info.totalParts || 0) > 0;
                     const parts = info.parts || {};
                     
-                    let multipartProgress = 0;
-                    if (isMultipart && info.totalParts) {
+                    // Calculate progress and bytes for display
+                    let displayProgress = 0;
+                    let displayReceived = 0;
+                    let displayTotal = 0;
+                    
+                    if (isMultipart && info.totalParts && info.totalParts > 0) {
                       // Calculate progress for all parts, treating unreported parts as 0%
-                      let totalProgress = 0;
+                      // Use bytes-based calculation for more accurate progress
+                      let bytesReceived = 0;
+                      let bytesTotal = 0;
+                      
+                      // Iterate using string keys since object keys are strings
                       for (let i = 0; i < info.totalParts; i++) {
-                        const part = parts[i];
-                        if (part && part.total > 0) {
-                          totalProgress += Math.min(part.received, part.total) / part.total;
+                        const part = (parts as Record<string | number, PartInfo>)[i] || (parts as Record<string | number, PartInfo>)[String(i)];
+                        if (part) {
+                          bytesReceived += (part.received || 0);
+                          bytesTotal += (part.total || 0);
                         }
-                        // Parts that haven't reported yet or have 0 total are counted as 0%
                       }
-                      multipartProgress = (totalProgress / info.totalParts) * 100;
+                      
+                      // Calculate progress based on bytes if we have total, otherwise use part count
+                      if (bytesTotal > 0) {
+                        displayProgress = Math.min(100, (bytesReceived / bytesTotal) * 100);
+                      } else {
+                        // Fallback to part-based progress
+                        const partsWithProgress = Object.values(parts).filter((p: any) => p && p.total > 0);
+                        const partProgress = partsWithProgress.reduce((sum: number, p: any) => {
+                          return sum + Math.min(p.received || 0, p.total) / p.total;
+                        }, 0);
+                        displayProgress = Math.min(100, (partProgress / info.totalParts) * 100);
+                      }
+                      
+                      displayReceived = bytesReceived;
+                      displayTotal = bytesTotal;
+                    } else {
+                      // Single file progress
+                      displayReceived = info.received || 0;
+                      displayTotal = info.total || 0;
+                      displayProgress = displayTotal > 0 ? Math.min(100, (displayReceived / displayTotal) * 100) : 0;
                     }
+                    
+                    // Ensure progress is a valid number
+                    if (!Number.isFinite(displayProgress)) displayProgress = 0;
 
                     const getStatusType = (status: string) => {
                       if (status === 'downloading' || status.includes('downloading') || status.includes('parts')) return 'downloading';
@@ -384,14 +413,20 @@ export default function InstallProgress(props: InstallProgressProps) {
                         </div>
                         
                         <div className="flex items-center gap-3 flex-shrink-0">
+                          {/* Show bytes for multipart files */}
+                          {isMultipart && displayTotal > 0 && (
+                            <span className="text-[10px] text-base-content/40 hidden sm:block">
+                              {formatBytes(displayReceived)}/{formatBytes(displayTotal)}
+                            </span>
+                          )}
                           <div className="w-24 h-1.5 bg-base-300/30 rounded-full overflow-hidden">
                             <div 
-                              className={`h-full rounded-full transition-all duration-300 ${getProgressColor()}`}
-                              style={{ width: `${isMultipart ? multipartProgress : percent}%` }}
+                              className={`h-full rounded-full ${getProgressColor()}`}
+                              style={{ width: `${Math.max(0, Math.min(100, displayProgress)).toFixed(1)}%` }}
                             />
                           </div>
                           <span className="text-xs font-mono text-base-content/60 w-10 text-right">
-                            {Math.floor(isMultipart ? multipartProgress : percent)}%
+                            {Math.floor(displayProgress)}%
                           </span>
                         </div>
                       </div>
