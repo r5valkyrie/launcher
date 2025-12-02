@@ -48,10 +48,8 @@ export default function HeroBanner(props: HeroBannerProps) {
   const channelSelectorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Enhanced animations with anime.js (CSS fallback already applied via classes)
     const timer = setTimeout(() => {
       try {
-        // Add floating animation to logo after initial fade-in
         if (logoRef.current) {
           animations.logoFloat(logoRef.current);
         }
@@ -65,7 +63,6 @@ export default function HeroBanner(props: HeroBannerProps) {
     };
   }, []);
 
-  // Add button hover animations
   const handleButtonHover = (e: React.MouseEvent<HTMLButtonElement>) => {
     animations.buttonHover(e.currentTarget);
   };
@@ -76,7 +73,7 @@ export default function HeroBanner(props: HeroBannerProps) {
 
   return (
     <div className="relative mx-6 mt-12 mb-6 overflow-visible">
-      <div ref={bannerRef} className="relative h-[250px] rounded-[2.3vw] overflow-hidden will-change-auto">
+      <div ref={bannerRef} className="relative h-[250px] rounded-2xl overflow-hidden will-change-auto border border-white/10">
         <img src="r5v_bannerBG.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none" />
         {bgVideo && (
           <video
@@ -91,21 +88,22 @@ export default function HeroBanner(props: HeroBannerProps) {
           />
         )}
 
-        <div className="absolute inset-0 bg-gradient-to-t from-base-100/70 via-base-100/10 to-transparent pointer-events-none"/>
+        <div className="absolute inset-0 bg-gradient-to-t from-base-100/80 via-base-100/20 to-transparent pointer-events-none"/>
         <div className="relative z-10 h-full w-full flex flex-col items-start justify-start p-9">
           <div className="flex flex-col h-full w-full">
             <div>
-              <img ref={logoRef} src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto hero-logo" />
-              <div className="text-md opacity-80 mt-2 hero-text">Pilots. Legends. One Frontier. One Battle.</div>
+              <img ref={logoRef} src="r5v_tempLogo.png" alt="R5 Valkyrie" className="h-14 md:h-15 lg:h-13 w-auto hero-logo drop-shadow-lg" />
+              <div className="text-md text-white/80 mt-2 hero-text drop-shadow-md">Pilots. Legends. One Frontier. One Battle.</div>
             </div>
             <div ref={buttonsRef} className="mt-auto flex items-center gap-3 pb-1 hero-buttons">
               {primaryAction === 'install' && (
                 <button 
-                  className="btn btn-lg btn-primary text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" 
+                  className="btn btn-lg btn-primary text-white shadow-lg shadow-primary/30 rounded-xl min-w-[7rem] gap-2 border-0" 
                   disabled={busy} 
                   onClick={openInstallPrompt}
                   onMouseEnter={handleButtonHover}
-                  onMouseLeave={handleButtonLeave}>
+                  onMouseLeave={handleButtonLeave}
+                >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                     <polyline points="7,10 12,15 17,10"/>
@@ -116,45 +114,50 @@ export default function HeroBanner(props: HeroBannerProps) {
               )}
               {primaryAction === 'update' && (
                 <button 
-                  className="btn btn-lg btn-warning text-white shadow-lg rounded-[1.5vw] min-w-[6rem] gap-2" 
+                  className="btn btn-lg bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white shadow-lg shadow-amber-500/30 rounded-xl min-w-[7rem] gap-2 border-0" 
                   disabled={busy} 
                   onClick={() => repairChannel(selectedChannel, true)}
                   onMouseEnter={handleButtonHover}
-                  onMouseLeave={handleButtonLeave}>
+                  onMouseLeave={handleButtonLeave}
+                >
                   <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M1 4v6h6"/>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                    <path d="M16 16h5v5"/>
                   </svg>
                   Update
                 </button>
               )}
               {primaryAction === 'play' && (
                 <button 
-                  className={`btn btn-lg btn-error btn-wide text-white shadow-lg shadow-error/20 rounded-[1.5vw] min-w-[6rem] gap-2 ${playCooldown?'btn-disabled opacity-70':''}`} 
+                  className={`btn btn-lg bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-600 hover:to-rose-600 text-white shadow-lg shadow-red-500/30 rounded-xl min-w-[8rem] gap-2 border-0 ${playCooldown ? 'opacity-70 cursor-not-allowed' : ''}`} 
                   disabled={busy || playCooldown} 
-                  onClick={async ()=>{
-                  if (busy || launchClickGuardRef.current) return;
-                  launchClickGuardRef.current = true;
-                  setPlayCooldown(true);
-                  const ok = await requireEula();
-                  if (!ok) { setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 300); return; }
-                  await getSettingsAndLaunch();
-                  setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
-                }}
+                  onClick={async () => {
+                    if (busy || launchClickGuardRef.current) return;
+                    launchClickGuardRef.current = true;
+                    setPlayCooldown(true);
+                    const ok = await requireEula();
+                    if (!ok) { setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 300); return; }
+                    await getSettingsAndLaunch();
+                    setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
+                  }}
                   onMouseEnter={handleButtonHover}
-                  onMouseLeave={handleButtonLeave}>
-                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  onMouseLeave={handleButtonLeave}
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                     <polygon points="5,3 19,12 5,21"/>
                   </svg>
-                  {busy ? 'Working…' : 'Play'}
+                  {busy ? 'Working...' : 'Play'}
                 </button>
               )}
               <button 
-                className="btn btn-lg rounded-[1.5vw] min-w-[3rem]" 
+                className="btn btn-lg bg-base-300/50 hover:bg-base-300/70 backdrop-blur-sm border border-white/10 hover:border-white/20 rounded-xl min-w-[3rem] text-white/80 hover:text-white" 
                 title="Launch Options" 
                 onClick={onOpenLaunchOptions}
                 onMouseEnter={handleButtonHover}
-                onMouseLeave={handleButtonLeave}>
+                onMouseLeave={handleButtonLeave}
+              >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <circle cx="12" cy="12" r="3"/>
                   <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -164,16 +167,16 @@ export default function HeroBanner(props: HeroBannerProps) {
           </div>
           {enabledChannels.length > 0 && (
             <div ref={channelSelectorRef} className="absolute bottom-[40px] right-6 text-right hero-selector">
-              <div className="text-xs text-white/60 mb-2 font-medium">Release Channel</div>
-              <div className="glass rounded-xl p-1 border border-white/20 backdrop-blur-md">
+              <div className="text-xs text-white/50 mb-2 font-medium uppercase tracking-wider">Release Channel</div>
+              <div className="bg-base-300/40 backdrop-blur-md rounded-xl p-1 border border-white/10">
                 <div className="flex gap-1">
                   {enabledChannels.map((c) => (
                     <button
                       key={c.name}
                       className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
                         selectedChannel === c.name 
-                          ? 'bg-primary text-primary-content shadow-lg shadow-primary/25' 
-                          : 'text-white/70 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-primary to-primary/80 text-white shadow-lg shadow-primary/25' 
+                          : 'text-white/60 hover:text-white hover:bg-white/10'
                       }`}
                       onClick={() => setSelectedChannel(c.name)}
                     >
@@ -186,10 +189,8 @@ export default function HeroBanner(props: HeroBannerProps) {
           )}
         </div>
       </div>
-      <img src="r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-[2vw]" />
+      <img src="r5v_bannerBG_gradient.png" alt="" className="absolute inset-0 w-full h-full object-cover pointer-events-none rounded-2xl" />
       <img src="r5v_bannerCharacters.png" alt="" className="absolute inset-x-6 bottom-0 w-[calc(100%-5%)] h-[300px] object-contain object-bottom origin-bottom transform scale-[1.1] pointer-events-none" />
     </div>
   );
 }
-
-

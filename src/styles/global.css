@@ -378,6 +378,54 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   animation: listItemSlideIn 400ms ease-out both;
 }
 
+/* Category pills scrollbar */
+.scrollbar-thin::-webkit-scrollbar {
+  height: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thumb-base-300::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+.scrollbar-track-transparent::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Mod card hover shine effect */
+.mod-card-shine {
+  position: relative;
+  overflow: hidden;
+}
+.mod-card-shine::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 50%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.05), transparent);
+  transition: left 0.5s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+.mod-card-shine:hover::before {
+  left: 100%;
+}
+
+/* Shimmer animation for progress bars */
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(200%); }
+}
+.animate-shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
 /* Modern Toast Notifications */
 @keyframes modernToastEnter {
   0% { 

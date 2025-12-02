@@ -14,7 +14,6 @@ import UpdaterModal from './modals/UpdaterModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
-import UpdateBanner from './ui/UpdateBanner';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
 import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible } from './common/modUtils';
@@ -700,20 +699,8 @@ export default function LauncherUI() {
     }));
     setInstallPromptOpen(false);
     
-    // Test if we already have write permissions to the install directory
-    try {
-      const testResult = await window.electronAPI?.testWritePermissions?.(finalPath);
-      if (testResult?.hasWriteAccess) {
-        // We already have write access, skip permission dialog and start install directly
-        await startInstall();
-        return;
-      }
-    } catch {
-      // If test fails, proceed with permission dialog as fallback
-    }
-    
-    // Show permission prompt before starting installation
-    setPermissionPromptOpen(true);
+    // Start install directly - permission fixing is available in Settings if needed
+    await startInstall();
   }
 
   async function confirmPermissionsAndInstall() {
@@ -2408,13 +2395,6 @@ export default function LauncherUI() {
         {activeTab !== 'settings' && (
           <PageTransition pageKey={activeTab} className="mx-6 mt-4" staggerContent>
             <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_.8fr] gap-0 items-start pb-6">
-            <UpdateBanner
-              updateAvailable={updateAvailable}
-              updateDownloaded={updateDownloaded}
-              updateProgress={updateProgress}
-              onDownloadUpdate={() => window.electronAPI?.downloadUpdate?.()}
-              onRestartToUpdate={() => window.electronAPI?.quitAndInstall?.()}
-            />
             <div className="space-y-3 xl:col-span-2">
               <OutdatedModsBanner
                 visible={activeTab === 'general'}
