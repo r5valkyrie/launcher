@@ -10,6 +10,7 @@ import ModsPanel from './panels/ModsPanel';
 import NewsPanel from './panels/NewsPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
 import InstallProgress from './ui/InstallProgress';
+import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
@@ -123,6 +124,7 @@ export default function LauncherUI() {
   const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
   const [customBaseDir, setCustomBaseDir] = useState<string>(''); // Custom base directory for game installations
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
+  const [snowEffectEnabled, setSnowEffectEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
@@ -266,6 +268,7 @@ export default function LauncherUI() {
       }
       if (typeof s?.customBaseDir === 'string') setCustomBaseDir(s.customBaseDir);
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
+      if (typeof s?.snowEffectEnabled === 'boolean') setSnowEffectEnabled(Boolean(s.snowEffectEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
       if (typeof s?.easterEggDiscovered === 'boolean') setEasterEggDiscovered(Boolean(s.easterEggDiscovered));
@@ -2214,8 +2217,10 @@ export default function LauncherUI() {
   };
 
   return (
-    <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
-      <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
+    <>
+      <SnowEffect enabled={snowEffectEnabled} />
+      <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
+        <Sidebar appVersion={appVersion} onVersionClick={handleVersionClick} />
 
       <section className="relative overflow-y-scroll overlay-scroll bg-[#171b20]">
         <TabNav activeTab={activeTab as any} onChange={(tab) => setActiveTab(tab as any)} />
@@ -2321,6 +2326,8 @@ export default function LauncherUI() {
             easterEggDiscovered={easterEggDiscovered}
             emojiMode={emojiMode}
             toggleEmojiMode={toggleEmojiMode}
+            snowEffectEnabled={snowEffectEnabled}
+            setSnowEffectEnabled={setSnowEffectEnabled}
             repairChannel={repairChannel}
             fixChannelPermissions={fixChannelPermissions}
             setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}
@@ -2539,7 +2546,8 @@ export default function LauncherUI() {
         isFixingPermissions={isFixingPermissions}
         installDir={(channelsSettings?.[selectedChannel]?.installDir) || installDir}
       />
-    </div>
+      </div>
+    </>
   );
 }
 

@@ -25,6 +25,8 @@ type SettingsPanelProps = {
   easterEggDiscovered: boolean;
   emojiMode: boolean;
   toggleEmojiMode: (enabled: boolean) => void;
+  snowEffectEnabled: boolean;
+  setSnowEffectEnabled: (enabled: boolean) => void;
   repairChannel: (name: string) => void;
   fixChannelPermissions: (name: string) => void;
   setSetting: (key: string, value: any) => Promise<any> | void;
@@ -60,6 +62,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     easterEggDiscovered,
     emojiMode,
     toggleEmojiMode,
+    snowEffectEnabled,
+    setSnowEffectEnabled,
     repairChannel,
     fixChannelPermissions,
     setSetting,
@@ -299,6 +303,33 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 }}
               />
             </label>
+
+            {/* Snow Effect - Only show in December */}
+            {new Date().getMonth() === 11 && (
+              <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+                    <svg className="w-4 h-4 text-cyan-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v20M17 7l-5 5-5-5M7 17l5-5 5 5M2 12h20M7 7l10 10M17 7L7 17"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <span className="font-medium text-sm">Holiday Snow Effect</span>
+                    <p className="text-xs text-base-content/40">Festive snowfall animation</p>
+                  </div>
+                </div>
+                <input
+                  type="checkbox"
+                  className="toggle toggle-secondary"
+                  checked={snowEffectEnabled}
+                  onChange={async (e) => {
+                    const v = e.target.checked;
+                    setSnowEffectEnabled(v);
+                    await setSetting('snowEffectEnabled', v);
+                  }}
+                />
+              </label>
+            )}
 
             {easterEggDiscovered && (
               <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
