@@ -20,6 +20,7 @@ type NewsPanelProps = {
   markPostAsRead: (url: string) => void;
   toggleFavoritePost: (url: string) => void;
   getPostCategory: (post: any) => 'patch-notes' | 'community' | 'dev-blog';
+  openNewsPost: (post: any) => void;
 };
 
 const FILTER_OPTIONS = [
@@ -44,6 +45,7 @@ export default function NewsPanel(props: NewsPanelProps) {
     markPostAsRead,
     toggleFavoritePost,
     getPostCategory,
+    openNewsPost,
   } = props;
 
   const getCategoryColor = (category: string) => {
@@ -63,6 +65,19 @@ export default function NewsPanel(props: NewsPanelProps) {
       default: return category;
     }
   };
+
+  // Sort posts to put patch-notes first when viewing all posts
+  const sortedPosts = patchNotesFilter === 'all' 
+    ? [...filteredPatchPosts].sort((a, b) => {
+        const catA = getPostCategory(a);
+        const catB = getPostCategory(b);
+        // Patch notes come first
+        if (catA === 'patch-notes' && catB !== 'patch-notes') return -1;
+        if (catA !== 'patch-notes' && catB === 'patch-notes') return 1;
+        // Otherwise maintain original order (by date)
+        return 0;
+      })
+    : filteredPatchPosts;
 
   return (
     <div className="xl:col-span-2">
@@ -201,7 +216,7 @@ export default function NewsPanel(props: NewsPanelProps) {
               {/* Grid View */}
               {patchNotesView === 'grid' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {filteredPatchPosts.map((post, index) => {
+                  {sortedPosts.map((post, index) => {
                     const category = getPostCategory(post);
                     const colors = getCategoryColor(category);
                     const isRead = readPosts.has(post.url);
@@ -235,23 +250,8 @@ export default function NewsPanel(props: NewsPanelProps) {
                               </span>
                             </div>
 
-                            {/* Favorite Button */}
-                            <button 
-                              className={`absolute top-3 right-3 p-2 rounded-lg transition-all ${
-                                isFavorite 
-                                  ? 'bg-amber-500/90 text-white' 
-                                  : 'bg-black/40 backdrop-blur-sm text-white/70 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-black/60'
-                              }`}
-                              onClick={(e) => { e.preventDefault(); toggleFavoritePost(post.url); }}
-                              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                              </svg>
-                            </button>
-
                             {/* Unread Badge */}
-                            {!isRead && (
+                            {!isRead && false && (
                               <div className="absolute bottom-3 left-3">
                                 <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-blue-500/90 text-white">
                                   New
@@ -287,18 +287,15 @@ export default function NewsPanel(props: NewsPanelProps) {
                             )}
                             
                             <div className="flex items-center justify-between">
-                              <a 
-                                href={post.url} 
-                                target="_blank" 
-                                rel="noreferrer"
+                              <button 
                                 className="btn btn-sm btn-primary gap-1"
-                                onClick={() => markPostAsRead(post.url)}
+                                onClick={() => openNewsPost(post)}
                               >
                                 Read More
                                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <polyline points="9 18 15 12 9 6"/>
                                 </svg>
-                              </a>
+                              </button>
                               {isFavorite && (
                                 <span className="text-xs text-amber-500/70 flex items-center gap-1">
                                   <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
@@ -317,7 +314,7 @@ export default function NewsPanel(props: NewsPanelProps) {
               ) : (
                 /* Timeline View */
                 <div className="space-y-3">
-                  {filteredPatchPosts.map((post, index) => {
+                  {sortedPosts.map((post, index) => {
                     const category = getPostCategory(post);
                     const colors = getCategoryColor(category);
                     const isRead = readPosts.has(post.url);
@@ -329,7 +326,7 @@ export default function NewsPanel(props: NewsPanelProps) {
                           {/* Timeline Indicator */}
                           <div className="flex flex-col items-center pt-1">
                             <div className={`w-3 h-3 rounded-full ${colors.dot} ring-4 ring-base-100`}></div>
-                            {index < filteredPatchPosts.length - 1 && <div className="w-px flex-1 bg-white/10 mt-2"></div>}
+                            {index < sortedPosts.length - 1 && <div className="w-px flex-1 bg-white/10 mt-2"></div>}
                           </div>
                           
                           {/* Content */}
@@ -346,19 +343,6 @@ export default function NewsPanel(props: NewsPanelProps) {
                                   </span>
                                 )}
                               </div>
-                              <button 
-                                className={`p-1.5 rounded-lg transition-all flex-shrink-0 ${
-                                  isFavorite 
-                                    ? 'bg-amber-500/20 text-amber-400' 
-                                    : 'text-base-content/30 hover:text-amber-400 hover:bg-amber-500/10'
-                                }`}
-                                onClick={() => toggleFavoritePost(post.url)}
-                                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                              >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                                </svg>
-                              </button>
                             </div>
                             
                             {post.published_at && (
@@ -380,18 +364,15 @@ export default function NewsPanel(props: NewsPanelProps) {
                               <p className="text-xs text-base-content/50 mb-3 line-clamp-2">{post.excerpt}</p>
                             )}
                             
-                            <a 
-                              href={post.url} 
-                              target="_blank" 
-                              rel="noreferrer"
+                            <button 
                               className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:text-primary/80 transition-colors"
-                              onClick={() => markPostAsRead(post.url)}
+                              onClick={() => openNewsPost(post)}
                             >
                               Read Full Article
                               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polyline points="9 18 15 12 9 6"/>
                               </svg>
-                            </a>
+                            </button>
                           </div>
                         </div>
                       </ListItemWrapper>

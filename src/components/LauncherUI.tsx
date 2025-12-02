@@ -12,6 +12,7 @@ import InstallProgress from './ui/InstallProgress';
 import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
 import ConfirmModal from './modals/ConfirmModal';
+import NewsModal from './modals/NewsModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
@@ -160,6 +161,9 @@ export default function LauncherUI() {
   // Uninstall confirmation modal state
   const [uninstallModalOpen, setUninstallModalOpen] = useState<boolean>(false);
   const [channelToUninstall, setChannelToUninstall] = useState<string | null>(null);
+  // News modal state
+  const [newsModalOpen, setNewsModalOpen] = useState<boolean>(false);
+  const [selectedNewsPost, setSelectedNewsPost] = useState<any>(null);
   const [optionalFilesSize, setOptionalFilesSize] = useState<number>(0);
   const [baseGameSize, setBaseGameSize] = useState<number>(0);
   // Permission prompt modal state
@@ -374,7 +378,7 @@ export default function LauncherUI() {
     return base;
   }, [installedMods, installingMods]);
   // News posts
-  type NewsPost = { title: string; excerpt?: string; published_at?: string; url: string; feature_image?: string };
+  type NewsPost = { title: string; excerpt?: string; html?: string; published_at?: string; url: string; feature_image?: string };
   const [newsPosts, setNewsPosts] = useState<NewsPost[] | null>(null);
   const [newsLoading, setNewsLoading] = useState<boolean>(false);
   const [patchPosts, setPatchPosts] = useState<NewsPost[] | null>(null);
@@ -1308,7 +1312,7 @@ export default function LauncherUI() {
       if (newsPosts || newsLoading) return;
       setNewsLoading(true);
       try {
-        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,published_at,url,feature_image');
+        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,html,published_at,url,feature_image');
         const json = await resp.json();
         const posts = Array.isArray(json?.posts) ? json.posts : [];
         setNewsPosts(posts);
@@ -1342,7 +1346,7 @@ export default function LauncherUI() {
           filterQuery = `filter=tag:${encodeURIComponent(devBlogTag)}`;
         }
         
-        const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&${filterQuery}&limit=20&fields=title,excerpt,published_at,url,feature_image&order=published_at%20desc`;
+        const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&${filterQuery}&limit=20&fields=title,excerpt,html,published_at,url,feature_image&order=published_at%20desc`;
         
         const resp = await fetch(url);
         const json = await resp.json();
@@ -1696,6 +1700,13 @@ export default function LauncherUI() {
       setBusy(false);
     }
   }
+
+  // News modal handler
+  const openNewsPost = (post: any) => {
+    setSelectedNewsPost(post);
+    setNewsModalOpen(true);
+    markPostAsRead(post.url);
+  };
 
   // Uninstall modal handlers
   const handleUninstallClick = (channelName: string) => {
@@ -2621,6 +2632,7 @@ export default function LauncherUI() {
                 markPostAsRead={markPostAsRead}
                 toggleFavoritePost={toggleFavoritePost}
                 getPostCategory={getPostCategory as any}
+                openNewsPost={openNewsPost}
               />
             )}
             </div>
@@ -2668,6 +2680,16 @@ export default function LauncherUI() {
         cancelText="Cancel"
         variant="danger"
         busy={busy}
+      />
+
+      <NewsModal
+        open={newsModalOpen}
+        post={selectedNewsPost}
+        onClose={() => {
+          setNewsModalOpen(false);
+          setSelectedNewsPost(null);
+        }}
+        getPostCategory={getPostCategory as any}
       />
 
       <ModDetailsModal
