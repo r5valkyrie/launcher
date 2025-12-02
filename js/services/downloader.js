@@ -84,7 +84,26 @@ function sha256File(filePath) {
 }
 
 function ensureDir(dir) {
-  fs.mkdirSync(dir, { recursive: true });
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+  } catch (e) {
+    // Check if the error is because the parent path doesn't exist (e.g., drive not mounted)
+    const code = e?.code;
+    if (code === 'ENOENT') {
+      // Try to identify which part of the path is missing
+      const parts = dir.split(path.sep).filter(Boolean);
+      let checkPath = '';
+      for (const part of parts) {
+        checkPath = checkPath ? path.join(checkPath, part) : (part.includes(':') ? part + path.sep : part);
+        try {
+          fs.accessSync(checkPath);
+        } catch {
+          throw new Error(`Cannot create directory: parent path "${checkPath}" does not exist or is not accessible. Please ensure the drive is available and you have write permissions.`);
+        }
+      }
+    }
+    throw e;
+  }
 }
 
 function fetchJson(url) {

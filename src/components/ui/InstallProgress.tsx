@@ -117,9 +117,7 @@ export default function InstallProgress(props: InstallProgressProps) {
 
   return (
     <div className="mx-6 mb-6 animate-fadeSlideIn">
-      <div className="glass rounded-2xl p-6 border border-white/10 relative overflow-hidden">
-        {/* Background gradient */}
-        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-cyan-500/5 pointer-events-none" />
+      <div className="glass rounded-xl p-6 relative overflow-hidden">
         
         <div className="relative z-10">
           {/* Header */}
