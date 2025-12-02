@@ -18,7 +18,7 @@ export default function OutdatedModsBanner(props: OutdatedModsBannerProps) {
   if (!visible || outdatedMods.length === 0) return null;
 
   return (
-    <div className="glass rounded-2xl p-6 border border-amber-500/20 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-transparent">
+    <div className="glass rounded-2xl p-6 mb-4 border border-amber-500/20 bg-gradient-to-r from-amber-500/5 via-orange-500/5 to-transparent">
       {/* Header */}
       <div className="flex items-center gap-4 mb-5">
         <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">

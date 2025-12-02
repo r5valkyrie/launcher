@@ -1,12 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import ListItemWrapper from '../ui/ListItemWrapper';
 
 type ModsPanelProps = {
   // Tabs and view
   modsSubtab: 'installed' | 'all';
   setModsSubtab: (t: 'installed' | 'all') => void;
-  modsView: 'grid' | 'list';
-  setModsView: (v: 'grid' | 'list') => void;
+  installedModsView: 'grid' | 'list';
+  setInstalledModsView: (v: 'grid' | 'list') => void;
+  browseModsView: 'grid' | 'list';
+  setBrowseModsView: (v: 'grid' | 'list') => void;
   setModsRefreshNonce: (updater: (x: number) => number) => void;
 
   // Data/state
@@ -50,27 +53,28 @@ type ModsPanelProps = {
   toggleFavoriteMod: (id: string) => void;
   openModDetails: (pack: any) => void;
   getModCategory: (m: any) => 'qol' | 'animation' | 'sound' | 'ui' | 'model' | 'cosmetic' | 'server-side' | 'client-side' | 'modpack' | 'framework' | 'map' | 'gamemode' | 'weapon' | 'legend' | 'other' | string;
+  getModCategories: (m: any) => string[];
   getModTags: (m: any) => string[];
   installingMods: Record<string, 'install' | 'uninstall' | undefined>;
   modProgress: Record<string, { received: number; total: number; phase: string }>;
 };
 
 const CATEGORIES = [
-  { value: 'all', label: 'All' },
-  { value: 'qol', label: 'QoL' },
+  { value: 'all', label: 'All Mods' },
+  { value: 'qol', label: 'Quality of Life' },
   { value: 'animation', label: 'Animation' },
   { value: 'sound', label: 'Sound' },
-  { value: 'ui', label: 'UI' },
-  { value: 'model', label: 'Model' },
+  { value: 'ui', label: 'UI / HUD' },
+  { value: 'model', label: 'Models' },
   { value: 'cosmetic', label: 'Cosmetic' },
-  { value: 'weapon', label: 'Weapon' },
-  { value: 'legend', label: 'Legend' },
-  { value: 'map', label: 'Map' },
-  { value: 'gamemode', label: 'Gamemode' },
-  { value: 'modpack', label: 'Modpack' },
-  { value: 'framework', label: 'Framework' },
-  { value: 'server-side', label: 'Server' },
-  { value: 'client-side', label: 'Client' },
+  { value: 'weapon', label: 'Weapons' },
+  { value: 'legend', label: 'Legends' },
+  { value: 'map', label: 'Maps' },
+  { value: 'gamemode', label: 'Gamemodes' },
+  { value: 'modpack', label: 'Modpacks' },
+  { value: 'framework', label: 'Frameworks' },
+  { value: 'server-side', label: 'Server-Side' },
+  { value: 'client-side', label: 'Client-Side' },
 ] as const;
 
 const SORT_OPTIONS = [
@@ -91,8 +95,10 @@ export default function ModsPanel(props: ModsPanelProps) {
   const {
     modsSubtab,
     setModsSubtab,
-    modsView,
-    setModsView,
+    installedModsView,
+    setInstalledModsView,
+    browseModsView,
+    setBrowseModsView,
     setModsRefreshNonce,
     installedMods,
     installedModsLoading,
@@ -130,12 +136,98 @@ export default function ModsPanel(props: ModsPanelProps) {
     toggleFavoriteMod,
     openModDetails,
     getModCategory,
+    getModCategories,
     getModTags,
     installingMods,
     modProgress,
   } = props;
 
   const [installedSearchQuery, setInstalledSearchQuery] = useState('');
+  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
+  const categoryButtonRef = React.useRef<HTMLButtonElement>(null);
+  const categoryDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // Update dropdown position when opened
+  useEffect(() => {
+    if (categoryDropdownOpen && categoryButtonRef.current) {
+      const rect = categoryButtonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + 8,
+        left: rect.left,
+      });
+    }
+  }, [categoryDropdownOpen]);
+
+  // Close category dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        categoryButtonRef.current && !categoryButtonRef.current.contains(target) &&
+        categoryDropdownRef.current && !categoryDropdownRef.current.contains(target)
+      ) {
+        setCategoryDropdownOpen(false);
+      }
+    };
+    if (categoryDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [categoryDropdownOpen]);
+
+  // Category label lookup
+  const getCategoryLabel = (value: string) => {
+    const cat = CATEGORIES.find(c => c.value === value);
+    return cat?.label || value;
+  };
+
+  // Component to display category tags with hover expansion
+  const CategoryTags = ({ mod, maxVisible = 2, variant = 'dark' }: { mod: any; maxVisible?: number; variant?: 'dark' | 'light' }) => {
+    const categories = getModCategories(mod);
+    const visible = categories.slice(0, maxVisible);
+    const hidden = categories.slice(maxVisible);
+    
+    if (categories.length === 0) return null;
+    
+    const baseClass = variant === 'dark' 
+      ? 'bg-black/60 backdrop-blur-sm text-white/80' 
+      : 'bg-base-300/50 text-base-content/60';
+    
+    return (
+      <div className="group/cats relative inline-flex items-center gap-1">
+        {visible.map((cat) => (
+          <span 
+            key={cat} 
+            className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${baseClass}`}
+          >
+            {getCategoryLabel(cat)}
+          </span>
+        ))}
+        {hidden.length > 0 && (
+          <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium cursor-default ${baseClass} opacity-70`}>
+            +{hidden.length}
+          </span>
+        )}
+        {/* Hover tooltip showing all categories */}
+        {hidden.length > 0 && (
+          <div className="absolute top-full left-0 mt-1 opacity-0 group-hover/cats:opacity-100 pointer-events-none group-hover/cats:pointer-events-auto transition-opacity z-50">
+            <div className="bg-base-200 rounded-lg border border-white/10 shadow-xl p-2 flex flex-col gap-1 min-w-max">
+              <span className="text-[9px] uppercase tracking-wider text-base-content/40 px-1 mb-1">All Categories</span>
+              {categories.map(cat => (
+                <span 
+                  key={cat} 
+                  className="px-2 py-1 rounded text-[10px] font-medium bg-base-300/50 text-base-content/80"
+                >
+                  {getCategoryLabel(cat)}
+                </span>
+              ))}
+              </div>
+              </div>
+        )}
+            </div>
+    );
+  };
 
   // Filter installed mods by search (computed inline to avoid dependency issues)
   const baseMods = (installedModsAugmented || []).filter(isInstalledModVisible);
@@ -160,7 +252,7 @@ export default function ModsPanel(props: ModsPanelProps) {
         <div className="flex items-center justify-between gap-4">
           {/* Tab Pills */}
           <div className="flex items-center gap-1 p-1 bg-base-300/30 rounded-xl">
-            <button 
+                <button 
               className={`relative px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
                 modsSubtab === 'installed' 
                   ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white shadow-lg shadow-green-500/20' 
@@ -171,7 +263,7 @@ export default function ModsPanel(props: ModsPanelProps) {
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
               </svg>
-              Installed
+                  Installed
               <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
                 modsSubtab === 'installed' 
                   ? 'bg-white/20 text-white' 
@@ -184,8 +276,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                   {updateCount}
                 </span>
               )}
-            </button>
-            <button 
+                </button>
+                <button 
               className={`px-5 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 flex items-center gap-2 ${
                 modsSubtab === 'all' 
                   ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-blue-500/20' 
@@ -198,7 +290,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                 <line x1="2" y1="12" x2="22" y2="12"/>
                 <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
               </svg>
-              Browse
+                  Browse
               <span className={`ml-1 px-2 py-0.5 text-xs rounded-full ${
                 modsSubtab === 'all' 
                   ? 'bg-white/20 text-white' 
@@ -206,57 +298,65 @@ export default function ModsPanel(props: ModsPanelProps) {
               }`}>
                 {filteredAndSortedMods.length}
               </span>
-            </button>
-          </div>
+                </button>
+            </div>
 
           {/* Right Side Controls */}
           <div className="flex items-center gap-3">
-            {/* View Toggle */}
+            {/* View Toggle - separate state per tab */}
             <div className="flex items-center gap-1 p-1 bg-base-300/30 rounded-lg">
-              <button 
-                className={`p-2 rounded-md transition-all ${modsView === 'grid' ? 'bg-primary text-primary-content shadow' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/50'}`}
-                onClick={() => setModsView('grid')}
-                title="Grid View"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <button 
+                className={`p-2 rounded-md transition-all ${
+                  (modsSubtab === 'installed' ? installedModsView : browseModsView) === 'grid' 
+                    ? 'bg-primary text-primary-content shadow' 
+                    : 'text-base-content/50 hover:text-base-content hover:bg-base-300/50'
+                }`}
+                onClick={() => modsSubtab === 'installed' ? setInstalledModsView('grid') : setBrowseModsView('grid')}
+                  title="Grid View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="3" y="3" width="7" height="7" rx="1"/>
                   <rect x="14" y="3" width="7" height="7" rx="1"/>
                   <rect x="3" y="14" width="7" height="7" rx="1"/>
                   <rect x="14" y="14" width="7" height="7" rx="1"/>
-                </svg>
-              </button>
-              <button 
-                className={`p-2 rounded-md transition-all ${modsView === 'list' ? 'bg-primary text-primary-content shadow' : 'text-base-content/50 hover:text-base-content hover:bg-base-300/50'}`}
-                onClick={() => setModsView('list')}
-                title="List View"
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="8" y1="6" x2="21" y2="6"/>
-                  <line x1="8" y1="12" x2="21" y2="12"/>
-                  <line x1="8" y1="18" x2="21" y2="18"/>
+                  </svg>
+                </button>
+                <button 
+                className={`p-2 rounded-md transition-all ${
+                  (modsSubtab === 'installed' ? installedModsView : browseModsView) === 'list' 
+                    ? 'bg-primary text-primary-content shadow' 
+                    : 'text-base-content/50 hover:text-base-content hover:bg-base-300/50'
+                }`}
+                onClick={() => modsSubtab === 'installed' ? setInstalledModsView('list') : setBrowseModsView('list')}
+                  title="List View"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <line x1="8" y1="6" x2="21" y2="6"/>
+                    <line x1="8" y1="12" x2="21" y2="12"/>
+                    <line x1="8" y1="18" x2="21" y2="18"/>
                   <circle cx="4" cy="6" r="1" fill="currentColor"/>
                   <circle cx="4" cy="12" r="1" fill="currentColor"/>
                   <circle cx="4" cy="18" r="1" fill="currentColor"/>
-                </svg>
-              </button>
-            </div>
-            
+                  </svg>
+                </button>
+              </div>
+              
             {/* Refresh Button */}
-            <button 
+              <button 
               className="btn btn-sm btn-ghost gap-2 text-base-content/70 hover:text-base-content hover:bg-base-300/50" 
               onClick={() => setModsRefreshNonce((x) => x + 1)}
-              title="Refresh mod list"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="23 4 23 10 17 10"/>
-                <polyline points="1 20 1 14 7 14"/>
-                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
-              </svg>
+                title="Refresh mod list"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <polyline points="1 20 1 14 7 14"/>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
               <span className="hidden sm:inline">Refresh</span>
-            </button>
+              </button>
           </div>
-        </div>
-      </div>
+            </div>
+          </div>
 
       {/* Installed Mods View */}
       {modsSubtab === 'installed' && (
@@ -334,7 +434,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                   </>
                 )}
               </div>
-            ) : modsView === 'grid' ? (
+            ) : installedModsView === 'grid' ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
                 {visibleInstalledMods.map((m, index) => {
                   const latest = getLatestVersionForName(m.name);
@@ -356,20 +456,20 @@ export default function ModsPanel(props: ModsPanelProps) {
                               ? 'border-emerald-500/20 hover:border-emerald-500/40' 
                               : 'border-white/5 hover:border-white/15'
                         } ${draggingModName === m.name ? 'opacity-50 scale-95' : 'hover:shadow-xl hover:shadow-black/30 hover:-translate-y-1'}`}
-                        draggable
+              draggable
                         onDragStart={(e) => { setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed = 'move'; }}
                         onDragEnd={() => { setDraggingModName(null); setDragOverModName(null); }}
                         onDragEnter={() => setDragOverModName(m.name)}
                         onDragLeave={(e) => { if ((e.target as HTMLElement).closest('[data-mod-card]')) return; setDragOverModName(null); }}
                         onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }}
                         onDrop={(e) => { e.preventDefault(); const name = e.dataTransfer.getData('text/mod-name'); setDragOverModName(null); if (!name || name === m.name) return; setInstalledMods((prev) => { const list = (prev || []).slice(); const fromIdx = list.findIndex(x => x.name === name); const toIdx = list.findIndex(x => x.name === m.name); if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev || []; const [item] = list.splice(fromIdx, 1); list.splice(toIdx, 0, item); (async () => { try { const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir; if (dir) await window.electronAPI?.reorderMods?.(dir, list.map(x => String(x.id || ''))); } catch {} })(); return list; }); }}
-                        data-mod-card
-                      >
+              data-mod-card
+            >
                         {/* Image with gradient overlay */}
                         <div className="relative aspect-[16/9] bg-base-300/50 overflow-hidden flex-shrink-0">
                           {m.iconDataUrl ? (
                             <img src={m.iconDataUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                          ) : getModIconUrl(m.name || m.id) ? (
+                  ) : getModIconUrl(m.name || m.id) ? (
                             <img src={getModIconUrl(m.name || m.id) as string} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-300/80 to-base-300/40">
@@ -385,6 +485,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                           {/* Top badges row */}
                           <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
                             <div className="flex items-center gap-2">
+                              {/* Load Order Badge */}
+                              <span className="w-6 h-6 flex items-center justify-center rounded bg-black/70 text-white text-[11px] font-bold backdrop-blur-md shadow-lg" title={`Load order: ${index + 1}`}>
+                                {index + 1}
+                              </span>
                               {/* Enabled/Disabled indicator */}
                               <span className={`px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider backdrop-blur-md ${
                                 m.enabled 
@@ -397,8 +501,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <span className="px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber-500/90 text-white backdrop-blur-md shadow-lg shadow-amber-500/30">
                                   Update
                                 </span>
-                              )}
-                            </div>
+                  )}
+                </div>
                             
                             {/* Drag Handle */}
                             <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -411,9 +515,9 @@ export default function ModsPanel(props: ModsPanelProps) {
                                   <circle cx="9" cy="18" r="1.5"/>
                                   <circle cx="15" cy="18" r="1.5"/>
                                 </svg>
-                              </div>
-                            </div>
-                          </div>
+                    </div>
+                        </div>
+                    </div>
                           
                           {/* Bottom info on image */}
                           <div className="absolute bottom-3 left-3 right-3">
@@ -431,10 +535,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 </>
                               )}
                               <span className="text-white/30">•</span>
-                              <span className="text-white/60 capitalize">{category}</span>
-                            </div>
-                          </div>
-                        </div>
+                              <span className="text-white/60">{getCategoryLabel(category)}</span>
+                  </div>
+                </div>
+              </div>
                         
                         {/* Content - fixed height for uniformity */}
                         <div className="p-4 flex flex-col flex-1">
@@ -445,7 +549,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             ) : (
                               <p className="text-xs text-base-content/30 italic">No description available</p>
                             )}
-                          </div>
+                      </div>
                           
                           {/* Actions Row */}
                           <div className="flex items-center gap-2">
@@ -512,10 +616,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                                     </>
                                   )}
                                 </svg>
-                              </div>
+                </div>
                               {/* Pulse ring */}
                               <div className="absolute inset-0 rounded-2xl border-2 border-white/30 animate-ping" />
-                            </div>
+              </div>
                             
                             {/* Status text */}
                             <div className="text-white font-semibold mb-1">
@@ -533,8 +637,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shimmer" />
                               </div>
                             </div>
-                          </div>
-                        )}
+              </div>
+            )}
                         
                         {/* Uninstalling overlay */}
                         {isUninstalling && (
@@ -546,11 +650,11 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <line x1="10" y1="11" x2="10" y2="17"/>
                                 <line x1="14" y1="11" x2="14" y2="17"/>
                               </svg>
-                            </div>
+          </div>
                             <div className="text-white font-semibold">Uninstalling...</div>
                             <div className="text-white/60 text-sm">Please wait</div>
-                          </div>
-                        )}
+        </div>
+      )}
                       </div>
                     </ListItemWrapper>
                   );
@@ -597,7 +701,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             <circle cx="9" cy="18" r="1.5"/>
                             <circle cx="15" cy="18" r="1.5"/>
                           </svg>
-                        </div>
+              </div>
                         
                         {/* Icon with status ring */}
                         <div className={`relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 ring-2 ${m.enabled ? 'ring-emerald-500/50' : 'ring-white/10'}`}>
@@ -610,19 +714,17 @@ export default function ModsPanel(props: ModsPanelProps) {
                               <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                               </svg>
-                            </div>
+              </div>
                           )}
                           {/* Status dot */}
                           <div className={`absolute bottom-1 right-1 w-3 h-3 rounded-full border-2 border-base-100 ${m.enabled ? 'bg-emerald-500' : 'bg-base-content/30'}`} />
-                        </div>
-                        
+            </div>
+
                         {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                             <h4 className="font-semibold text-sm truncate">{String(m.name || m.id || '').replace(/_/g, ' ')}</h4>
-                            <span className="px-1.5 py-0.5 rounded text-[10px] bg-base-300/50 text-base-content/50 capitalize">
-                              {category}
-                            </span>
+                            <CategoryTags mod={m} maxVisible={2} variant="light" />
                             {needsUpdate && (
                               <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400">
                                 Update
@@ -641,7 +743,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                         {/* Actions */}
                         <div className="flex items-center gap-3">
                           {needsUpdate && (
-                            <button 
+                <button 
                               className={`btn btn-sm btn-warning gap-1 ${isInstalling ? 'btn-disabled' : ''}`}
                               onClick={() => updateInstalled(m)}
                               disabled={isInstalling}
@@ -658,7 +760,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                   Update
                                 </>
                               )}
-                            </button>
+                </button>
                           )}
                           <label className="cursor-pointer flex items-center gap-2">
                             <input 
@@ -668,7 +770,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                               onChange={() => toggleModEnabled(m)} 
                             />
                           </label>
-                          <button 
+                <button 
                             className={`btn btn-sm btn-ghost text-error/60 hover:text-error hover:bg-error/10 ${(!m.hasManifest || isUninstalling) ? 'btn-disabled opacity-40' : ''}`}
                             onClick={() => uninstallMod(m)}
                             disabled={!m.hasManifest || isUninstalling}
@@ -682,8 +784,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                               </svg>
                             )}
-                          </button>
-                        </div>
+                </button>
+              </div>
                         
                         {/* Progress bar at bottom */}
                         {isInstalling && (
@@ -700,7 +802,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                 })}
               </div>
             )}
-          </div>
+            </div>
 
           {/* Footer tip */}
           {visibleInstalledMods.length > 0 && (
@@ -748,27 +850,67 @@ export default function ModsPanel(props: ModsPanelProps) {
               )}
             </div>
 
-            {/* Category Pills */}
-            <div className="relative">
-              <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-base-300 scrollbar-track-transparent -mx-1 px-1">
-                {CATEGORIES.map(cat => (
-                  <button
-                    key={cat.value}
-                    className={`px-3.5 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-                      modsCategory === cat.value
-                        ? 'bg-primary text-primary-content shadow-md shadow-primary/20'
-                        : 'bg-base-300/30 text-base-content/60 hover:bg-base-300/50 hover:text-base-content'
-                    }`}
-                    onClick={() => setModsCategory(cat.value as any)}
-                  >
-                    {cat.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Status & Sort Row */}
+            {/* Filters Row */}
             <div className="flex flex-wrap items-center gap-3">
+              {/* Category Dropdown */}
+              <div className="relative">
+                <button 
+                  ref={categoryButtonRef}
+                  onClick={() => setCategoryDropdownOpen(!categoryDropdownOpen)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all border ${
+                    categoryDropdownOpen 
+                      ? 'bg-primary/10 border-primary/30 text-primary' 
+                      : modsCategory !== 'all'
+                        ? 'bg-primary/5 border-primary/20 text-base-content hover:bg-primary/10'
+                        : 'bg-base-300/30 border-transparent text-base-content/70 hover:bg-base-300/50 hover:text-base-content'
+                  }`}
+                >
+                  <span>{CATEGORIES.find(c => c.value === modsCategory)?.label || 'All Mods'}</span>
+                  <svg className={`w-4 h-4 transition-transform ${categoryDropdownOpen ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+
+                {/* Dropdown Panel - Rendered via Portal */}
+                {categoryDropdownOpen && createPortal(
+                  <div 
+                    ref={categoryDropdownRef}
+                    className="fixed bg-base-200 rounded-xl border border-white/10 shadow-2xl shadow-black/50 overflow-hidden dropdown-enter"
+                    style={{ 
+                      top: dropdownPosition.top,
+                      left: dropdownPosition.left,
+                      zIndex: 99999,
+                      minWidth: '160px',
+                    }}
+                  >
+                    <div className="py-1 max-h-80 overflow-y-auto scrollbar-thin">
+                      {CATEGORIES.map(cat => (
+              <button 
+                          key={cat.value}
+                          onClick={() => {
+                            setModsCategory(cat.value as any);
+                            setCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-4 py-2 text-left text-sm transition-colors ${
+                            modsCategory === cat.value
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-base-content/70 hover:bg-base-300/50 hover:text-base-content'
+                          }`}
+                        >
+                          <span>{cat.label}</span>
+                          {modsCategory === cat.value && (
+                            <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                              <polyline points="20 6 9 17 4 12"/>
+                </svg>
+                          )}
+              </button>
+                      ))}
+            </div>
+                  </div>,
+                  document.body
+                )}
+          </div>
+
               {/* Status Filter Pills */}
               <div className="flex items-center gap-1 p-1 bg-base-300/20 rounded-lg">
                 {STATUS_FILTERS.map(filter => (
@@ -785,7 +927,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                   </button>
                 ))}
               </div>
-              
+
               <div className="flex-1" />
               
               {/* Sort Options */}
@@ -871,7 +1013,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                     </button>
                   )}
                 </div>
-              ) : modsView === 'grid' ? (
+              ) : browseModsView === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                   {filteredAndSortedMods.slice(0, 60).map((m: any, index: number) => {
                     const latest = Array.isArray(m?.versions) && m.versions[0] ? m.versions[0] : null;
@@ -891,16 +1033,16 @@ export default function ModsPanel(props: ModsPanelProps) {
                         <div className="group relative rounded-xl overflow-hidden bg-base-300/30 border border-white/5 hover:border-white/15 transition-all duration-300 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-1 flex flex-col h-full">
                           {/* Image */}
                           <div className="relative aspect-[16/10] bg-base-300/50 overflow-hidden">
-                            {m?.versions?.[0]?.icon ? (
+                          {m?.versions?.[0]?.icon ? (
                               <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                             ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <svg className="w-12 h-12 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                   <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                                 </svg>
-                              </div>
-                            )}
-                            
+                            </div>
+                          )}
+                          
                             {/* Gradient overlay */}
                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
                             
@@ -910,16 +1052,14 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <span className={`px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider shadow ${state === 'update' ? 'bg-amber-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
                                   {state === 'update' ? 'Update' : 'Installed'}
                                 </span>
-                              </div>
+                          </div>
                             )}
-                            
-                            {/* Category */}
+
+                            {/* Categories */}
                             <div className="absolute top-2 right-2">
-                              <span className="px-2 py-1 rounded text-[10px] font-medium uppercase tracking-wider bg-black/60 backdrop-blur-sm text-white/80 capitalize">
-                                {category}
-                              </span>
+                              <CategoryTags mod={m} maxVisible={2} />
                             </div>
-                            
+
                             {/* Favorite Button */}
                             <button 
                               className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all ${
@@ -934,8 +1074,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
                               </svg>
                             </button>
-                          </div>
-                          
+                        </div>
+                        
                           {/* Content */}
                           <div className="p-4 flex flex-col flex-1">
                             <h4 className="font-semibold text-sm mb-1 line-clamp-1 group-hover:text-primary transition-colors">{title}</h4>
@@ -966,7 +1106,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             {/* Actions */}
                             <div className="flex items-center gap-2 mt-auto pt-2">
                               {state === 'not' && !installingMods[key] && (
-                                <button 
+                              <button 
                                   className="btn btn-sm btn-success flex-1 gap-1"
                                   onClick={() => installFromAll(m)}
                                 >
@@ -976,60 +1116,60 @@ export default function ModsPanel(props: ModsPanelProps) {
                                     <line x1="12" y1="15" x2="12" y2="3"/>
                                   </svg>
                                   Install
-                                </button>
-                              )}
+                              </button>
+                            )}
                               {state === 'installed' && !installingMods[key] && (
-                                <button 
+                              <button 
                                   className="btn btn-sm btn-error flex-1"
                                   onClick={() => uninstallFromAll(m)}
-                                >
-                                  Uninstall
-                                </button>
-                              )}
+                              >
+                                Uninstall
+                              </button>
+                            )}
                               {state === 'update' && !installingMods[key] && (
-                                <>
-                                  <button 
+                              <>
+                                <button 
                                     className="btn btn-sm btn-warning flex-1"
                                     onClick={() => updateFromAll(m)}
-                                  >
+                                >
                                     Update
-                                  </button>
-                                  <button 
+                                </button>
+                                <button 
                                     className="btn btn-sm btn-ghost text-error"
                                     onClick={() => uninstallFromAll(m)}
-                                    title="Uninstall"
-                                  >
+                                  title="Uninstall"
+                                >
                                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                       <polyline points="3 6 5 6 21 6"/>
                                       <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                     </svg>
-                                  </button>
-                                </>
-                              )}
+                                </button>
+                              </>
+                            )}
                               {!installingMods[key] && (
-                                <button 
+                            <button 
                                   className="btn btn-sm btn-ghost opacity-70 hover:opacity-100"
                                   onClick={() => openModDetails(m)}
-                                  title="View details"
-                                >
+                              title="View details"
+                            >
                                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <circle cx="12" cy="12" r="10"/>
                                     <line x1="12" y1="16" x2="12" y2="12"/>
                                     <line x1="12" y1="8" x2="12.01" y2="8"/>
                                   </svg>
-                                </button>
-                              )}
-                            </div>
+                            </button>
+                            )}
                           </div>
-                          
+                        </div>
+                        
                           {/* Installing overlay */}
                           {installingMods[key] === 'install' && (
                             <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/95 via-green-900/95 to-teal-900/95 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-10 rounded-xl">
-                              {(() => { 
-                                const mp = modProgress[key]; 
+                            {(() => { 
+                              const mp = modProgress[key]; 
                                 const pct = mp?.total ? Math.min(100, Math.floor((mp.received / mp.total) * 100)) : (mp?.phase === 'extracting' ? 100 : 0);
                                 const isExtracting = mp?.phase === 'extracting';
-                                return (
+                              return (
                                   <>
                                     {/* Animated icon */}
                                     <div className="relative mb-3">
@@ -1049,9 +1189,9 @@ export default function ModsPanel(props: ModsPanelProps) {
                                             </>
                                           )}
                                         </svg>
-                                      </div>
+                                  </div>
                                       <div className="absolute inset-0 rounded-xl border-2 border-white/20 animate-ping" />
-                                    </div>
+                                </div>
                                     
                                     <div className="text-white font-semibold text-sm mb-0.5">
                                       {isExtracting ? 'Extracting' : 'Downloading'}
@@ -1068,10 +1208,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                                       </div>
                                     </div>
                                   </>
-                                );
-                              })()}
-                            </div>
-                          )}
+                              );
+                            })()}
+                          </div>
+                        )}
                           
                           {/* Uninstalling overlay */}
                           {installingMods[key] === 'uninstall' && (
@@ -1083,8 +1223,8 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 </svg>
                               </div>
                               <div className="text-white font-semibold text-sm">Removing...</div>
-                            </div>
-                          )}
+                          </div>
+                        )}
                         </div>
                       </ListItemWrapper>
                     );
@@ -1111,48 +1251,46 @@ export default function ModsPanel(props: ModsPanelProps) {
                         <div className="group flex items-center gap-4 p-3 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 hover:bg-base-300/30 transition-all relative">
                           {/* Icon */}
                           <div className="w-14 h-14 rounded-lg bg-base-300/50 overflow-hidden flex-shrink-0">
-                            {m?.versions?.[0]?.icon ? (
-                              <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
-                            ) : (
+                          {m?.versions?.[0]?.icon ? (
+                            <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                          ) : (
                               <div className="w-full h-full flex items-center justify-center">
                                 <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                   <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                                 </svg>
-                              </div>
-                            )}
-                          </div>
-                          
+                            </div>
+                          )}
+                        </div>
+                        
                           {/* Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <h4 className="font-semibold text-sm">{title}</h4>
-                              <span className="px-1.5 py-0.5 rounded text-[10px] bg-base-300/50 text-base-content/50 capitalize">
-                                {category}
-                              </span>
+                        <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <h4 className="font-semibold text-sm">{title}</h4>
+                              <CategoryTags mod={m} maxVisible={2} variant="light" />
                               {state === 'installed' && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">Installed</span>}
                               {state === 'update' && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400">Update</span>}
                               {isFavorite && <span className="text-warning text-xs">★</span>}
-                            </div>
+                              </div>
                             <div className="flex items-center gap-3 text-xs opacity-50 mt-0.5">
                               <span>v{ver}</span>
                               {totalDownloads > 0 && <span>{totalDownloads >= 1000 ? `${(totalDownloads / 1000).toFixed(1)}k` : totalDownloads} downloads</span>}
                               <span>★ {(m?.rating_score || 0).toFixed(1)}</span>
                             </div>
-                            {m?.versions?.[0]?.description && (
+                              {m?.versions?.[0]?.description && (
                               <p className="text-xs opacity-50 line-clamp-1 mt-1">{m.versions[0].description}</p>
                             )}
-                          </div>
-                          
-                          {/* Actions */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <button 
-                              className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost opacity-50 hover:opacity-100'}`}
-                              onClick={() => toggleFavoriteMod(modId)}
-                              title={isFavorite ? 'Unfavorite' : 'Favorite'}
-                            >
-                              ★
-                            </button>
+                            </div>
                             
+                          {/* Actions */}
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              <button 
+                              className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost opacity-50 hover:opacity-100'}`}
+                                onClick={() => toggleFavoriteMod(modId)}
+                              title={isFavorite ? 'Unfavorite' : 'Favorite'}
+                              >
+                              ★
+                              </button>
+                              
                             {/* Installing progress indicator */}
                             {installingMods[key] === 'install' && (
                               <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30">
@@ -1191,43 +1329,43 @@ export default function ModsPanel(props: ModsPanelProps) {
                             
                             {!installingMods[key] && (
                               <>
-                                {state === 'not' && (
-                                  <button 
+                              {state === 'not' && (
+                                <button 
                                     className="btn btn-sm btn-success gap-1"
                                     onClick={() => installFromAll(m)}
-                                  >
+                                > 
                                     Install
-                                  </button>
-                                )}
-                                {state === 'installed' && (
-                                  <button 
+                                </button>
+                              )}
+                              {state === 'installed' && (
+                                <button 
                                     className="btn btn-sm btn-error"
                                     onClick={() => uninstallFromAll(m)}
-                                  >
-                                    Uninstall
-                                  </button>
-                                )}
-                                {state === 'update' && (
-                                  <>
-                                    <button 
+                                >
+                                  Uninstall
+                                </button>
+                              )}
+                              {state === 'update' && (
+                                <>
+                                  <button 
                                       className="btn btn-sm btn-warning"
                                       onClick={() => updateFromAll(m)}
-                                    >
+                                  >
                                       Update
-                                    </button>
-                                    <button 
+                                  </button>
+                                  <button 
                                       className="btn btn-sm btn-ghost text-error"
                                       onClick={() => uninstallFromAll(m)}
-                                      title="Uninstall"
-                                    >
+                                    title="Uninstall"
+                                  >
                                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                         <polyline points="3 6 5 6 21 6"/>
                                         <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                       </svg>
-                                    </button>
-                                  </>
-                                )}
-                                <button 
+                                  </button>
+                                </>
+                              )}
+                              <button 
                                   className="btn btn-sm btn-ghost opacity-60 hover:opacity-100"
                                   onClick={() => openModDetails(m)}
                                   title="Details"
@@ -1237,25 +1375,25 @@ export default function ModsPanel(props: ModsPanelProps) {
                                     <line x1="12" y1="16" x2="12" y2="12"/>
                                     <line x1="12" y1="8" x2="12.01" y2="8"/>
                                   </svg>
-                                </button>
+                              </button>
                               </>
-                            )}
-                          </div>
+                              )}
+                            </div>
                         </div>
                       </ListItemWrapper>
                     );
                   })}
                 </div>
               )}
-              
+
               {/* Load more hint */}
               {filteredAndSortedMods.length > 60 && (
                 <div className="text-center text-xs opacity-40 pt-4">
                   Showing 60 of {filteredAndSortedMods.length} mods. Use search or filters to find more.
                 </div>
-              )}
-            </div>
           )}
+        </div>
+      )}
 
           {/* Thunderstore Attribution */}
           <div className="text-center">
@@ -1269,7 +1407,7 @@ export default function ModsPanel(props: ModsPanelProps) {
               <span>Powered by Thunderstore</span>
             </a>
           </div>
-        </div>
+          </div>
       )}
     </div>
   );

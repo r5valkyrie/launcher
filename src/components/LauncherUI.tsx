@@ -273,7 +273,13 @@ export default function LauncherUI() {
       if (typeof s?.easterEggDiscovered === 'boolean') setEasterEggDiscovered(Boolean(s.easterEggDiscovered));
       if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
       if (typeof s?.patchNotesView === 'string') setPatchNotesView(s.patchNotesView as 'grid' | 'timeline');
-      if (typeof s?.modsView === 'string') setModsView(s.modsView as 'grid' | 'list');
+      if (typeof s?.installedModsView === 'string') setInstalledModsView(s.installedModsView as 'grid' | 'list');
+      if (typeof s?.browseModsView === 'string') setBrowseModsView(s.browseModsView as 'grid' | 'list');
+      // Migration from old single modsView setting
+      if (typeof s?.modsView === 'string' && !s?.installedModsView && !s?.browseModsView) {
+        setInstalledModsView(s.modsView as 'grid' | 'list');
+        setBrowseModsView(s.modsView as 'grid' | 'list');
+      }
       if (s?.channels) {
         // Migrate existing channels to include missing fields
         const migratedChannels = { ...s.channels };
@@ -327,7 +333,8 @@ export default function LauncherUI() {
   const [modProgress, setModProgress] = useState<Record<string, { received: number; total: number; phase: string }>>({});
   const [modsShowDeprecated, setModsShowDeprecated] = useState<boolean>(false);
   const [modsShowNsfw, setModsShowNsfw] = useState<boolean>(false);
-  const [modsView, setModsView] = useState<'grid' | 'list'>('grid');
+  const [installedModsView, setInstalledModsView] = useState<'grid' | 'list'>('grid');
+  const [browseModsView, setBrowseModsView] = useState<'grid' | 'list'>('grid');
   const [modsCategory, setModsCategory] = useState<'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio'>('all');
   const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('name');
   const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates'>('all');
@@ -1448,58 +1455,75 @@ export default function LauncherUI() {
     return [];
   };
 
-  const getModCategory = (mod: any): string => {
-    // First, check if mod has actual categories/tags from the API
+  // Helper to map a raw category string to our normalized category
+  const mapCategoryString = (cat: string): string | null => {
+    const lc = cat.toLowerCase();
+    if (lc.includes('weapon')) return 'weapon';
+    if (lc.includes('map')) return 'map';  
+    if (lc.includes('legend') || lc.includes('character')) return 'legend';
+    if (lc.includes('gamemode') || lc.includes('mode')) return 'gamemode';
+    if (lc.includes('ui') || lc.includes('hud')) return 'ui';
+    if (lc.includes('sound') || lc.includes('audio')) return 'sound';
+    if (lc.includes('animation')) return 'animation';
+    if (lc.includes('model')) return 'model';
+    if (lc.includes('cosmetic') || lc.includes('skin')) return 'cosmetic';
+    if (lc.includes('server')) return 'server-side';
+    if (lc.includes('client')) return 'client-side';
+    if (lc.includes('modpack') || lc.includes('pack')) return 'modpack';
+    if (lc.includes('framework') || lc.includes('library')) return 'framework';
+    if (lc.includes('qol') || lc.includes('quality')) return 'qol';
+    return null;
+  };
+
+  // Get ALL categories a mod belongs to (for filtering)
+  const getModCategories = (mod: any): string[] => {
+    const result: string[] = [];
     const categories = mod?.categories || mod?.tags || mod?.versions?.[0]?.categories || [];
-    if (Array.isArray(categories) && categories.length > 0) {
-      // Map common Thunderstore categories to our categories
-      const firstCategory = String(categories[0]).toLowerCase();
-      
-      // Direct mappings
-      if (firstCategory.includes('weapon')) return 'weapon';
-      if (firstCategory.includes('map')) return 'map';  
-      if (firstCategory.includes('legend') || firstCategory.includes('character')) return 'legend';
-      if (firstCategory.includes('gamemode') || firstCategory.includes('mode')) return 'gamemode';
-      if (firstCategory.includes('ui') || firstCategory.includes('hud')) return 'ui';
-      if (firstCategory.includes('sound') || firstCategory.includes('audio')) return 'sound';
-      if (firstCategory.includes('animation')) return 'animation';
-      if (firstCategory.includes('model')) return 'model';
-      if (firstCategory.includes('cosmetic') || firstCategory.includes('skin')) return 'cosmetic';
-      if (firstCategory.includes('server')) return 'server-side';
-      if (firstCategory.includes('client')) return 'client-side';
-      if (firstCategory.includes('modpack') || firstCategory.includes('pack')) return 'modpack';
-      if (firstCategory.includes('framework') || firstCategory.includes('library')) return 'framework';
-      if (firstCategory.includes('qol') || firstCategory.includes('quality')) return 'qol';
+    
+    if (Array.isArray(categories)) {
+      for (const cat of categories) {
+        const mapped = mapCategoryString(String(cat));
+        if (mapped && !result.includes(mapped)) {
+          result.push(mapped);
+        }
+      }
     }
     
     // Fallback to keyword matching if no categories found
-    const name = (mod?.name || mod?.full_name || '').toLowerCase();
-    const desc = (mod?.versions?.[0]?.description || '').toLowerCase();
+    if (result.length === 0) {
+      const name = (mod?.name || mod?.full_name || '').toLowerCase();
+      const desc = (mod?.versions?.[0]?.description || '').toLowerCase();
+      
+      const checkKeyword = (text: string, keywords: string[]) => {
+        return keywords.some(keyword => {
+          const regex = new RegExp(`\\b${keyword}\\b`, 'i');
+          return regex.test(text);
+        });
+      };
+      
+      if (checkKeyword(name, ['weapon', 'gun', 'rifle', 'pistol', 'shotgun', 'sniper'])) result.push('weapon');
+      if (checkKeyword(name, ['map', 'level', 'arena', 'zone'])) result.push('map');
+      if (checkKeyword(name, ['legend', 'character', 'hero', 'pilot'])) result.push('legend');
+      if (checkKeyword(name, ['gamemode', 'mode'])) result.push('gamemode');
+      if (checkKeyword(name, ['ui', 'hud', 'interface', 'menu', 'overlay'])) result.push('ui');
+      if (checkKeyword(name, ['sound', 'audio', 'music', 'sfx', 'voice'])) result.push('sound');
+      if (checkKeyword(name, ['animation', 'anim'])) result.push('animation');
+      if (checkKeyword(name, ['model', 'mesh'])) result.push('model');
+      if (checkKeyword(name, ['cosmetic', 'skin', 'texture', 'visual'])) result.push('cosmetic');
+      if (checkKeyword(name, ['server'])) result.push('server-side');
+      if (checkKeyword(name, ['client'])) result.push('client-side');
+      if (checkKeyword(name, ['modpack', 'pack', 'collection'])) result.push('modpack');
+      if (checkKeyword(name, ['framework', 'api', 'library', 'core'])) result.push('framework');
+      if (checkKeyword(name, ['qol']) || checkKeyword(desc, ['quality of life', 'improvement', 'fix', 'enhance'])) result.push('qol');
+    }
     
-    // Use more precise keyword matching with word boundaries
-    const checkKeyword = (text: string, keywords: string[]) => {
-      return keywords.some(keyword => {
-        const regex = new RegExp(`\\b${keyword}\\b`, 'i');
-        return regex.test(text);
-      });
-    };
-    
-    if (checkKeyword(name, ['weapon', 'gun', 'rifle', 'pistol', 'shotgun', 'sniper'])) return 'weapon';
-    if (checkKeyword(name, ['map', 'level', 'arena', 'zone'])) return 'map';
-    if (checkKeyword(name, ['legend', 'character', 'hero', 'pilot'])) return 'legend';
-    if (checkKeyword(name, ['gamemode', 'mode'])) return 'gamemode';
-    if (checkKeyword(name, ['ui', 'hud', 'interface', 'menu', 'overlay'])) return 'ui';
-    if (checkKeyword(name, ['sound', 'audio', 'music', 'sfx', 'voice'])) return 'sound';
-    if (checkKeyword(name, ['animation', 'anim'])) return 'animation';
-    if (checkKeyword(name, ['model', 'mesh'])) return 'model';
-    if (checkKeyword(name, ['cosmetic', 'skin', 'texture', 'visual'])) return 'cosmetic';
-    if (checkKeyword(name, ['server'])) return 'server-side';
-    if (checkKeyword(name, ['client'])) return 'client-side';
-    if (checkKeyword(name, ['modpack', 'pack', 'collection'])) return 'modpack';
-    if (checkKeyword(name, ['framework', 'api', 'library', 'core'])) return 'framework';
-    if (checkKeyword(name, ['qol']) || checkKeyword(desc, ['quality of life', 'improvement', 'fix', 'enhance'])) return 'qol';
-    
-    return 'other';
+    return result.length > 0 ? result : ['other'];
+  };
+
+  // Get the primary category for display (first one)
+  const getModCategory = (mod: any): string => {
+    const categories = getModCategories(mod);
+    return categories[0] || 'other';
   };
 
   const filteredAndSortedMods = useMemo(() => {
@@ -1510,8 +1534,8 @@ export default function LauncherUI() {
       if (!modsShowDeprecated && m?.is_deprecated) return false;
       if (!modsShowNsfw && m?.has_nsfw_content) return false;
       
-      // Category filter
-      if (modsCategory !== 'all' && getModCategory(m) !== modsCategory) return false;
+      // Category filter - check if ANY of the mod's categories match
+      if (modsCategory !== 'all' && !getModCategories(m).includes(modsCategory)) return false;
       
       // Status filter
       const installed = (installedMods || []).find((im) => 
@@ -2450,10 +2474,15 @@ export default function LauncherUI() {
                 <ModsPanel
                   modsSubtab={modsSubtab as any}
                   setModsSubtab={setModsSubtab as any}
-                  modsView={modsView as any}
-                  setModsView={(view) => {
-                    setModsView(view);
-                    window.electronAPI?.setSetting('modsView', view);
+                  installedModsView={installedModsView}
+                  setInstalledModsView={(view) => {
+                    setInstalledModsView(view);
+                    window.electronAPI?.setSetting('installedModsView', view);
+                  }}
+                  browseModsView={browseModsView}
+                  setBrowseModsView={(view) => {
+                    setBrowseModsView(view);
+                    window.electronAPI?.setSetting('browseModsView', view);
                   }}
                   setModsRefreshNonce={setModsRefreshNonce}
                   installedMods={installedMods as any}
@@ -2492,6 +2521,7 @@ export default function LauncherUI() {
                   toggleFavoriteMod={toggleFavoriteMod}
                   openModDetails={openModDetails}
                   getModCategory={getModCategory as any}
+                  getModCategories={getModCategories as any}
                   getModTags={getModTags as any}
                   installingMods={installingMods}
                   modProgress={modProgress}

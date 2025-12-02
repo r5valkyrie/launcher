@@ -96,7 +96,7 @@ export default function Sidebar({ appVersion, onVersionClick }: SidebarProps) {
         <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Blog">
           <a 
             className="w-9 h-9 rounded-lg bg-transparent hover:bg-purple-500/20 border border-transparent hover:border-purple-500/30 flex items-center justify-center text-base-content/60 hover:text-purple-400 transition-all duration-200"
-            href='https://blog.playvalkyrie.org/'
+            href='https://playvalkyrie.org/blog'
           >
             <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"/>

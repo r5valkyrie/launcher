@@ -1,12 +1,26 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 type SnowEffectProps = {
   enabled: boolean;
 };
 
+const HOLIDAY_MESSAGES = [
+  "Happy Holidays!",
+  "Season's Greetings!",
+  "Ho Ho Ho!",
+  "Merry Christmas!",
+  "Happy New Year!",
+  "Joy to the World!",
+  "Let it Snow!",
+  "Warm Wishes!",
+];
+
 export default function SnowEffect({ enabled }: SnowEffectProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const lightsRef = useRef<HTMLDivElement>(null);
+  const confettiRef = useRef<HTMLDivElement>(null);
+  const [showMessage, setShowMessage] = useState(false);
+  const [message, setMessage] = useState('');
 
   // Snowflake varieties for more visual interest
   const snowflakeChars = ['❄', '❅', '❆', '✦', '✧', '•'];
@@ -77,6 +91,53 @@ export default function SnowEffect({ enabled }: SnowEffectProps) {
     };
   }, [enabled]);
 
+  // Present click handler - burst confetti
+  const handlePresentClick = () => {
+    if (!confettiRef.current) return;
+
+    const container = confettiRef.current;
+    const confettiItems: HTMLDivElement[] = [];
+    const confettiEmojis = ['❄', '❅', '❆', '✦', '✧', '•'];
+    const confettiCount = 25;
+
+    // Create confetti burst
+    for (let i = 0; i < confettiCount; i++) {
+      const confetti = document.createElement('div');
+      confetti.className = 'present-confetti';
+      confetti.innerHTML = confettiEmojis[Math.floor(Math.random() * confettiEmojis.length)];
+      
+      // Random angle and distance for burst effect
+      const angle = (Math.random() * 360) * (Math.PI / 180);
+      const distance = Math.random() * 200 + 100;
+      const x = Math.cos(angle) * distance;
+      const y = Math.sin(angle) * distance;
+      
+      confetti.style.setProperty('--x', `${x}px`);
+      confetti.style.setProperty('--y', `${y}px`);
+      confetti.style.setProperty('--rotation', `${Math.random() * 720 - 360}deg`);
+      confetti.style.animationDelay = `${Math.random() * 0.2}s`;
+      confetti.style.fontSize = `${Math.random() * 16 + 14}px`;
+      
+      container.appendChild(confetti);
+      confettiItems.push(confetti);
+    }
+
+    // Show random holiday message
+    const randomMessage = HOLIDAY_MESSAGES[Math.floor(Math.random() * HOLIDAY_MESSAGES.length)];
+    setMessage(randomMessage);
+    setShowMessage(true);
+
+    // Clean up confetti after animation
+    setTimeout(() => {
+      confettiItems.forEach(c => c.remove());
+    }, 1500);
+
+    // Hide message after delay
+    setTimeout(() => {
+      setShowMessage(false);
+    }, 2500);
+  };
+
   // Check if it's December
   const isDecember = new Date().getMonth() === 11;
 
@@ -102,8 +163,37 @@ export default function SnowEffect({ enabled }: SnowEffectProps) {
       <div className="fixed top-4 left-4 pointer-events-none z-[98] opacity-60" aria-hidden="true">
         <div className="holiday-holly">🎄</div>
       </div>
-      <div className="fixed top-4 right-16 pointer-events-none z-[98] opacity-60" aria-hidden="true">
-        <div className="holiday-holly">🎁</div>
+      
+      {/* Clickable Present */}
+      <div className="fixed bottom-4 right-4 z-[101]">
+        <button
+          onClick={handlePresentClick}
+          className="present-button group relative"
+          title="Click me!"
+        >
+          <span className="text-2xl transition-transform duration-200 group-hover:scale-125 group-active:scale-90 inline-block filter drop-shadow-lg">
+            🎁
+          </span>
+          {/* Sparkle hint on hover */}
+          <span className="absolute -top-1 -right-1 text-xs opacity-0 group-hover:opacity-100 transition-opacity">✨</span>
+        </button>
+        
+        {/* Confetti container */}
+        <div 
+          ref={confettiRef}
+          className="absolute bottom-0 right-0 pointer-events-none"
+          aria-hidden="true"
+        />
+        
+        {/* Holiday message popup */}
+        {showMessage && (
+          <div className="absolute bottom-12 right-0 animate-message-popup">
+            <div className="bg-base-300/30 text-white px-4 py-2 rounded-xl shadow-lg whitespace-nowrap font-semibold text-sm">
+              {message}
+              <div className="absolute -bottom-2 right-4 w-0 h-0 border-l-8 border-r-8 border-t-8 border-l-transparent border-r-transparent border-t-green-500" />
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Subtle festive vignette */}
@@ -208,6 +298,75 @@ export default function SnowEffect({ enabled }: SnowEffectProps) {
           }
         }
 
+        /* Present button */
+        .present-button {
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 8px;
+          border-radius: 12px;
+          transition: all 0.2s ease;
+        }
+        
+        .present-button:hover {
+          background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .present-button:active {
+          background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Confetti burst animation */
+        .present-confetti {
+          position: absolute;
+          bottom: 50%;
+          right: 50%;
+          animation: confetti-burst 1.2s ease-out forwards;
+          pointer-events: none;
+        }
+
+        @keyframes confetti-burst {
+          0% {
+            transform: translate(0, 0) rotate(0deg) scale(0);
+            opacity: 1;
+          }
+          20% {
+            transform: translate(calc(var(--x) * 0.3), calc(var(--y) * 0.3)) rotate(calc(var(--rotation) * 0.3)) scale(1.2);
+            opacity: 1;
+          }
+          100% {
+            transform: translate(var(--x), calc(var(--y) + 100px)) rotate(var(--rotation)) scale(0.5);
+            opacity: 0;
+          }
+        }
+
+        /* Message popup animation */
+        @keyframes message-popup {
+          0% {
+            transform: translateY(10px) scale(0.8);
+            opacity: 0;
+          }
+          20% {
+            transform: translateY(-5px) scale(1.05);
+            opacity: 1;
+          }
+          30% {
+            transform: translateY(0) scale(1);
+          }
+          80% {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+          }
+          100% {
+            transform: translateY(-10px) scale(0.9);
+            opacity: 0;
+          }
+        }
+
+        .animate-message-popup {
+          animation: message-popup 2.5s ease-out forwards;
+        }
+
         /* Optional: Add festive accent to buttons when holiday mode is on */
         .holiday-accent {
           position: relative;
@@ -232,4 +391,3 @@ export default function SnowEffect({ enabled }: SnowEffectProps) {
     </>
   );
 }
-
