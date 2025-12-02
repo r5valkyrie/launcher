@@ -313,10 +313,16 @@ export default function InstallProgress(props: InstallProgressProps) {
                     
                     let multipartProgress = 0;
                     if (isMultipart && info.totalParts) {
-                      const partialProgress = Object.values(parts).reduce((sum, p) => {
-                        return sum + (p.total > 0 ? p.received / p.total : 0);
-                      }, 0);
-                      multipartProgress = (partialProgress / info.totalParts) * 100;
+                      // Calculate progress for all parts, treating unreported parts as 0%
+                      let totalProgress = 0;
+                      for (let i = 0; i < info.totalParts; i++) {
+                        const part = parts[i];
+                        if (part && part.total > 0) {
+                          totalProgress += Math.min(part.received, part.total) / part.total;
+                        }
+                        // Parts that haven't reported yet or have 0 total are counted as 0%
+                      }
+                      multipartProgress = (totalProgress / info.totalParts) * 100;
                     }
 
                     const getStatusType = (status: string) => {

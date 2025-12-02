@@ -177,6 +177,14 @@ async function createWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' });
   }
 
+  // Enable Ctrl+Shift+I to open dev tools in all builds
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (input.control && input.shift && input.key.toLowerCase() === 'i') {
+      mainWindow.webContents.toggleDevTools();
+      event.preventDefault();
+    }
+  });
+
   // Basic diagnostics if load fails
   mainWindow.webContents.on('did-fail-load', (_e, errorCode, errorDesc, validatedURL) => {
     console.error('Load failed', { errorCode, errorDesc, validatedURL });
@@ -1029,9 +1037,42 @@ ipcMain.handle('video:cache', async (_e, { filename }) => {
 ipcMain.handle('fs:is-installed-in-dir', async (_e, { path: targetPath }) => {
   let hasClient = false;
   let hasServer = false;
+  let hasPartialFiles = false;
+  
   try { await fs.promises.access(path.join(targetPath, 'r5apex.exe')); hasClient = true; } catch { }
   try { await fs.promises.access(path.join(targetPath, 'r5apex_ds.exe')); hasServer = true; } catch { }
-  return hasClient || hasServer;
+  
+  // Check for partial download files that indicate incomplete installation
+  try {
+    const checkForPartials = async (dir, depth = 0) => {
+      if (depth > 3) return false; // Don't go too deep
+      try {
+        const entries = await fs.promises.readdir(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile()) {
+            const name = entry.name.toLowerCase();
+            if (name.endsWith('.part0') || name.endsWith('.part1') || name.endsWith('.part2') || 
+                name.endsWith('.part3') || name.endsWith('.part4') || name.endsWith('.part5') ||
+                name.endsWith('.download') || /\.part\d+$/.test(name)) {
+              return true;
+            }
+          } else if (entry.isDirectory() && !entry.name.startsWith('.')) {
+            if (await checkForPartials(path.join(dir, entry.name), depth + 1)) {
+              return true;
+            }
+          }
+        }
+      } catch {}
+      return false;
+    };
+    hasPartialFiles = await checkForPartials(targetPath);
+  } catch {}
+  
+  // Return object with installation status details
+  return { 
+    isInstalled: hasClient || hasServer, 
+    needsRepair: hasPartialFiles 
+  };
 });
 
 let downloadPaused = false;

@@ -8,7 +8,7 @@ type HeroBannerProps = {
   bgVideo?: string;
   videoFilename?: string | null;
   setVideoSrc: (src: string | null) => void;
-  primaryAction: 'install' | 'update' | 'play';
+  primaryAction: 'install' | 'update' | 'play' | 'repair';
   busy: boolean;
   openInstallPrompt: () => void;
   repairChannel: (name: string, isUpdate?: boolean) => Promise<void> | void;
@@ -259,6 +259,20 @@ export default function HeroBanner(props: HeroBannerProps) {
                       <path d="M16 16h5v5"/>
                     </svg>
                     <span>Update Available</span>
+                  </button>
+                )}
+                {primaryAction === 'repair' && (
+                  <button 
+                    className="group relative flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-400 hover:to-violet-400 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-200 border border-white/10" 
+                    disabled={busy} 
+                    onClick={() => repairChannel(selectedChannel, false)}
+                    onMouseEnter={handleButtonHover}
+                    onMouseLeave={handleButtonLeave}
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                    </svg>
+                    <span>Repair Installation</span>
                   </button>
                 )}
                 {primaryAction === 'play' && (

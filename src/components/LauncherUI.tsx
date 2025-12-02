@@ -54,7 +54,7 @@ declare global {
       openFolder: (folderPath: string) => Promise<{ok: boolean; error?: string}>;
       setDownloadSpeedLimit: (bytesPerSecond: number) => Promise<{ok: boolean; error?: string}>;
       cacheBackgroundVideo: (filename: string) => Promise<string>;
-      isInstalledInDir: (path: string) => Promise<boolean>;
+      isInstalledInDir: (path: string) => Promise<boolean | { isInstalled: boolean; needsRepair: boolean }>;
       pauseDownload?: () => Promise<boolean>;
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
@@ -309,7 +309,8 @@ export default function LauncherUI() {
   const [remoteVersion, setRemoteVersion] = useState<string | null>(null);
   const [installedVersion, setInstalledVersion] = useState<string | null>(null);
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
-  const [primaryAction, setPrimaryAction] = useState<'install'|'update'|'play'>('install');
+  const [primaryAction, setPrimaryAction] = useState<'install'|'update'|'play'|'repair'>('install');
+  const [needsRepair, setNeedsRepair] = useState<boolean>(false);
   const enabledChannels = useMemo(() => (config?.channels?.filter((c) => c.enabled) || []), [config]);
   const [channelsSettings, setChannelsSettings] = useState<Record<string, any>>({});
   // Mods state
@@ -635,10 +636,17 @@ export default function LauncherUI() {
     // Check if r5apex.exe already exists in the target directory
     // If it does, repair instead of showing install prompt
     try {
-      const isAlreadyInstalled = await window.electronAPI?.isInstalledInDir(targetInstallDir);
-      if (isAlreadyInstalled) {
-        // Game files detected - repair instead of install
-        const shouldRepair = confirm('Game files detected in the target directory. Would you like to repair/verify the installation instead?');
+      const installStatus = await window.electronAPI?.isInstalledInDir(targetInstallDir);
+      // Handle both old boolean return type and new object return type for backwards compatibility
+      const isAlreadyInstalled = typeof installStatus === 'object' ? installStatus.isInstalled : Boolean(installStatus);
+      const hasPartialFiles = typeof installStatus === 'object' ? installStatus.needsRepair : false;
+      
+      if (isAlreadyInstalled || hasPartialFiles) {
+        // Game files or partial downloads detected - repair instead of install
+        const message = hasPartialFiles && !isAlreadyInstalled
+          ? 'Incomplete installation detected. Would you like to continue/repair the installation?'
+          : 'Game files detected in the target directory. Would you like to repair/verify the installation instead?';
+        const shouldRepair = confirm(message);
         if (shouldRepair) {
           await repairChannel(selectedChannel, false);
           return;
@@ -907,6 +915,7 @@ export default function LauncherUI() {
       // Update local install state so primary button flips to Play
       setInstalledVersion(String(checksums?.game_version || ''));
       setIsInstalled(true);
+      setNeedsRepair(false); // Installation complete, no partial files
       setChannelsSettings((prev) => ({
         ...prev,
         [channel.name]: {
@@ -1235,10 +1244,16 @@ export default function LauncherUI() {
         
         if (effectiveInstallDir) {
           setInstallDir(effectiveInstallDir);
-          setIsInstalled(Boolean(await window.electronAPI?.isInstalledInDir(effectiveInstallDir)));
+          const installStatus = await window.electronAPI?.isInstalledInDir(effectiveInstallDir);
+          // Handle both old boolean return type and new object return type for backwards compatibility
+          const installed = typeof installStatus === 'object' ? installStatus.isInstalled : Boolean(installStatus);
+          const hasPartials = typeof installStatus === 'object' ? installStatus.needsRepair : false;
+          setIsInstalled(installed);
+          setNeedsRepair(hasPartials);
         } else {
           setInstallDir('');
           setIsInstalled(false);
+          setNeedsRepair(false);
         }
         
         setInstalledVersion(ch?.gameVersion || null);
@@ -1615,15 +1630,22 @@ export default function LauncherUI() {
     // Decide primary action
     // Custom channels can only be played or repaired, never freshly installed or updated
     if (channel?.isCustom) {
-      setPrimaryAction('play');
+      // Custom channels with partial files need repair
+      setPrimaryAction(needsRepair ? 'repair' : 'play');
+    } else if (!isInstalled && needsRepair) {
+      // Not installed but has partial files - show repair to continue/fix incomplete install
+      setPrimaryAction('repair');
     } else if (!isInstalled) {
       setPrimaryAction('install');
+    } else if (needsRepair) {
+      // Installed but has partial files - needs repair
+      setPrimaryAction('repair');
     } else if (remoteVersion && installedVersion && remoteVersion !== installedVersion) {
       setPrimaryAction('update');
     } else {
       setPrimaryAction('play');
     }
-  }, [isInstalled, installedVersion, remoteVersion, channel]);
+  }, [isInstalled, installedVersion, remoteVersion, channel, needsRepair]);
 
   async function fixChannelPermissions(ch: string) {
     setBusy(true);
@@ -1778,10 +1800,13 @@ export default function LauncherUI() {
         }));
       }));
       window.electronAPI!.onProgress('progress:part:reset', guard((p: any) => {
-        setProgressItems((prev) => ({
-          ...prev,
-          [p.path]: { ...(prev[p.path] || {}), parts: {}, totalParts: 0 }
-        }));
+        setProgressItems((prev) => {
+          const current = prev[p.path] || { status: 'downloading parts' } as FileInfo;
+          const parts = { ...(current.parts || {}) } as Record<number, PartInfo>;
+          // Only reset the specific part that failed, keeping totalParts intact
+          if (parts[p.part]) parts[p.part] = { received: 0, total: parts[p.part].total || 0 };
+          return { ...prev, [p.path]: { ...current, parts, totalParts: p.totalParts || current.totalParts || 0 } };
+        });
       }));
       window.electronAPI!.onProgress('progress:skip', guard((p: any) => { 
         // Add skipped file bytes to received total for accurate progress
@@ -2059,6 +2084,7 @@ export default function LauncherUI() {
       // Update local install state and persist to settings
       setInstalledVersion(newVersion);
       setIsInstalled(true);
+      setNeedsRepair(false); // Repair complete, no partial files
       
       // Update channel settings both in state and persistent storage
       const updatedChannelSettings = {
