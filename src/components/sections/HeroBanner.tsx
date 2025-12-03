@@ -230,54 +230,75 @@ export default function HeroBanner(props: HeroBannerProps) {
               <div ref={buttonsRef} className="flex items-center gap-2.5 hero-buttons">
                 {primaryAction === 'install' && (
                   <button 
-                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg shadow-primary/25 hover:shadow-primary/40 transition-all duration-200 border border-white/10" 
+                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-primary to-primary/80 shadow-lg shadow-primary/25 transition-all duration-200 border border-white/10 ${busy ? 'opacity-50 cursor-not-allowed' : 'hover:from-primary/90 hover:to-primary/70 hover:shadow-primary/40'}`} 
                     disabled={busy} 
                     onClick={openInstallPrompt}
-                    onMouseEnter={handleButtonHover}
-                    onMouseLeave={handleButtonLeave}
+                    onMouseEnter={!busy ? handleButtonHover : undefined}
+                    onMouseLeave={!busy ? handleButtonLeave : undefined}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                      <polyline points="7,10 12,15 17,10"/>
-                      <line x1="12" y1="15" x2="12" y2="3"/>
-                    </svg>
-                    <span>Install Game</span>
+                    {busy ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7,10 12,15 17,10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                    )}
+                    <span>{busy ? 'Working...' : 'Install Game'}</span>
                   </button>
                 )}
                 {primaryAction === 'update' && (
                   <button 
-                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 shadow-lg shadow-amber-500/25 hover:shadow-amber-500/40 transition-all duration-200 border border-white/10" 
+                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-amber-500 to-orange-500 shadow-lg shadow-amber-500/25 transition-all duration-200 border border-white/10 ${busy ? 'opacity-50 cursor-not-allowed' : 'hover:from-amber-400 hover:to-orange-400 hover:shadow-amber-500/40'}`} 
                     disabled={busy} 
                     onClick={() => repairChannel(selectedChannel, true)}
-                    onMouseEnter={handleButtonHover}
-                    onMouseLeave={handleButtonLeave}
+                    onMouseEnter={!busy ? handleButtonHover : undefined}
+                    onMouseLeave={!busy ? handleButtonLeave : undefined}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                      <path d="M3 3v5h5"/>
-                      <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                      <path d="M16 16h5v5"/>
-                    </svg>
-                    <span>Update Available</span>
+                    {busy ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                        <path d="M3 3v5h5"/>
+                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                        <path d="M16 16h5v5"/>
+                      </svg>
+                    )}
+                    <span>{busy ? 'Working...' : 'Update Available'}</span>
                   </button>
                 )}
                 {primaryAction === 'repair' && (
                   <button 
-                    className="group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-purple-500 to-violet-500 hover:from-purple-400 hover:to-violet-400 shadow-lg shadow-purple-500/25 hover:shadow-purple-500/40 transition-all duration-200 border border-white/10" 
+                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-purple-500 to-violet-500 shadow-lg shadow-purple-500/25 transition-all duration-200 border border-white/10 ${busy ? 'opacity-50 cursor-not-allowed' : 'hover:from-purple-400 hover:to-violet-400 hover:shadow-purple-500/40'}`} 
                     disabled={busy} 
                     onClick={() => repairChannel(selectedChannel, false)}
-                    onMouseEnter={handleButtonHover}
-                    onMouseLeave={handleButtonLeave}
+                    onMouseEnter={!busy ? handleButtonHover : undefined}
+                    onMouseLeave={!busy ? handleButtonLeave : undefined}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-                    </svg>
-                    <span>Repair Installation</span>
+                    {busy ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                      </svg>
+                    )}
+                    <span>{busy ? 'Working...' : 'Repair Installation'}</span>
                   </button>
                 )}
                 {primaryAction === 'play' && (
                   <button 
-                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 hover:from-red-400 hover:to-rose-400 shadow-lg shadow-red-500/25 hover:shadow-red-500/40 transition-all duration-200 border border-white/10 ${playCooldown ? 'opacity-60 cursor-not-allowed' : ''}`} 
+                    className={`group relative flex items-center text-center justify-center gap-2 px-12 py-3.5 rounded-xl text-md font-semibold text-white bg-gradient-to-r from-red-500 to-rose-500 shadow-lg shadow-red-500/25 transition-all duration-200 border border-white/10 ${busy || playCooldown ? 'opacity-50 cursor-not-allowed' : 'hover:from-red-400 hover:to-rose-400 hover:shadow-red-500/40'}`} 
                     disabled={busy || playCooldown} 
                     onClick={async () => {
                       if (busy || launchClickGuardRef.current) return;
@@ -288,12 +309,19 @@ export default function HeroBanner(props: HeroBannerProps) {
                       await getSettingsAndLaunch();
                       setTimeout(() => { setPlayCooldown(false); launchClickGuardRef.current = false; }, 2000);
                     }}
-                    onMouseEnter={handleButtonHover}
-                    onMouseLeave={handleButtonLeave}
+                    onMouseEnter={!(busy || playCooldown) ? handleButtonHover : undefined}
+                    onMouseLeave={!(busy || playCooldown) ? handleButtonLeave : undefined}
                   >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-                      <polygon points="5,3 19,12 5,21"/>
-                    </svg>
+                    {busy ? (
+                      <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <circle cx="12" cy="12" r="10" strokeOpacity="0.25"/>
+                        <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5,3 19,12 5,21"/>
+                      </svg>
+                    )}
                     <span>{busy ? 'Working...' : 'Play'}</span>
                   </button>
                 )}

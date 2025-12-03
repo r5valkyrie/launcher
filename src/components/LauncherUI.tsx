@@ -639,14 +639,21 @@ export default function LauncherUI() {
   }
 
 
+  const installClickGuardRef = useRef(false);
+  
   async function openInstallPrompt() {
+    // Prevent multiple clicks during async work
+    if (busy || installClickGuardRef.current) return;
+    
     // Custom channels can't be installed, only repaired
     if (channel?.isCustom) {
       alert('Custom channels cannot be installed from remote sources. You can only repair or play existing installations.');
       return;
     }
     
-    const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
+    installClickGuardRef.current = true;
+    try {
+      const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
     const targetInstallDir = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
     
@@ -701,6 +708,9 @@ export default function LauncherUI() {
     
     try { const lr = await window.electronAPI?.getLauncherInstallRoot?.(); if (lr) setLauncherRoot(lr); } catch {}
     setInstallPromptOpen(true);
+    } finally {
+      installClickGuardRef.current = false;
+    }
   }
 
   async function confirmInstallWithDir() {
@@ -2055,6 +2065,9 @@ export default function LauncherUI() {
   }
 
   async function repairChannel(name: string, isUpdate = false) {
+    // Prevent multiple clicks
+    if (busy) return;
+    
     const target = config?.channels.find((c) => c.name === name);
     if (!target) return;
     
@@ -2064,12 +2077,17 @@ export default function LauncherUI() {
       return;
     }
     
+    // Set busy immediately to prevent double-clicks
+    setBusy(true);
+    
     let dir = channelsSettings?.[name]?.installDir;
     if (!dir) {
       dir = (await window.electronAPI?.getDefaultInstallDir(name)) || '';
     }
-    if (!dir) return;
-    setBusy(true);
+    if (!dir) {
+      setBusy(false);
+      return;
+    }
     setFinished(false);
     setProgressItems({});
     setDoneCount(0);
