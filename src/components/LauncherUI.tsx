@@ -938,19 +938,14 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:error', guard((p: any) => { 
         setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } }));
-        // Track this as a failed download
-        setFailedDownloads((prev) => {
-          // Avoid duplicates
-          if (prev.some(f => f.path === p.path)) return prev;
-          return [...prev, { path: p.path, error: p.message }];
-        });
+        // Don't track here - only track final failures in progress:done with error flag
       }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => {
         setOverall(p);
         setExitingItems((prev) => ({ ...prev, [p.path]: true }));
         setDoneCount((x) => x + 1);
         if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null);
-        // Track failed downloads that come through progress:done with error flag
+        // Only track final failures (files that failed after all retries)
         if (p.error) {
           setFailedDownloads((prev) => {
             if (prev.some(f => f.path === p.path)) return prev;
@@ -2241,15 +2236,13 @@ export default function LauncherUI() {
       }));
       window.electronAPI!.onProgress('progress:error', guard((p: any) => { 
         setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } }));
-        setFailedDownloads((prev) => {
-          if (prev.some(f => f.path === p.path)) return prev;
-          return [...prev, { path: p.path, error: p.message }];
-        });
+        // Don't track here - only track final failures in progress:done with error flag
       }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => { 
         setOverall(p); 
         setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); 
         setDoneCount((x) => x + 1);
+        // Only track final failures (files that failed after all retries)
         if (p.error) {
           setFailedDownloads((prev) => {
             if (prev.some(f => f.path === p.path)) return prev;
