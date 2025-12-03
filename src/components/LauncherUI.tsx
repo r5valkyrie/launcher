@@ -12,6 +12,7 @@ import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
 import ConfirmModal from './modals/ConfirmModal';
 import NewsModal from './modals/NewsModal';
+import FailedDownloadsModal from './modals/FailedDownloadsModal';
 import OutdatedModsBanner from './ui/OutdatedModsBanner';
 import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './sections/GameLaunchSection';
@@ -165,6 +166,9 @@ export default function LauncherUI() {
   // News modal state
   const [newsModalOpen, setNewsModalOpen] = useState<boolean>(false);
   const [selectedNewsPost, setSelectedNewsPost] = useState<any>(null);
+  // Failed downloads modal state
+  const [failedDownloadsModalOpen, setFailedDownloadsModalOpen] = useState<boolean>(false);
+  const [failedDownloads, setFailedDownloads] = useState<Array<{ path: string; error?: string }>>([]);
   // Permission prompt modal state
   const [permissionPromptOpen, setPermissionPromptOpen] = useState<boolean>(false);
   const [isFixingPermissions, setIsFixingPermissions] = useState<boolean>(false);
@@ -798,6 +802,7 @@ export default function LauncherUI() {
     setProgressItems({});
     setDoneCount(0);
     setTotalCount(0);
+    setFailedDownloads([]); // Clear any previous failed downloads
     setCurrentOperation('Installing files');
     const runId = Date.now();
     runIdRef.current = runId;
@@ -931,12 +936,27 @@ export default function LauncherUI() {
         // Don't add skipped files to progress display to reduce visual jumping
         if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null); 
       }));
-      window.electronAPI!.onProgress('progress:error', guard((p: any) => { setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } })); }));
+      window.electronAPI!.onProgress('progress:error', guard((p: any) => { 
+        setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } }));
+        // Track this as a failed download
+        setFailedDownloads((prev) => {
+          // Avoid duplicates
+          if (prev.some(f => f.path === p.path)) return prev;
+          return [...prev, { path: p.path, error: p.message }];
+        });
+      }));
       window.electronAPI!.onProgress('progress:done', guard((p: any) => {
         setOverall(p);
         setExitingItems((prev) => ({ ...prev, [p.path]: true }));
         setDoneCount((x) => x + 1);
         if (fileProgress?.path?.startsWith(p.path)) setFileProgress(null);
+        // Track failed downloads that come through progress:done with error flag
+        if (p.error) {
+          setFailedDownloads((prev) => {
+            if (prev.some(f => f.path === p.path)) return prev;
+            return [...prev, { path: p.path, error: 'Download failed after retries' }];
+          });
+        }
         setTimeout(() => {
           setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
           setExitingItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; });
@@ -946,13 +966,28 @@ export default function LauncherUI() {
       window.electronAPI!.onProgress('progress:resumed', guard(() => { setIsPaused(false); }));
       window.electronAPI!.onProgress('progress:cancelled', guard(() => { setIsPaused(false); setBusy(false); setHasStarted(false); }));
       await window.electronAPI!.downloadAll({ baseUrl: channel.game_url, checksums, installDir: actualInstallDir, includeOptional: getIncludeOptional(selectedChannel), concurrency, partConcurrency, channelName: channel.name, mode: 'install' });
-      setToastMessage('Install completed');
-      setToastType('success');
+      
+      // Check if there were any failed downloads - use callback form to get latest state
+      setFailedDownloads((currentFailures) => {
+        if (currentFailures.length > 0) {
+          // Some files failed - show warning and offer repair
+          setToastMessage(`Install completed with ${currentFailures.length} failed file${currentFailures.length !== 1 ? 's' : ''}`);
+          setToastType('warning');
+          setNeedsRepair(true);
+          // Show the failed downloads modal after a short delay
+          setTimeout(() => setFailedDownloadsModalOpen(true), 500);
+        } else {
+          setToastMessage('Install completed');
+          setToastType('success');
+          setNeedsRepair(false);
+        }
+        return currentFailures; // Don't modify state
+      });
+      
       setFinished(true);
       // Update local install state so primary button flips to Play
       setInstalledVersion(String(checksums?.game_version || ''));
       setIsInstalled(true);
-      setNeedsRepair(false); // Installation complete, no partial files
       setChannelsSettings((prev) => ({
         ...prev,
         [channel.name]: {
@@ -2086,6 +2121,7 @@ export default function LauncherUI() {
     setProgressItems({});
     setDoneCount(0);
     setTotalCount(0);
+    setFailedDownloads([]); // Clear any previous failed downloads
     const operationText = isUpdate ? 'Updating files' : 'Repairing files';
     setCurrentOperation(operationText);
     setHasStarted(true);
@@ -2203,7 +2239,24 @@ export default function LauncherUI() {
           return next;
         });
       }));
-      window.electronAPI!.onProgress('progress:done', guard((p: any) => { setOverall(p); setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); setDoneCount((x) => x + 1); }));
+      window.electronAPI!.onProgress('progress:error', guard((p: any) => { 
+        setProgressItems((prev) => ({ ...prev, [p.path]: { status: `error: ${p.message}` } }));
+        setFailedDownloads((prev) => {
+          if (prev.some(f => f.path === p.path)) return prev;
+          return [...prev, { path: p.path, error: p.message }];
+        });
+      }));
+      window.electronAPI!.onProgress('progress:done', guard((p: any) => { 
+        setOverall(p); 
+        setProgressItems((prev) => { const next = { ...prev }; delete next[p.path]; return next; }); 
+        setDoneCount((x) => x + 1);
+        if (p.error) {
+          setFailedDownloads((prev) => {
+            if (prev.some(f => f.path === p.path)) return prev;
+            return [...prev, { path: p.path, error: 'Download failed after retries' }];
+          });
+        }
+      }));
       
       // Add error handling for the download process
       try {
@@ -2215,15 +2268,29 @@ export default function LauncherUI() {
         setFinished(true);
         return; // Exit early on download failure
       }
+      
       const newVersion = String(checksums?.game_version || '');
-      setToastMessage(isUpdate ? 'Update completed' : 'Repair completed');
-      setToastType('success');
+      
+      // Check if there were any failed downloads
+      setFailedDownloads((currentFailures) => {
+        if (currentFailures.length > 0) {
+          setToastMessage(`${isUpdate ? 'Update' : 'Repair'} completed with ${currentFailures.length} failed file${currentFailures.length !== 1 ? 's' : ''}`);
+          setToastType('warning');
+          setNeedsRepair(true);
+          setTimeout(() => setFailedDownloadsModalOpen(true), 500);
+        } else {
+          setToastMessage(isUpdate ? 'Update completed' : 'Repair completed');
+          setToastType('success');
+          setNeedsRepair(false);
+        }
+        return currentFailures;
+      });
+      
       setFinished(true);
       
       // Update local install state and persist to settings
       setInstalledVersion(newVersion);
       setIsInstalled(true);
-      setNeedsRepair(false); // Repair complete, no partial files
       
       // Update channel settings both in state and persistent storage
       const updatedChannelSettings = {
@@ -2707,6 +2774,14 @@ export default function LauncherUI() {
           setSelectedNewsPost(null);
         }}
         getPostCategory={getPostCategory as any}
+      />
+
+      <FailedDownloadsModal
+        open={failedDownloadsModalOpen}
+        onClose={() => setFailedDownloadsModalOpen(false)}
+        onRepair={() => repairChannel(selectedChannel, false)}
+        failedFiles={failedDownloads}
+        channelName={selectedChannel}
       />
 
       <ModDetailsModal
