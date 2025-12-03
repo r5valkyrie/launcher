@@ -717,6 +717,16 @@ export default function LauncherUI() {
         }
       }
     } catch {}
+    
+    // If no default install directory is set, save this base directory as the new default
+    try {
+      const s: any = await window.electronAPI?.getSettings();
+      if (!s?.installDir && base) {
+        await window.electronAPI?.setSetting('installDir', base);
+        setInstallDir(base);
+      }
+    } catch {}
+    
     await persistDir(finalPath);
     // Update the per-channel includeOptional setting with the dialog choice
     await setIncludeOptional(selectedChannel, installIncludeOptional);
@@ -726,8 +736,8 @@ export default function LauncherUI() {
     }));
     setInstallPromptOpen(false);
     
-    // Start install directly - permission fixing is available in Settings if needed
-    await startInstall();
+    // Start install directly - pass finalPath to avoid race condition with state update
+    await startInstall(finalPath);
   }
 
   async function confirmPermissionsAndInstall() {
@@ -761,14 +771,15 @@ export default function LauncherUI() {
     await startInstall();
   }
 
-  async function startInstall() {
+  async function startInstall(overrideInstallDir?: string) {
     // Custom channels cannot be installed
     if (channel?.isCustom) {
       alert('Custom channels cannot be installed from remote sources.');
       return;
     }
     
-    const actualInstallDir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+    // Use override if provided (from confirmInstallWithDir), otherwise fall back to settings
+    const actualInstallDir = overrideInstallDir || (channelsSettings?.[selectedChannel]?.installDir) || installDir;
     if (!channel || !actualInstallDir) return;
     // Require EULA
     const ok = await requireEula();
@@ -2405,7 +2416,7 @@ export default function LauncherUI() {
         />
 
         <InstallProgress
-          visible={activeTab === 'general' && busy}
+          visible={busy}
           busy={busy}
           hasStarted={hasStarted}
           isPaused={isPaused}

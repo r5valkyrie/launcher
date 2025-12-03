@@ -27,6 +27,15 @@ const keepAliveAgent = new https.Agent({
   scheduling: 'fifo'     // Better connection reuse strategy
 });
 
+// Standard headers for Cloudflare + Backblaze B2 optimization
+const downloadHeaders = {
+  'User-Agent': 'R5Valkyrie-Launcher/1.0',
+  'Accept': 'application/octet-stream, */*;q=0.8',
+  'Accept-Encoding': 'identity',  // No compression for binary files (already compressed)
+  'Connection': 'keep-alive',
+  'Cache-Control': 'no-transform', // Prevent Cloudflare from modifying content
+};
+
 // Global download speed limiter using token bucket algorithm
 class RateLimiter {
   constructor() {
@@ -108,7 +117,16 @@ function ensureDir(dir) {
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { agent: keepAliveAgent }, (res) => {
+    const reqOptions = {
+      agent: keepAliveAgent,
+      headers: {
+        'User-Agent': 'R5Valkyrie-Launcher/1.0',
+        'Accept': 'application/json',
+        'Accept-Encoding': 'identity',  // No compression to avoid decompression complexity
+        'Connection': 'keep-alive',
+      },
+    };
+    const req = https.get(url, reqOptions, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode} for ${url}`));
         res.resume();
@@ -171,9 +189,12 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
     const safeResolve = (v) => { if (!settled) { settled = true; resolve(v); } };
     const safeReject = (e) => { if (!settled) { settled = true; reject(e); } };
     
-    const reqOptions = { agent: keepAliveAgent };
+    const reqOptions = { 
+      agent: keepAliveAgent,
+      headers: { ...downloadHeaders },
+    };
     if (resumeFrom > 0) {
-      reqOptions.headers = { Range: `bytes=${resumeFrom}-` };
+      reqOptions.headers.Range = `bytes=${resumeFrom}-`;
     }
     
     let received = 0;
