@@ -168,7 +168,8 @@ body { font-family: 'CenturyGothic', ui-sans-serif, system-ui, -apple-system, Se
   0% { opacity: 0; transform: translateY(6px); }
   100% { opacity: 1; transform: translateY(0); }
 }
-.fade-in {
+.fade-in,
+.animate-fadeSlideIn {
   animation: fadeSlideIn 400ms ease-out both;
 }
 

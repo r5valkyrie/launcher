@@ -8,7 +8,6 @@ import SettingsPanel from './panels/SettingsPanel';
 import ModsPanel from './panels/ModsPanel';
 import NewsPanel from './panels/NewsPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
-import InstallProgress from './ui/InstallProgress';
 import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
 import ConfirmModal from './modals/ConfirmModal';
@@ -158,14 +157,14 @@ export default function LauncherUI() {
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
   const [launcherRoot, setLauncherRoot] = useState<string>('');
   const [installIncludeOptional, setInstallIncludeOptional] = useState<boolean>(false);
+  const [optionalFilesSize, setOptionalFilesSize] = useState<number>(0);
+  const [baseGameSize, setBaseGameSize] = useState<number>(0);
   // Uninstall confirmation modal state
   const [uninstallModalOpen, setUninstallModalOpen] = useState<boolean>(false);
   const [channelToUninstall, setChannelToUninstall] = useState<string | null>(null);
   // News modal state
   const [newsModalOpen, setNewsModalOpen] = useState<boolean>(false);
   const [selectedNewsPost, setSelectedNewsPost] = useState<any>(null);
-  const [optionalFilesSize, setOptionalFilesSize] = useState<number>(0);
-  const [baseGameSize, setBaseGameSize] = useState<number>(0);
   // Permission prompt modal state
   const [permissionPromptOpen, setPermissionPromptOpen] = useState<boolean>(false);
   const [isFixingPermissions, setIsFixingPermissions] = useState<boolean>(false);
@@ -1784,8 +1783,6 @@ export default function LauncherUI() {
         setNeedsRepair(false);
       }
       
-      alert(`${channelName} has been uninstalled successfully.`);
-      
     } catch (error: any) {
       alert(`Failed to uninstall: ${error?.message || 'Unknown error'}`);
     } finally {
@@ -1812,9 +1809,6 @@ export default function LauncherUI() {
     setCurrentOperation('Installing HD textures');
     const runId = Date.now();
     runIdRef.current = runId;
-    
-    // Switch to home page to show download progress
-    setActiveTab('general');
     
     try {
       // Fetch checksums to get optional files info
@@ -2095,7 +2089,6 @@ export default function LauncherUI() {
     const operationText = isUpdate ? 'Updating files' : 'Repairing files';
     setCurrentOperation(operationText);
     setHasStarted(true);
-    setActiveTab('general');
     setBytesTotal(0);
     setBytesReceived(0);
     setSpeedBps(0);
@@ -2431,11 +2424,6 @@ export default function LauncherUI() {
           onOpenLaunchOptions={() => setActiveTab('launch')}
           activeTab={activeTab as any}
           onTabChange={(tab) => setActiveTab(tab as any)}
-        />
-
-        <InstallProgress
-          visible={busy}
-          busy={busy}
           hasStarted={hasStarted}
           isPaused={isPaused}
           currentOperation={currentOperation}
@@ -2639,7 +2627,7 @@ export default function LauncherUI() {
                 />
               )}
 
-{/* Download progress is now shown via InstallProgress */}
+{/* Download progress is now integrated into HeroBanner */}
 
 
         </div>

@@ -721,9 +721,16 @@ ipcMain.handle('download:all', async (e, { baseUrl, checksums, installDir, inclu
 });
 
 ipcMain.handle('default-install-dir', (_e, { channelName }) => {
-  // Check if user has set a custom base directory
+  // Check if user has set a custom base directory in settings
   const settings = getAllSettings();
-  const customBase = settings?.customBaseDir;
+  
+  // First check for channel-specific installDir
+  if (channelName && settings?.channels?.[channelName]?.installDir) {
+    return settings.channels[channelName].installDir;
+  }
+  
+  // Then check for base installDir in settings
+  const customBase = settings?.installDir;
   
   let base;
   if (customBase && typeof customBase === 'string' && customBase.trim()) {
@@ -760,7 +767,7 @@ ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channe
     
     // Get custom base directory from settings
     const settings = getAllSettings();
-    const customBase = settings?.customBaseDir;
+    const customBase = settings?.installDir;
     
     // 1. Scan base library location (custom or default)
     let libraryBase;
