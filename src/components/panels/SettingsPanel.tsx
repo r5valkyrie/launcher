@@ -1,5 +1,4 @@
 import React from 'react';
-import DownloadOptimizer from '../ui/DownloadOptimizer';
 
 type Channel = { name: string; game_url: string; isCustom?: boolean; installDir?: string };
 
@@ -14,8 +13,8 @@ type SettingsPanelProps = {
   setPartConcurrency: (n: number) => void;
   downloadSpeedLimit: number;
   setDownloadSpeedLimit: (n: number) => void;
-  customBaseDir: string;
-  setCustomBaseDir: (dir: string) => void;
+  installDir: string;
+  setInstallDir: (dir: string) => void;
   bannerVideoEnabled: boolean;
   setBannerVideoEnabled: (v: boolean) => void;
   modsShowDeprecated: boolean;
@@ -43,7 +42,6 @@ type SettingsPanelProps = {
 export default function SettingsPanel(props: SettingsPanelProps) {
   const {
     busy,
-    channel,
     enabledChannels,
     channelsSettings,
     concurrency,
@@ -52,8 +50,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     setPartConcurrency,
     downloadSpeedLimit,
     setDownloadSpeedLimit,
-    customBaseDir,
-    setCustomBaseDir,
+    installDir,
+    setInstallDir,
     bannerVideoEnabled,
     setBannerVideoEnabled,
     modsShowDeprecated,
@@ -69,7 +67,6 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     fixChannelPermissions,
     onUninstallClick,
     setSetting,
-    openExternal,
     openFolder,
     optimizeForSpeed,
     optimizeForStability,
@@ -78,354 +75,529 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     uninstallHdTextures,
   } = props;
 
+  const SectionHeader = ({ 
+    icon, 
+    title, 
+    description, 
+    gradient 
+  }: { 
+    icon: React.ReactNode; 
+    title: string; 
+    description: string; 
+    gradient: string;
+  }) => (
+    <div className="flex items-center gap-3 mb-5">
+      <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center shadow-lg`}>
+        <span className="text-white">{icon}</span>
+      </div>
+      <div>
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <p className="text-xs text-base-content/50">{description}</p>
+      </div>
+    </div>
+  );
+
+  const ToggleCard = ({ 
+    checked, 
+    onChange, 
+    label, 
+    description, 
+    icon,
+    accentColor = 'blue'
+  }: { 
+    checked: boolean; 
+    onChange: (v: boolean) => void; 
+    label: string; 
+    description?: string;
+    icon: React.ReactNode;
+    accentColor?: string;
+  }) => {
+    const colorMap: Record<string, string> = {
+      blue: 'bg-blue-500/10 group-hover:bg-blue-500/20 text-blue-400',
+      purple: 'bg-purple-500/10 group-hover:bg-purple-500/20 text-purple-400',
+      amber: 'bg-amber-500/10 group-hover:bg-amber-500/20 text-amber-400',
+      cyan: 'bg-cyan-500/10 group-hover:bg-cyan-500/20 text-cyan-400',
+      rose: 'bg-rose-500/10 group-hover:bg-rose-500/20 text-rose-400',
+      emerald: 'bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-400',
+      red: 'bg-red-500/10 group-hover:bg-red-500/20 text-red-400',
+      indigo: 'bg-indigo-500/10 group-hover:bg-indigo-500/20 text-indigo-400',
+    };
+    
+    const toggleColorMap: Record<string, string> = {
+      blue: 'toggle-primary',
+      purple: 'toggle-secondary',
+      amber: 'toggle-warning',
+      cyan: 'toggle-info',
+      rose: 'toggle-error',
+      emerald: 'toggle-success',
+      red: 'toggle-error',
+      indigo: 'toggle-primary',
+    };
+
+    return (
+      <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-all cursor-pointer group hover:bg-base-300/30">
+        <div className="flex items-center gap-3">
+          <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${colorMap[accentColor]}`}>
+            {icon}
+          </div>
+          <div>
+            <span className="font-medium text-sm block">{label}</span>
+            {description && <p className="text-xs text-base-content/40 mt-0.5">{description}</p>}
+          </div>
+        </div>
+        <input 
+          type="checkbox" 
+          className={`toggle ${toggleColorMap[accentColor]}`}
+          checked={checked} 
+          onChange={(e) => onChange(e.target.checked)} 
+        />
+      </label>
+    );
+  };
+
+  const PresetCard = ({
+    onClick,
+    icon,
+    title,
+    description,
+    accentColor,
+  }: {
+    onClick: () => void;
+    icon: React.ReactNode;
+    title: string;
+    description: string;
+    accentColor: string;
+  }) => {
+    const colorMap: Record<string, string> = {
+      emerald: 'hover:border-emerald-500/30 hover:bg-emerald-500/10',
+      blue: 'hover:border-blue-500/30 hover:bg-blue-500/10',
+      amber: 'hover:border-amber-500/30 hover:bg-amber-500/10',
+    };
+    
+    const iconColorMap: Record<string, string> = {
+      emerald: 'bg-emerald-500/10 group-hover:bg-emerald-500/20 text-emerald-400',
+      blue: 'bg-blue-500/10 group-hover:bg-blue-500/20 text-blue-400',
+      amber: 'bg-amber-500/10 group-hover:bg-amber-500/20 text-amber-400',
+    };
+
+    return (
+      <button 
+        className={`group flex items-center gap-3 p-4 rounded-xl bg-base-300/20 border border-white/5 transition-all text-left ${colorMap[accentColor]}`}
+        onClick={onClick}
+      >
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center transition-colors ${iconColorMap[accentColor]}`}>
+          {icon}
+        </div>
+        <div>
+          <div className="font-semibold text-sm">{title}</div>
+          <div className="text-xs text-base-content/50">{description}</div>
+        </div>
+      </button>
+    );
+  };
+
   return (
     <div key="content-settings" className="space-y-6 fade-in pb-6">
-      {/* Settings Grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      {/* Download Performance */}
+      <div className="glass rounded-xl p-6">
+        <SectionHeader
+          icon={
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+          }
+          title="Download Performance"
+          description="Optimize download speed and stability"
+          gradient="from-indigo-500 to-violet-600"
+        />
         
-        {/* Download Performance */}
-        <div className="xl:col-span-2">
-          <DownloadOptimizer
-            concurrency={concurrency}
-            setConcurrency={(value) => {
-              setConcurrency(value);
-              setSetting('concurrency', value);
-            }}
-            partConcurrency={partConcurrency}
-            setPartConcurrency={(value) => {
-              setPartConcurrency(value);
-              setSetting('partConcurrency', value);
-            }}
-            onOptimizeForSpeed={optimizeForSpeed}
-            onOptimizeForStability={optimizeForStability}
-            onResetToDefaults={resetDownloadDefaults}
+        {/* Sliders */}
+        <div className="space-y-6 mb-6">
+          {/* File Concurrency */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <label className="text-sm font-medium">File Concurrency</label>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg text-xs font-mono bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                {concurrency}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="16"
+              value={concurrency}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setConcurrency(value);
+                setSetting('concurrency', value);
+              }}
+              className="range range-primary w-full"
+            />
+            <div className="flex justify-between text-xs text-base-content/40">
+              <span>1</span>
+              <span>Simultaneous file downloads</span>
+              <span>16</span>
+            </div>
+          </div>
+          
+          {/* Part Concurrency */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+                <label className="text-sm font-medium">Part Concurrency</label>
+              </div>
+              <span className="px-2.5 py-1 rounded-lg text-xs font-mono bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                {partConcurrency}
+              </span>
+            </div>
+            <input
+              type="range"
+              min="1"
+              max="12"
+              value={partConcurrency}
+              onChange={(e) => {
+                const value = Number(e.target.value);
+                setPartConcurrency(value);
+                setSetting('partConcurrency', value);
+              }}
+              className="range range-primary w-full"
+            />
+            <div className="flex justify-between text-xs text-base-content/40">
+              <span>1</span>
+              <span>Parts per multipart file</span>
+              <span>12</span>
+            </div>
+          </div>
+        </div>
+        
+        {/* Quick Presets */}
+        <h4 className="text-sm font-semibold text-base-content/60 uppercase tracking-wider mb-4">Quick Presets</h4>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <PresetCard
+            onClick={optimizeForSpeed}
+            title="Speed"
+            description="Max performance"
+            accentColor="emerald"
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+              </svg>
+            }
+          />
+          <PresetCard
+            onClick={optimizeForStability}
+            title="Stability"
+            description="Reliable downloads"
+            accentColor="blue"
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            }
+          />
+          <PresetCard
+            onClick={resetDownloadDefaults}
+            title="Reset"
+            description="Default settings"
+            accentColor="amber"
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="1 4 1 10 7 10"/>
+                <polyline points="23 20 23 14 17 14"/>
+                <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+              </svg>
+            }
           />
         </div>
+      </div>
 
-        {/* Download Speed Limit */}
-        <div className="xl:col-span-2 glass rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Download Speed Limit</h3>
-              <p className="text-xs text-base-content/50">Cap maximum download speed across all downloads</p>
+      {/* Download Speed Limit */}
+      <div className="glass rounded-xl p-6">
+        <SectionHeader
+          icon={
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+          }
+          title="Download Speed Limit"
+          description="Cap maximum download speed across all downloads"
+          gradient="from-amber-500 to-orange-600"
+        />
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">
+              Maximum Speed: <span className="text-amber-400">{downloadSpeedLimit === 0 ? 'Unlimited' : `${(downloadSpeedLimit / 1024 / 1024).toFixed(1)} MB/s`}</span>
+            </label>
+            <input
+              type="range"
+              min="0"
+              max="104857600"
+              step="1048576"
+              value={downloadSpeedLimit}
+              onChange={async (e) => {
+                const value = Number(e.target.value);
+                setDownloadSpeedLimit(value);
+                await setSetting('downloadSpeedLimit', value);
+                if (window.electronAPI?.setDownloadSpeedLimit) {
+                  await window.electronAPI.setDownloadSpeedLimit(value);
+                }
+              }}
+              className="range range-warning w-full"
+            />
+            <div className="flex justify-between text-xs text-base-content/40 mt-1">
+              <span>Unlimited</span>
+              <span>25 MB/s</span>
+              <span>50 MB/s</span>
+              <span>75 MB/s</span>
+              <span>100 MB/s</span>
             </div>
           </div>
 
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Maximum Speed: <span className="text-amber-400">{downloadSpeedLimit === 0 ? 'Unlimited' : `${(downloadSpeedLimit / 1024 / 1024).toFixed(1)} MB/s`}</span>
-              </label>
-              <input
-                type="range"
-                min="0"
-                max="104857600"
-                step="1048576"
-                value={downloadSpeedLimit}
-                onChange={async (e) => {
-                  const value = Number(e.target.value);
+          <div className="flex flex-wrap gap-2">
+            {[
+              { value: 0, label: '∞' },
+              { value: 5, label: '5' },
+              { value: 10, label: '10' },
+              { value: 25, label: '25' },
+              { value: 50, label: '50' },
+            ].map((preset) => (
+              <button
+                key={preset.value}
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
+                  downloadSpeedLimit === preset.value * 1024 * 1024
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-base-300/30 text-base-content/60 border border-white/5 hover:border-white/10'
+                }`}
+                onClick={async () => {
+                  const value = preset.value * 1024 * 1024;
                   setDownloadSpeedLimit(value);
                   await setSetting('downloadSpeedLimit', value);
                   if (window.electronAPI?.setDownloadSpeedLimit) {
                     await window.electronAPI.setDownloadSpeedLimit(value);
                   }
                 }}
-                className="range range-warning w-full"
+              >
+                {preset.label} {preset.value !== 0 && 'MB/s'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Custom Base Directory */}
+      <div className="glass rounded-xl p-6">
+        <SectionHeader
+          icon={
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+          }
+          title="Default Install Location"
+          description="Set a custom base directory for game installations"
+          gradient="from-cyan-500 to-blue-600"
+        />
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-base-content/70 mb-2">Base Directory</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="input input-bordered flex-1 font-mono text-sm bg-base-300/30 border-white/10 focus:border-primary/50"
+                value={installDir}
+                onChange={(e) => setInstallDir(e.target.value)}
+                onBlur={async (e) => {
+                  await setSetting('installDir', e.target.value);
+                }}
+                placeholder="%LOCALAPPDATA%\Programs\R5VLibrary (default)"
               />
-              <div className="flex justify-between text-xs text-base-content/40 mt-1">
-                <span>Unlimited</span>
-                <span>25 MB/s</span>
-                <span>50 MB/s</span>
-                <span>75 MB/s</span>
-                <span>100 MB/s</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2">
-              {[0, 5, 10, 25, 50].map((mbps) => (
-                <button
-                  key={mbps}
-                  className={`btn btn-sm ${downloadSpeedLimit === mbps * 1024 * 1024 ? 'btn-warning' : 'btn-ghost border border-white/10 hover:border-amber-500/30'}`}
-                  onClick={async () => {
-                    const value = mbps * 1024 * 1024;
-                    setDownloadSpeedLimit(value);
-                    await setSetting('downloadSpeedLimit', value);
-                    if (window.electronAPI?.setDownloadSpeedLimit) {
-                      await window.electronAPI.setDownloadSpeedLimit(value);
-                    }
-                  }}
-                >
-                  {mbps === 0 ? '∞' : `${mbps}`}
-                </button>
-              ))}
-            </div>
-
-            <div className="bg-base-300/20 border border-white/5 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-base-300/50 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-base-content/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium mb-1 text-base-content/80">Global Speed Cap</div>
-                  <p className="text-xs text-base-content/50 leading-relaxed">This limit applies to all downloads (game files, mods, etc.). Set to unlimited for maximum speed.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Custom Base Directory */}
-        <div className="xl:col-span-2 glass rounded-xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-500 flex items-center justify-center shadow-lg shadow-cyan-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-              </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Default Install Location</h3>
-              <p className="text-xs text-base-content/50">Set a custom base directory for game installations</p>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">Base Directory</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  className="input input-bordered flex-1 font-mono text-sm bg-base-300/30 border-white/10 focus:border-primary/50"
-                  value={customBaseDir}
-                  onChange={(e) => setCustomBaseDir(e.target.value)}
-                  onBlur={async (e) => {
-                    await setSetting('customBaseDir', e.target.value);
-                  }}
-                  placeholder="%LOCALAPPDATA%\Programs\R5VLibrary (default)"
-                />
-                <button
-                  className="btn btn-outline border-white/10 hover:border-cyan-500/50 hover:bg-cyan-500/10 gap-2"
-                  onClick={async () => {
-                    const dir = await window.electronAPI?.selectDirectory?.();
-                    if (dir) {
-                      setCustomBaseDir(dir);
-                      await setSetting('customBaseDir', dir);
-                      if (confirm('Custom base directory set! Reload launcher to detect channels in the new location?')) {
-                        window.location.reload();
-                      }
-                    }
-                  }}
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                  Browse
-                </button>
-                {customBaseDir && (
-                  <button
-                    className="btn btn-outline border-white/10 hover:border-red-500/50 hover:bg-red-500/10"
-                    onClick={async () => {
-                      setCustomBaseDir('');
-                      await setSetting('customBaseDir', '');
+              <button
+                className="btn btn-ghost border border-white/10 hover:border-cyan-500/30 hover:bg-cyan-500/10 gap-2"
+                onClick={async () => {
+                  const dir = await window.electronAPI?.selectDirectory?.();
+                  if (dir) {
+                    setInstallDir(dir);
+                    await setSetting('installDir', dir);
+                    if (confirm('Custom base directory set! Reload launcher to detect channels in the new location?')) {
                       window.location.reload();
-                    }}
-                  >
-                    Reset
-                  </button>
-                )}
-              </div>
+                    }
+                  }
+                }}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                Browse
+              </button>
+              {installDir && (
+                <button
+                  className="btn btn-ghost border border-white/10 hover:border-red-500/30 hover:bg-red-500/10"
+                  onClick={async () => {
+                    setInstallDir('');
+                    await setSetting('installDir', '');
+                    window.location.reload();
+                  }}
+                >
+                  Reset
+                </button>
+              )}
             </div>
+          </div>
 
-            <div className="bg-base-300/20 border border-white/5 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-lg bg-base-300/50 flex items-center justify-center flex-shrink-0">
-                  <svg className="w-4 h-4 text-base-content/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                  </svg>
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium mb-1 text-base-content/80">About Custom Directory</div>
-                  <p className="text-xs text-base-content/50 leading-relaxed">
-                    Set a custom location where game channels will be installed. Each channel will create a subfolder (e.g., LIVE, BETA). 
-                    Custom builds in this location will be automatically detected. Leave empty to use the default location.
-                  </p>
-                </div>
+          <div className="p-4 rounded-xl bg-base-300/20 border border-white/5">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-base-300/50 flex items-center justify-center flex-shrink-0">
+                <svg className="w-4 h-4 text-base-content/50" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="12" y1="16" x2="12" y2="12"/>
+                  <line x1="12" y1="8" x2="12.01" y2="8"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <div className="text-sm font-medium mb-1 text-base-content/80">About Custom Directory</div>
+                <p className="text-xs text-base-content/50 leading-relaxed">
+                  Set a custom location where game channels will be installed. Each channel will create a subfolder (e.g., LIVE, BETA). 
+                  Custom builds in this location will be automatically detected.
+                </p>
               </div>
             </div>
           </div>
         </div>
+      </div>
 
+      {/* Two Column Grid */}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Appearance Settings */}
-        <div className="glass rounded-xl p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center shadow-lg shadow-purple-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="glass rounded-xl p-6">
+          <SectionHeader
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <circle cx="12" cy="12" r="3"/>
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
               </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Appearance</h3>
-              <p className="text-xs text-base-content/50">Customize the visual experience</p>
-            </div>
-          </div>
+            }
+            title="Appearance"
+            description="Customize the visual experience"
+            gradient="from-purple-500 to-pink-600"
+          />
           
-          <div className="space-y-2">
-            <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                  <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polygon points="23 7 16 12 23 17 23 7"/>
-                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                  </svg>
-                </div>
-                <div>
-                  <span className="font-medium text-sm">Banner Video</span>
-                  <p className="text-xs text-base-content/40">Enable animated background videos</p>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-secondary"
-                checked={bannerVideoEnabled}
-                onChange={async (e) => {
-                  const v = e.target.checked;
-                  setBannerVideoEnabled(v);
-                  await setSetting('bannerVideoEnabled', v);
-                }}
-              />
-            </label>
+          <div className="space-y-3">
+            <ToggleCard
+              checked={bannerVideoEnabled}
+              onChange={async (v) => {
+                setBannerVideoEnabled(v);
+                await setSetting('bannerVideoEnabled', v);
+              }}
+              label="Banner Video"
+              description="Enable animated background videos"
+              accentColor="purple"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="23 7 16 12 23 17 23 7"/>
+                  <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                </svg>
+              }
+            />
 
             {/* Holiday Theme - Only show in December */}
             {new Date().getMonth() === 11 && (
-              <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center group-hover:bg-red-500/20 transition-colors">
-                    <span className="text-base">🎄</span>
-                  </div>
-                  <div>
-                    <span className="font-medium text-sm">Holiday Theme</span>
-                    <p className="text-xs text-base-content/40">Festive snow, lights & decorations</p>
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-secondary"
-                  checked={snowEffectEnabled}
-                  onChange={async (e) => {
-                    const v = e.target.checked;
-                    setSnowEffectEnabled(v);
-                    await setSetting('snowEffectEnabled', v);
-                  }}
-                />
-              </label>
+              <ToggleCard
+                checked={snowEffectEnabled}
+                onChange={async (v) => {
+                  setSnowEffectEnabled(v);
+                  await setSetting('snowEffectEnabled', v);
+                }}
+                label="Holiday Theme"
+                description="Festive snow, lights & decorations"
+                accentColor="red"
+                icon={<span className="text-base">🎄</span>}
+              />
             )}
 
             {easterEggDiscovered && (
-              <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center group-hover:bg-purple-500/20 transition-colors">
-                    <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                      <path d="M9 9h.01M15 9h.01M9 15h6"/>
-                    </svg>
-                  </div>
-                  <div>
-                    <span className="font-medium text-sm">Emoji Letters</span>
-                    <p className="text-xs text-base-content/40">Transform text into blue square emojis</p>
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  className="toggle toggle-secondary"
-                  checked={emojiMode}
-                  onChange={(e) => toggleEmojiMode(e.target.checked)}
-                />
-              </label>
+              <ToggleCard
+                checked={emojiMode}
+                onChange={toggleEmojiMode}
+                label="Emoji Letters"
+                description="Transform text into blue square emojis"
+                accentColor="purple"
+                icon={
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <path d="M9 9h.01M15 9h.01M9 15h6"/>
+                  </svg>
+                }
+              />
             )}
           </div>
         </div>
 
         {/* Mod Settings */}
-        <div className="glass rounded-xl p-6 space-y-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+        <div className="glass rounded-xl p-6">
+          <SectionHeader
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
               </svg>
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold">Mod Preferences</h3>
-              <p className="text-xs text-base-content/50">Control mod visibility and filtering</p>
-            </div>
-          </div>
+            }
+            title="Mod Preferences"
+            description="Control mod visibility and filtering"
+            gradient="from-emerald-500 to-teal-600"
+          />
           
-          <div className="space-y-2">
-            <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                  <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
-                    <line x1="12" y1="9" x2="12" y2="13"/>
-                    <line x1="12" y1="17" x2="12.01" y2="17"/>
-                  </svg>
-                </div>
-                <div>
-                  <span className="font-medium text-sm">Deprecated Mods</span>
-                  <p className="text-xs text-base-content/40">Show outdated or unsupported mods</p>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-success"
-                checked={modsShowDeprecated}
-                onChange={async (e) => {
-                  const v = e.target.checked;
-                  setModsShowDeprecated(v);
-                  await setSetting('modsShowDeprecated', v);
-                }}
-              />
-            </label>
+          <div className="space-y-3">
+            <ToggleCard
+              checked={modsShowDeprecated}
+              onChange={async (v) => {
+                setModsShowDeprecated(v);
+                await setSetting('modsShowDeprecated', v);
+              }}
+              label="Deprecated Mods"
+              description="Show outdated or unsupported mods"
+              accentColor="emerald"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                  <line x1="12" y1="9" x2="12" y2="13"/>
+                  <line x1="12" y1="17" x2="12.01" y2="17"/>
+                </svg>
+              }
+            />
             
-            <label className="flex items-center justify-between p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-colors cursor-pointer group">
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center group-hover:bg-emerald-500/20 transition-colors">
-                  <svg className="w-4 h-4 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </div>
-                <div>
-                  <span className="font-medium text-sm">NSFW Content</span>
-                  <p className="text-xs text-base-content/40">Show adult-oriented modifications</p>
-                </div>
-              </div>
-              <input
-                type="checkbox"
-                className="toggle toggle-success"
-                checked={modsShowNsfw}
-                onChange={async (e) => {
-                  const v = e.target.checked;
-                  setModsShowNsfw(v);
-                  await setSetting('modsShowNsfw', v);
-                }}
-              />
-            </label>
+            <ToggleCard
+              checked={modsShowNsfw}
+              onChange={async (v) => {
+                setModsShowNsfw(v);
+                await setSetting('modsShowNsfw', v);
+              }}
+              label="NSFW Content"
+              description="Show adult-oriented modifications"
+              accentColor="emerald"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              }
+            />
           </div>
         </div>
       </div>
 
-      {/* Channel Management - Each channel in its own panel */}
+      {/* Channel Management */}
       {enabledChannels.map((c) => {
         const ch = channelsSettings?.[c.name];
         const dir = c.isCustom ? c.installDir : ch?.installDir;
@@ -436,11 +608,11 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         
         return (
           <div key={c.name} className="glass rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center gap-3 mb-5">
               <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${
                 isCustom 
-                  ? 'bg-gradient-to-br from-violet-500 to-purple-500 shadow-violet-500/20' 
-                  : 'bg-gradient-to-br from-blue-500 to-indigo-500 shadow-blue-500/20'
+                  ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20' 
+                  : 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'
               }`}>
                 {isCustom ? (
                   <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -449,7 +621,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 ) : (
                   <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="3"/>
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                    <path d="M12 1v6m0 6v10"/>
                   </svg>
                 )}
               </div>
@@ -468,33 +640,30 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                   )}
                 </div>
                 <p className="text-xs text-base-content/50 mt-0.5">
-                  {isCustom 
-                    ? 'Custom local game installation' 
-                    : 'Official release channel'}
+                  {isCustom ? 'Custom local game installation' : 'Official release channel'}
                 </p>
               </div>
               <div className={`w-3 h-3 rounded-full ${isInstalled ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-base-content/20'}`}></div>
             </div>
             
-            <div className="text-xs text-base-content/50 mb-4 font-mono bg-base-300/20 border border-white/5 p-3 rounded-lg break-all">
-              {dir || 'Not installed'}
+            <div className="p-3 rounded-xl bg-base-300/20 border border-white/5 mb-4">
+              <code className="text-xs text-base-content/50 font-mono break-all">
+                {dir || 'Not installed'}
+              </code>
             </div>
             
             <div className="flex flex-wrap gap-2">
-              {/* Browse Files button */}
               <button 
                 className="btn btn-sm btn-ghost border border-white/10 hover:border-white/20 gap-2" 
                 disabled={!dir} 
                 onClick={() => dir && openFolder(dir)}
-                title="Open folder in file explorer"
               >
                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
-                Browse Files
+                Browse
               </button>
               
-              {/* Official channel buttons */}
               {!isCustom && (
                 <>
                   <button 
@@ -516,7 +685,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
                       <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
                     </svg>
-                    Fix Permissions
+                    Permissions
                   </button>
                   <button 
                     className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
@@ -528,7 +697,7 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                       <line x1="8" y1="21" x2="16" y2="21"/>
                       <line x1="12" y1="17" x2="12" y2="21"/>
                     </svg>
-                    {hdTexturesInstalled ? 'Uninstall HD Textures' : 'Install HD Textures'}
+                    {hdTexturesInstalled ? 'Remove HD' : 'HD Textures'}
                   </button>
                   {(() => {
                     const dedi = (c as any)?.dedi_url as string | undefined;
@@ -544,20 +713,18 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                           <line x1="6" y1="6" x2="6.01" y2="6"/>
                           <line x1="6" y1="18" x2="6.01" y2="18"/>
                         </svg>
-                        Dedicated Server
+                        Server
                       </a>
                     );
                   })()}
                 </>
               )}
               
-              {/* Uninstall button - always show if installed */}
               {isInstalled && (
                 <button 
                   className="btn btn-sm btn-ghost border border-red-500/20 hover:border-red-500/40 hover:bg-red-500/10 text-red-400 hover:text-red-300 gap-2 ml-auto" 
                   disabled={busy} 
                   onClick={() => onUninstallClick(c.name)}
-                  title="Uninstall this channel and delete all game files"
                 >
                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="3 6 5 6 21 6"/>
