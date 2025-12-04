@@ -1,73 +1,305 @@
 # R5 Valkyrie Launcher
 
-Modern game launcher for R5 Valkyrie built with Electron + Astro + React.
+A modern game launcher for R5 Valkyrie built with Electron, Astro, and React.
+
+## Table of Contents
+
+- [Features](#features)
+- [Requirements](#requirements)
+- [Installation](#installation)
+- [Development](#development)
+- [Building](#building)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Download System](#download-system)
+- [Auto-Updates](#auto-updates)
+- [Deep Links](#deep-links)
+- [License](#license)
 
 ## Features
 
-- Fast concurrent downloads with multipart support, checksum verification, and repair
-- Dynamic Install / Update / Play primary action per channel
-- Per‑channel settings, launch options, and install locations
-- Background video with local caching via custom protocol
-- Auto‑updates from GitHub Releases
-- Dedicated server link per channel (optional)
+- **Multi-channel support**: Manage multiple game channels (PTU, Live, etc.) with independent settings
+- **High-performance downloads**: Concurrent multipart downloads with configurable parallelism
+- **Integrity verification**: SHA256 checksum validation with automatic repair for corrupted files
+- **Mod management**: Browse, install, update, and manage mods from Thunderstore
+- **Launch configuration**: Extensive launch options including resolution, networking, and developer settings
+- **Auto-updates**: Automatic launcher updates via GitHub Releases
+- **Custom install locations**: Per-channel or global custom installation directories
+- **HD texture support**: Optional high-resolution texture downloads
+- **Background video**: Dynamic background with local caching
 
-> Update feed is published to `r5valkyrie/launcher_releases`. See releases here:
-> https://github.com/r5valkyrie/launcher_releases
+## Requirements
+
+- Node.js 18+
+- npm 9+
+- Windows 10/11 (primary target platform)
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/r5valkyrie/launcher.git
+cd launcher
+
+# Install dependencies
+npm install
+```
+
+## Development
+
+```bash
+# Start development server with hot reload
+npm run dev
+
+# Start web-only development (no Electron)
+npm run web
+```
+
+The development server runs Astro on `http://localhost:4321` and launches Electron pointing to that URL.
+
+## Building
+
+```bash
+# Build for production (creates installer in ./release)
+npm run build
+
+# Build without publishing
+npm run release:dry
+
+# Build and publish to GitHub Releases
+npm run release
+
+# Version bump shortcuts
+npm run release:patch   # 0.9.18 -> 0.9.19
+npm run release:minor   # 0.9.18 -> 0.10.0
+npm run release:major   # 0.9.18 -> 1.0.0
+```
+
+Build output is placed in the `release/` directory.
 
 ## Configuration
 
-The launcher fetches a JSON config at startup (default):
-`https://example.com/config.json`
+The launcher fetches configuration from a remote endpoint at startup. Default:
+`https://playvalkyrie.org/api/client/launcherConfig`
 
-Example:
+### Config Schema
 
 ```json
 {
   "backgroundVideo": "shortshowcr5v.mp4",
   "channels": [
     {
-      "name": "PTU",
-      "game_url": "https://example.com/game_files",
-      "dedi_url": "https://example.com/dedi_files/server_PTC_v2.71.2-250907.7z",
-      "enabled": true
+      "name": "LIVE",
+      "game_url": "https://blaze.playvalkyrie.org/ptu_game",
+      "dedi_url": "https://blaze.playvalkyrie.org/dedi_game/server_LIVE_v2.9-251129.7z",
+      "enabled": true,
+      "requires_key": false,
+      "allow_updates": true
+    },
+    {
+      "name": "INDEV",
+      "game_url": "https://blaze.playvalkyrie.org/ptu_game",
+      "dedi_url": "https://blaze.playvalkyrie.org/dedi_game/server_INDEV_v3.0-251130.7z",
+      "enabled": false,
+      "requires_key": true,
+      "allow_updates": true
     }
   ]
 }
 ```
 
-- `backgroundVideo`: optional; loaded and cached with PNG fallback
-- `channels[*].game_url`: base path containing `checksums.json`
-- `channels[*].dedi_url`: optional link in Settings to download the dedicated server
+### Top-Level Properties
 
-## Downloads, Repair, Update
+| Property | Type | Description |
+|----------|------|-------------|
+| `backgroundVideo` | string | Filename for the banner background video (loaded from CDN) |
+| `channels` | array | List of available game channels |
 
-- Install/Update: reads `checksums.json`, downloads single files or multipart (with merge), then verifies checksums
-- Repair: verifies existing files and re‑downloads only mismatches/missing
-- Progress:
-  - Global bar (bytes, speed, ETA)
-  - Detailed per‑file/part view in the Downloads tab
-  - Top‑right toast when finished
+### Channel Properties
 
-Multipart retry behavior:
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | Channel display name and unique identifier (e.g., "LIVE", "INDEV") |
+| `game_url` | string | Base URL for game files, must contain `checksums.json` |
+| `dedi_url` | string | Direct download URL for the dedicated server archive |
+| `enabled` | boolean | Whether the channel is visible and selectable in the launcher |
+| `requires_key` | boolean | Whether the channel requires an access key (reserved) |
+| `allow_updates` | boolean | Whether the channel can receive game updates |
 
-- If a part fails checksum, it is retried once
-- The UI emits a part reset so progress doesn’t flicker between old/new numbers during retry
+## Architecture
 
-## Dedicated Server
+```
+src/
+├── components/
+│   ├── LauncherUI.tsx      # Main application component
+│   ├── common/             # Shared utilities
+│   │   ├── animations.ts   # UI animations (anime.js)
+│   │   ├── launchUtils.ts  # Game launch parameter building
+│   │   ├── modUtils.ts     # Mod management helpers
+│   │   └── utils.ts        # General utilities
+│   ├── modals/             # Modal dialogs
+│   ├── panels/             # Tab panels (Settings, Mods, Launch Options, News)
+│   └── ui/                 # Reusable UI components
+├── pages/
+│   └── index.astro         # Entry point
+└── styles/
+    └── global.css          # Global styles (Tailwind + DaisyUI)
 
-- If a channel has `dedi_url`, Settings shows a "Download Dedicated Server" button which opens the URL in the system browser
+js/                         # Electron source (pre-bundle)
+├── main.js                 # Main process
+├── preload.cjs             # Context bridge
+└── services/
+    ├── downloader.js       # Download manager
+    └── store.js            # Settings persistence
 
-## Auto‑Update
+electron/                   # Bundled Electron code (output)
+```
 
-- Uses `electron-updater` with GitHub provider
-- Feed repository: `r5valkyrie/launcher_releases`
-- Each release must include: `latest.yml`, installer `.exe`, and `.blockmap`
+## Download System
 
-Latest: https://github.com/r5valkyrie/launcher_releases/releases/latest
+### Checksums Format
 
-## Notes
+The launcher expects a `checksums.json` file at each channel's `game_url`:
 
-- Default install directory: `C:\\Program Files\\R5RValk Library\\<channel>`
-- External links always open in the default browser
-- Images/videos in `public/` are served from `dist/` in production
+```json
+{
+  "game_version": "2.9.2-live.251129",
+  "blog_slug": "playtest-patch-notes",
+  "languages": [],
+  "files": [
+    {
+      "path": "r5apex.exe",
+      "size": 123456789,
+      "checksum": "2f7273a8b8f67807c9a485bbc3c3f1340c17e940afa4e21e71869b0a48674a28",
+      "parts": []
+    },
+    {
+      "path": "paks\\Win64\\mp_rr_arena_skygarden.opt.starpak",
+      "size": 2275834152,
+      "checksum": "1293dfc43b1b4816e2c946a6c8f60026dce2c3441ef63cb5a37fa29d2fe12eea",
+      "optional": true,
+      "parts": [
+        {
+          "path": "paks\\Win64\\mp_rr_arena_skygarden.opt.starpak.p0",
+          "checksum": "ec4d157634a68a7370c339beb9fae00091415537fd39c24beb4b563bdb3e14ec",
+          "size": 513802240
+        },
+        {
+          "path": "paks\\Win64\\mp_rr_arena_skygarden.opt.starpak.p1",
+          "checksum": "13d09b5f6ae9c5e19773dc0f53ed5f133943acfd00ef8dfc0dd8c0745631c5af",
+          "size": 513802240
+        }
+      ]
+    }
+  ]
+}
+```
 
+### Checksums Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `game_version` | string | Version identifier for the game build |
+| `blog_slug` | string | Associated blog post slug for patch notes |
+| `languages` | array | Available language packs |
+| `files` | array | List of all game files |
+
+### File Entry Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `path` | string | Relative file path (uses backslashes on Windows) |
+| `size` | number | File size in bytes |
+| `checksum` | string | SHA256 hash of the complete file |
+| `optional` | boolean | If true, file is only downloaded when HD textures are enabled |
+| `parts` | array | Empty array for single files, or array of part objects for multipart files |
+
+### Part Properties (for multipart files)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `path` | string | Part file path (original path with `.p0`, `.p1`, etc. suffix) |
+| `checksum` | string | SHA256 hash of this part |
+| `size` | number | Part size in bytes |
+
+### Download Modes
+
+- **Install**: Downloads all required files, optionally including HD textures
+- **Update**: Verifies existing files, downloads only changed/missing files
+- **Repair**: Full verification pass with re-download of corrupted files
+
+### Multipart Downloads
+
+Large files can be split into parts for parallel downloading:
+- Parts are downloaded concurrently
+- Each part is verified independently
+- Failed parts retry once before marking as failed
+- Parts are merged after all complete verification
+
+### Performance Tuning
+
+Settings panel provides presets:
+- **Speed**: Higher concurrency (12 files, 8 parts)
+- **Stability**: Lower concurrency (4 files, 3 parts)
+- **Default**: Balanced (8 files, 6 parts)
+
+Custom speed limits can be set in bytes per second.
+
+## Auto-Updates
+
+The launcher uses `electron-updater` with GitHub as the update provider.
+
+### Release Repository
+
+Updates are published to: [r5valkyrie/launcher_releases](https://github.com/r5valkyrie/launcher_releases)
+
+### Required Release Assets
+
+Each release must include:
+- `latest.yml` - Update metadata
+- `R5Valkyrie Launcher Setup X.X.X.exe` - Installer
+- `R5Valkyrie Launcher Setup X.X.X.exe.blockmap` - Delta update data
+
+### Environment Variables
+
+For publishing releases, set in `.env`:
+```
+GH_TOKEN=your_github_token
+```
+
+## Deep Links
+
+The launcher registers the `r5v://` protocol for deep linking.
+
+### Supported Actions
+
+```
+r5v://mod/install?name=ModName&version=1.0.0
+r5v://mod/install?downloadUrl=https://...
+```
+
+## Settings Storage
+
+User settings are stored in:
+```
+%APPDATA%/r5vlauncher/settings.json
+```
+
+### Persisted Settings
+
+- Installation directories (global and per-channel)
+- Download performance settings
+- Launch options per channel
+- UI preferences (video, snow effect, mod filters)
+- EULA acceptance version
+
+## Default Paths
+
+- **Launcher installation**: `%LOCALAPPDATA%/Programs/r5vlauncher`
+- **Game installation**: `%LOCALAPPDATA%/Programs/R5VLibrary/<channel>`
+- **Settings**: `%APPDATA%/r5vlauncher/settings.json`
+- **Video cache**: `%APPDATA%/r5vlauncher/video_cache/`
+
+## License
+
+See [LICENSE](LICENSE) for details.
