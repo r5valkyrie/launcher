@@ -369,7 +369,7 @@ export default function LauncherUI() {
   const [installedModsView, setInstalledModsView] = useState<'grid' | 'list'>('grid');
   const [browseModsView, setBrowseModsView] = useState<'grid' | 'list'>('grid');
   const [modsCategory, setModsCategory] = useState<'all' | 'weapons' | 'maps' | 'ui' | 'gameplay' | 'audio'>('all');
-  const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('name');
+  const [modsSortBy, setModsSortBy] = useState<'name' | 'date' | 'downloads' | 'rating'>('date');
   const [modsFilter, setModsFilter] = useState<'all' | 'installed' | 'available' | 'updates'>('all');
   const [favoriteMods, setFavoriteMods] = useState<Set<string>>(new Set());
   const [draggingModName, setDraggingModName] = useState<string | null>(null);
@@ -2009,18 +2009,20 @@ export default function LauncherUI() {
     if (!allMods) return [];
     
     let filtered = allMods.filter((m: any) => {
+      // Check if mod is installed (used for multiple filters below)
+      const installed = (installedMods || []).find((im) => 
+        String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase()
+      );
+      
       // Basic filters
-      if (!modsShowDeprecated && m?.is_deprecated) return false;
+      // Hide deprecated mods unless they're installed or user wants to see them
+      if (!modsShowDeprecated && m?.is_deprecated && !installed) return false;
       if (!modsShowNsfw && m?.has_nsfw_content) return false;
       
       // Category filter - check if ANY of the mod's categories match
       if (modsCategory !== 'all' && !getModCategories(m).includes(modsCategory)) return false;
       
       // Status filter
-      const installed = (installedMods || []).find((im) => 
-        String(im.name || '').toLowerCase() === String(m?.name || '').toLowerCase()
-      );
-      
       if (modsFilter === 'installed' && !installed) return false;
       if (modsFilter === 'available' && installed) return false;
       if (modsFilter === 'updates') {
@@ -2863,35 +2865,46 @@ export default function LauncherUI() {
     <>
       <SnowEffect enabled={snowEffectEnabled} />
       <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
-        {/* Sidebar - inline */}
+        {/* Sidebar - Enhanced */}
         <aside 
           ref={sidebarRef} 
-          className="sticky top-0 h-full flex flex-col items-center py-4 gap-4 border-r border-white/5 overflow-visible relative z-30 bg-base-300/10" 
+          className="sticky top-0 h-full flex flex-col items-center py-6 gap-6 border-r border-white/10 overflow-visible relative z-30 bg-gradient-to-b from-base-300/20 via-base-300/10 to-base-300/5" 
           style={{ opacity: 0 }}
         >
-          {/* Logo */}
+          {/* Logo with enhanced glow */}
           <div 
             ref={sidebarLogoRef} 
-            className="w-14 h-14 rounded-xl bg-gradient-to-br from-primary/20 to-primary/5 border border-white/10 grid place-items-center overflow-hidden hover:border-primary/30 hover:from-primary/30 transition-all duration-300 group cursor-pointer" 
+            className="relative w-16 h-16 rounded-2xl bg-gradient-to-br from-primary/30 via-primary/20 to-primary/10 border border-primary/20 grid place-items-center overflow-hidden hover:border-primary/40 hover:from-primary/40 hover:via-primary/25 transition-all duration-500 group cursor-pointer shadow-lg shadow-primary/10 hover:shadow-xl hover:shadow-primary/20" 
             style={{ opacity: 0 }}
           >
+            {/* Animated background gradient */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-transparent via-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+            
+            {/* Glow effect */}
+            <div className="absolute inset-0 rounded-2xl bg-primary/0 group-hover:bg-primary/5 blur-xl transition-all duration-500" />
+            
             <img
               src="logo.png"
               alt="R5 Valkyrie"
-              className="w-10 h-10 object-contain transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)]"
+              className="relative w-11 h-11 object-contain transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]"
             />
           </div>
 
+          {/* Decorative accent line */}
+          <div className="w-8 h-0.5 bg-gradient-to-r from-transparent via-primary/30 to-transparent rounded-full" />
+
           <div className="flex-1" />
 
-          {/* Social Links */}
-          <div ref={sidebarLinksRef} className="flex flex-col items-center gap-1.5 pb-2 relative overflow-visible">
-            <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Discord">
+          {/* Social Links - Enhanced */}
+          <div ref={sidebarLinksRef} className="flex flex-col items-center gap-2 pb-2 relative overflow-visible">
+            {/* Discord */}
+            <div className="tooltip tooltip-right [--tooltip-offset:12px] [--tooltip-tail:8px] z-[60]" data-tip="Join Discord">
               <a 
-                className="w-9 h-9 rounded-lg bg-transparent hover:bg-indigo-500/20 border border-transparent hover:border-indigo-500/30 flex items-center justify-center text-base-content/60 hover:text-indigo-400 transition-all duration-200"
+                className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-base-300/30 to-base-300/10 hover:from-indigo-500/20 hover:to-indigo-600/10 border border-white/5 hover:border-indigo-500/40 flex items-center justify-center text-base-content/50 hover:text-indigo-400 transition-all duration-300 group/link hover:scale-110 hover:shadow-lg hover:shadow-indigo-500/20"
                 href='https://discord.gg/69V7aNPSzg'
               >
-                <svg className="w-4.5 h-4.5" viewBox="0 -28.5 256 256" preserveAspectRatio="xMidYMid">
+                <div className="absolute inset-0 rounded-xl bg-indigo-500/0 group-hover/link:bg-indigo-500/10 blur-md transition-all duration-300" />
+                <svg className="relative w-5 h-5 transition-transform duration-300 group-hover/link:scale-110" viewBox="0 -28.5 256 256" preserveAspectRatio="xMidYMid">
                   <path
                     d="M216.856339,16.5966031 C200.285002,8.84328665 182.566144,3.2084988 164.041564,0 C161.766523,4.11318106 159.108624,9.64549908 157.276099,14.0464379 C137.583995,11.0849896 118.072967,11.0849896 98.7430163,14.0464379 C96.9108417,9.64549908 94.1925838,4.11318106 91.8971895,0 C73.3526068,3.2084988 55.6133949,8.86399117 39.0420583,16.6376612 C5.61752293,67.146514 -3.4433191,116.400813 1.08711069,164.955721 C23.2560196,181.510915 44.7403634,191.567697 65.8621325,198.148576 C71.0772151,190.971126 75.7283628,183.341335 79.7352139,175.300261 C72.104019,172.400575 64.7949724,168.822202 57.8887866,164.667963 C59.7209612,163.310589 61.5131304,161.891452 63.2445898,160.431257 C105.36741,180.133187 151.134928,180.133187 192.754523,160.431257 C194.506336,161.891452 196.298154,163.310589 198.110326,164.667963 C191.183787,168.842556 183.854737,172.420929 176.223542,175.320965 C180.230393,183.341335 184.861538,190.991831 190.096624,198.16893 C211.238746,191.588051 232.743023,181.531619 254.911949,164.955721 C260.227747,108.668201 245.831087,59.8662432 216.856339,16.5966031 Z M85.4738752,135.09489 C72.8290281,135.09489 62.4592217,123.290155 62.4592217,108.914901 C62.4592217,94.5396472 72.607595,82.7145587 85.4738752,82.7145587 C98.3405064,82.7145587 108.709962,94.5189427 108.488529,108.914901 C108.508531,123.290155 98.3405064,135.09489 85.4738752,135.09489 Z M170.525237,135.09489 C157.88039,135.09489 147.510584,123.290155 147.510584,108.914901 C147.510584,94.5396472 157.658606,82.7145587 170.525237,82.7145587 C183.391518,82.7145587 193.761324,94.5189427 193.539891,108.914901 C193.539891,123.290155 183.391518,135.09489 170.525237,135.09489 Z"
                     fill="currentColor"
@@ -2900,24 +2913,28 @@ export default function LauncherUI() {
               </a>
             </div>
 
-            <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Website">
+            {/* Website */}
+            <div className="tooltip tooltip-right [--tooltip-offset:12px] [--tooltip-tail:8px] z-[60]" data-tip="Visit Website">
               <a 
-                className="w-9 h-9 rounded-lg bg-transparent hover:bg-cyan-500/20 border border-transparent hover:border-cyan-500/30 flex items-center justify-center text-base-content/60 hover:text-cyan-400 transition-all duration-200"
+                className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-base-300/30 to-base-300/10 hover:from-cyan-500/20 hover:to-cyan-600/10 border border-white/5 hover:border-cyan-500/40 flex items-center justify-center text-base-content/50 hover:text-cyan-400 transition-all duration-300 group/link hover:scale-110 hover:shadow-lg hover:shadow-cyan-500/20"
                 href='https://playvalkyrie.org'
               >
-                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="absolute inset-0 rounded-xl bg-cyan-500/0 group-hover/link:bg-cyan-500/10 blur-md transition-all duration-300" />
+                <svg className="relative w-5 h-5 transition-transform duration-300 group-hover/link:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" />
                 </svg>
               </a>
             </div>
 
-            <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Docs">
+            {/* Docs */}
+            <div className="tooltip tooltip-right [--tooltip-offset:12px] [--tooltip-tail:8px] z-[60]" data-tip="Documentation">
               <a 
-                className="w-9 h-9 rounded-lg bg-transparent hover:bg-emerald-500/20 border border-transparent hover:border-emerald-500/30 flex items-center justify-center text-base-content/60 hover:text-emerald-400 transition-all duration-200"
+                className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-base-300/30 to-base-300/10 hover:from-emerald-500/20 hover:to-emerald-600/10 border border-white/5 hover:border-emerald-500/40 flex items-center justify-center text-base-content/50 hover:text-emerald-400 transition-all duration-300 group/link hover:scale-110 hover:shadow-lg hover:shadow-emerald-500/20"
                 href='https://playvalkyrie.org/docs'
               >
-                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="absolute inset-0 rounded-xl bg-emerald-500/0 group-hover/link:bg-emerald-500/10 blur-md transition-all duration-300" />
+                <svg className="relative w-5 h-5 transition-transform duration-300 group-hover/link:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                   <polyline points="14 2 14 8 20 8" />
                   <line x1="16" y1="13" x2="8" y2="13" />
@@ -2927,12 +2944,14 @@ export default function LauncherUI() {
               </a>
             </div>
 
-            <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip="Blog">
+            {/* Blog */}
+            <div className="tooltip tooltip-right [--tooltip-offset:12px] [--tooltip-tail:8px] z-[60]" data-tip="Blog & News">
               <a 
-                className="w-9 h-9 rounded-lg bg-transparent hover:bg-purple-500/20 border border-transparent hover:border-purple-500/30 flex items-center justify-center text-base-content/60 hover:text-purple-400 transition-all duration-200"
+                className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-base-300/30 to-base-300/10 hover:from-purple-500/20 hover:to-purple-600/10 border border-white/5 hover:border-purple-500/40 flex items-center justify-center text-base-content/50 hover:text-purple-400 transition-all duration-300 group/link hover:scale-110 hover:shadow-lg hover:shadow-purple-500/20"
                 href='https://playvalkyrie.org/blog'
               >
-                <svg className="w-4.5 h-4.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <div className="absolute inset-0 rounded-xl bg-purple-500/0 group-hover/link:bg-purple-500/10 blur-md transition-all duration-300" />
+                <svg className="relative w-5 h-5 transition-transform duration-300 group-hover/link:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 20H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v1"/>
                   <path d="M18 14v4h4"/>
                   <path d="M18 22v-7.5a.5.5 0 0 1 .5-.5H22"/>
@@ -2942,16 +2961,18 @@ export default function LauncherUI() {
               </a>
             </div>
 
-            {/* Divider */}
-            <div className="w-6 h-px bg-white/10 my-1" />
+            {/* Divider with gradient */}
+            <div className="w-8 h-0.5 bg-gradient-to-r from-transparent via-white/20 to-transparent rounded-full my-2" />
 
+            {/* Version Info */}
             {appVersion && (
-              <div className="tooltip tooltip-right [--tooltip-offset:8px] [--tooltip-tail:8px] z-[60]" data-tip={`Version ${appVersion}`}>
+              <div className="tooltip tooltip-right [--tooltip-offset:12px] [--tooltip-tail:8px] z-[60]" data-tip={`Version ${appVersion}`}>
                 <button 
-                  className="w-9 h-9 rounded-lg bg-transparent hover:bg-base-content/10 border border-transparent hover:border-white/10 flex items-center justify-center text-base-content/40 hover:text-base-content/70 transition-all duration-200"
+                  className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-base-300/30 to-base-300/10 hover:from-base-300/40 hover:to-base-300/20 border border-white/5 hover:border-white/20 flex items-center justify-center text-base-content/40 hover:text-base-content/70 transition-all duration-300 group/link hover:scale-110 hover:shadow-lg hover:shadow-black/20"
                   onClick={handleVersionClick}
                 >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <div className="absolute inset-0 rounded-xl bg-white/0 group-hover/link:bg-white/5 blur-md transition-all duration-300" />
+                  <svg className="relative w-4.5 h-4.5 transition-transform duration-300 group-hover/link:scale-110" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="16" x2="12" y2="12" />
                     <line x1="12" y1="8" x2="12.01" y2="8" />

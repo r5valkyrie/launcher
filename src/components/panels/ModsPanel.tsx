@@ -546,13 +546,13 @@ export default function ModsPanel(props: ModsPanelProps) {
                   return (
                     <ListItemWrapper key={m.name} itemKey={m.name} type="mod" delay={index * 30}>
                       <div
-                        className={`group relative rounded-2xl overflow-hidden bg-gradient-to-b from-base-300/40 to-base-300/20 border transition-all duration-300 h-full flex flex-col ${
+                        className={`group relative rounded-2xl overflow-hidden bg-gradient-to-br from-base-300/50 via-base-300/30 to-base-300/20 border transition-all duration-300 h-full flex flex-col ${
                           dragOverModName === m.name 
-                            ? 'ring-2 ring-primary scale-[1.02] border-primary/50' 
+                            ? 'ring-2 ring-primary scale-[1.02] border-primary/50 shadow-2xl shadow-primary/30' 
                             : m.enabled 
-                              ? 'border-emerald-500/20 hover:border-emerald-500/40' 
-                              : 'border-white/5 hover:border-white/15'
-                        } ${draggingModName === m.name ? 'opacity-50 scale-95' : 'hover:shadow-xl hover:shadow-black/30 hover:-translate-y-1'}`}
+                              ? 'border-emerald-500/30 hover:border-emerald-500/50 hover:shadow-xl hover:shadow-emerald-500/10' 
+                              : 'border-white/10 hover:border-white/20 hover:shadow-xl hover:shadow-black/20'
+                        } ${draggingModName === m.name ? 'opacity-50 scale-95' : 'hover:-translate-y-1.5'}`}
               draggable
                         onDragStart={(e) => { setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed = 'move'; }}
                         onDragEnd={() => { setDraggingModName(null); setDragOverModName(null); }}
@@ -563,47 +563,47 @@ export default function ModsPanel(props: ModsPanelProps) {
               data-mod-card
             >
                         {/* Image with gradient overlay */}
-                        <div className="relative aspect-[16/9] bg-base-300/50 overflow-hidden flex-shrink-0">
+                        <div className="relative aspect-[16/9] bg-gradient-to-br from-base-300/70 to-base-300/40 overflow-hidden flex-shrink-0">
                           {m.iconDataUrl ? (
-                            <img src={m.iconDataUrl} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            <img src={m.iconDataUrl} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.15]" />
                   ) : getModIconUrl(m.name || m.id) ? (
-                            <img src={getModIconUrl(m.name || m.id) as string} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
+                            <img src={getModIconUrl(m.name || m.id) as string} alt="" className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.15]" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-300/80 to-base-300/40">
-                              <svg className="w-12 h-12 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <svg className="w-14 h-14 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                               </svg>
                             </div>
                           )}
                           
                           {/* Gradient overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
                           
                           {/* Top badges row */}
-                          <div className="absolute top-3 left-3 right-3 flex items-start justify-between">
-                            <div className="flex items-center gap-2">
+                          <div className="absolute top-3 left-3 right-3 flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
                               {/* Load Order Badge */}
-                              <span className="w-6 h-6 flex items-center justify-center rounded bg-black/70 text-white text-[11px] font-bold backdrop-blur-md shadow-lg" title={`Load order: ${index + 1}`}>
+                              <span className="w-7 h-7 flex items-center justify-center rounded-lg bg-black/80 text-white text-xs font-bold backdrop-blur-md shadow-lg ring-1 ring-white/20" title={`Load order: ${index + 1}`}>
                                 {index + 1}
                               </span>
                               {/* Enabled/Disabled indicator */}
-                              <span className={`px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider backdrop-blur-md ${
+                              <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border ${
                                 m.enabled 
-                                  ? 'bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/30' 
-                                  : 'bg-black/60 text-white/50'
+                                  ? 'bg-emerald-500/90 text-white shadow-lg shadow-emerald-500/40 border-emerald-400/50' 
+                                  : 'bg-black/70 text-white/50 border-white/20'
                               }`}>
                                 {m.enabled ? 'Active' : 'Inactive'}
                               </span>
                               {needsUpdate && (
-                                <span className="px-2.5 py-1 rounded text-[10px] font-semibold uppercase tracking-wider bg-amber-500/90 text-white backdrop-blur-md shadow-lg shadow-amber-500/30">
+                                <span className="px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-amber-500/90 text-white backdrop-blur-md shadow-lg shadow-amber-500/40 border border-amber-400/50">
                                   Update
                                 </span>
                   )}
                 </div>
                             
                             {/* Drag Handle */}
-                            <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                              <div className="p-2 rounded-lg bg-black/50 backdrop-blur-sm cursor-grab active:cursor-grabbing text-white/70 hover:text-white hover:bg-black/70 transition-colors" title="Drag to reorder">
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              <div className="p-2 rounded-lg bg-black/60 backdrop-blur-md cursor-grab active:cursor-grabbing text-white/70 hover:text-white hover:bg-black/80 transition-all ring-1 ring-white/10 hover:ring-white/20" title="Drag to reorder">
                                 <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
                                   <circle cx="9" cy="6" r="1.5"/>
                                   <circle cx="15" cy="6" r="1.5"/>
@@ -618,57 +618,60 @@ export default function ModsPanel(props: ModsPanelProps) {
                           
                           {/* Bottom info on image */}
                           <div className="absolute bottom-3 left-3 right-3">
-                            <h4 className="font-bold text-white text-base mb-1 drop-shadow-lg line-clamp-1">
+                            <h4 className="font-bold text-white text-base mb-1.5 drop-shadow-[0_2px_8px_rgba(0,0,0,0.8)] line-clamp-1">
                               {String(m.name || m.id || '').replace(/_/g, ' ')}
                             </h4>
-                            <div className="flex items-center gap-2 text-white/80 text-xs">
-                              <span className="font-mono bg-black/30 px-1.5 py-0.5 rounded">v{m.version || '—'}</span>
+                            <div className="flex items-center gap-2 text-white text-xs flex-wrap">
+                              <span className="font-mono bg-black/40 px-2 py-0.5 rounded-lg backdrop-blur-sm">v{m.version || '—'}</span>
                               {needsUpdate && (
                                 <>
-                                  <svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                                     <polyline points="9 18 15 12 9 6"/>
                                   </svg>
-                                  <span className="font-mono text-amber-400 bg-black/30 px-1.5 py-0.5 rounded">v{latest}</span>
+                                  <span className="font-mono text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-lg backdrop-blur-sm font-semibold">v{latest}</span>
                                 </>
                               )}
-                              <span className="text-white/30">•</span>
-                              <span className="text-white/60">{getCategoryLabel(category)}</span>
+                              <span className="text-white/40">•</span>
+                              <span className="text-white/80 bg-black/30 px-2 py-0.5 rounded-lg backdrop-blur-sm">{getCategoryLabel(category)}</span>
                   </div>
                 </div>
               </div>
                         
                         {/* Content - fixed height for uniformity */}
-                        <div className="p-4 flex flex-col flex-1">
+                        <div className="p-4 flex flex-col flex-1 bg-gradient-to-b from-base-300/20 to-transparent">
                           {/* Description - fixed height area */}
                           <div className="flex-1 min-h-[2.5rem] mb-3">
                             {m.description ? (
-                              <p className="text-xs text-base-content/50 line-clamp-2">{m.description}</p>
+                              <p className="text-xs text-base-content/60 line-clamp-2 leading-relaxed">{m.description}</p>
                             ) : (
                               <p className="text-xs text-base-content/30 italic">No description available</p>
                             )}
                       </div>
                           
                           {/* Actions Row */}
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 pt-3 border-t border-white/5">
                             {/* Toggle */}
-                            <label className="flex items-center gap-2 cursor-pointer flex-1">
+                            <label className="flex items-center gap-2 cursor-pointer flex-1 group/toggle">
                               <input 
                                 type="checkbox" 
                                 className="toggle-switch" 
                                 checked={!!m.enabled} 
                                 onChange={() => toggleModEnabled(m)} 
                               />
-                              <span className="text-xs opacity-50">{m.enabled ? 'Enabled' : 'Disabled'}</span>
+                              <span className="text-xs text-base-content/50 group-hover/toggle:text-base-content/70 transition-colors font-medium">
+                                {m.enabled ? 'Enabled' : 'Disabled'}
+                              </span>
                             </label>
                             
                             {/* Update button */}
                             {needsUpdate && (
                               <button 
-                                className={`btn btn-sm btn-warning gap-1 ${isInstalling ? 'btn-disabled' : ''}`}
+                                className={`btn btn-sm btn-warning gap-1.5 shadow-lg shadow-amber-500/20 ${isInstalling ? 'btn-disabled' : ''}`}
                                 onClick={() => updateInstalled(m)}
                                 disabled={isInstalling}
+                                title="Update to latest version"
                               >
-                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                   <polyline points="17 8 12 3 7 8"/>
                                   <line x1="12" y1="3" x2="12" y2="15"/>
@@ -679,10 +682,10 @@ export default function ModsPanel(props: ModsPanelProps) {
                             
                             {/* Uninstall */}
                             <button 
-                              className={`btn btn-sm btn-ghost text-error/70 hover:text-error hover:bg-error/10 ${(!m.hasManifest || isUninstalling) ? 'btn-disabled opacity-40' : ''}`}
+                              className={`btn btn-sm btn-ghost text-error/70 hover:text-error hover:bg-error/10 border border-transparent hover:border-error/20 ${(!m.hasManifest || isUninstalling) ? 'btn-disabled opacity-40' : ''}`}
                               onClick={() => uninstallMod(m)}
                               disabled={!m.hasManifest || isUninstalling}
-                              title="Uninstall"
+                              title="Uninstall mod"
                             >
                               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                 <polyline points="3 6 5 6 21 6"/>
@@ -772,13 +775,13 @@ export default function ModsPanel(props: ModsPanelProps) {
                   return (
                     <ListItemWrapper key={m.name} itemKey={m.name} type="mod" delay={index * 30}>
                       <div
-                        className={`group relative flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r transition-all duration-200 ${
+                        className={`group relative flex items-center gap-4 p-4 rounded-xl bg-gradient-to-r transition-all duration-300 ${
                           dragOverModName === m.name 
-                            ? 'ring-2 ring-primary scale-[1.01] from-primary/10 to-primary/5' 
+                            ? 'ring-2 ring-primary scale-[1.01] from-primary/15 to-primary/5 shadow-xl shadow-primary/20' 
                             : m.enabled 
-                              ? 'from-emerald-500/5 to-transparent border border-emerald-500/20 hover:border-emerald-500/40' 
-                              : 'from-base-300/30 to-base-300/10 border border-white/5 hover:border-white/15'
-                        } ${draggingModName === m.name ? 'opacity-50 scale-95' : 'hover:shadow-lg hover:shadow-black/20'}`}
+                              ? 'from-emerald-500/8 to-transparent border border-emerald-500/30 hover:border-emerald-500/50 hover:shadow-lg hover:shadow-emerald-500/10' 
+                              : 'from-base-300/30 to-base-300/10 border border-white/10 hover:border-white/20 hover:shadow-lg hover:shadow-black/10'
+                        } ${draggingModName === m.name ? 'opacity-50 scale-95' : ''}`}
                         draggable
                         onDragStart={(e) => { setDraggingModName(m.name); e.dataTransfer.setData('text/mod-name', String(m.name)); e.dataTransfer.effectAllowed = 'move'; }}
                         onDragEnd={() => { setDraggingModName(null); setDragOverModName(null); }}
@@ -788,8 +791,15 @@ export default function ModsPanel(props: ModsPanelProps) {
                         onDrop={(e) => { e.preventDefault(); const name = e.dataTransfer.getData('text/mod-name'); setDragOverModName(null); if (!name || name === m.name) return; setInstalledMods((prev) => { const list = (prev || []).slice(); const fromIdx = list.findIndex(x => x.name === name); const toIdx = list.findIndex(x => x.name === m.name); if (fromIdx < 0 || toIdx < 0 || fromIdx === toIdx) return prev || []; const [item] = list.splice(fromIdx, 1); list.splice(toIdx, 0, item); (async () => { try { const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir; if (dir) await window.electronAPI?.reorderMods?.(dir, list.map(x => String(x.id || ''))); } catch {} })(); return list; }); }}
                         data-mod-card
                       >
+                        {/* Load Order Badge */}
+                        <div className="flex-shrink-0 w-7 h-7 rounded-lg bg-base-300/50 border border-white/10 flex items-center justify-center">
+                          <span className="text-xs font-bold text-base-content/60" title={`Load order: ${index + 1}`}>
+                            {index + 1}
+                          </span>
+                        </div>
+                        
                         {/* Drag Handle */}
-                        <div className="cursor-grab active:cursor-grabbing text-base-content/20 hover:text-base-content/50 transition-colors" title="Drag to reorder">
+                        <div className="cursor-grab active:cursor-grabbing text-base-content/30 hover:text-base-content/60 transition-colors flex-shrink-0" title="Drag to reorder">
                           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="9" cy="6" r="1.5"/>
                             <circle cx="15" cy="6" r="1.5"/>
@@ -801,55 +811,71 @@ export default function ModsPanel(props: ModsPanelProps) {
               </div>
                         
                         {/* Icon with status ring */}
-                        <div className={`relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 ring-2 ${m.enabled ? 'ring-emerald-500/50' : 'ring-white/10'}`}>
+                        <div className={`relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 ring-2 transition-all group-hover:scale-105 ${
+                          m.enabled 
+                            ? 'ring-emerald-500/60 shadow-lg shadow-emerald-500/20' 
+                            : 'ring-white/20'
+                        }`}>
                           {m.iconDataUrl ? (
                             <img src={m.iconDataUrl} alt="" className="w-full h-full object-cover" />
                           ) : getModIconUrl(m.name || m.id) ? (
                             <img src={getModIconUrl(m.name || m.id) as string} alt="" className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center bg-base-300/50">
-                              <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-300/60 to-base-300/40">
+                              <svg className="w-7 h-7 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                 <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                               </svg>
               </div>
                           )}
                           {/* Status dot */}
-                          <div className={`absolute bottom-1 right-1 w-3 h-3 rounded-full border-2 border-base-100 ${m.enabled ? 'bg-emerald-500' : 'bg-base-content/30'}`} />
+                          <div className={`absolute bottom-1.5 right-1.5 w-3.5 h-3.5 rounded-full border-2 border-base-100 shadow-lg ${
+                            m.enabled 
+                              ? 'bg-emerald-500 shadow-emerald-500/50' 
+                              : 'bg-base-content/30'
+                          }`} />
             </div>
 
                         {/* Info */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                            <h4 className="font-semibold text-sm truncate">{String(m.name || m.id || '').replace(/_/g, ' ')}</h4>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap">
+                            <h4 className="font-bold text-sm truncate">{String(m.name || m.id || '').replace(/_/g, ' ')}</h4>
                             <CategoryTags mod={m} maxVisible={2} variant="light" />
                             {needsUpdate && (
-                              <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/20 text-amber-400">
-                                Update
+                              <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                Update Available
                               </span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2 text-xs opacity-50">
-                            <span className="font-mono">v{m.version || '—'}</span>
-                            {needsUpdate && <span className="text-warning">→ v{latest}</span>}
+                          <div className="flex items-center gap-2.5 text-xs text-base-content/50">
+                            <span className="font-mono bg-base-300/30 px-1.5 py-0.5 rounded">v{m.version || '—'}</span>
+                            {needsUpdate && (
+                              <>
+                                <svg className="w-3 h-3 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="9 18 15 12 9 6"/>
+                                </svg>
+                                <span className="font-mono text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-semibold">v{latest}</span>
+                              </>
+                            )}
                           </div>
                           {m.description && (
-                            <p className="text-xs opacity-40 line-clamp-1 mt-1">{m.description}</p>
+                            <p className="text-xs text-base-content/60 line-clamp-1 mt-1 leading-relaxed">{m.description}</p>
                           )}
                         </div>
                         
                         {/* Actions */}
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2.5 flex-shrink-0">
                           {needsUpdate && (
                 <button 
-                              className={`btn btn-sm btn-warning gap-1 ${isInstalling ? 'btn-disabled' : ''}`}
+                              className={`btn btn-sm btn-warning gap-1.5 shadow-lg shadow-amber-500/20 ${isInstalling ? 'btn-disabled' : ''}`}
                               onClick={() => updateInstalled(m)}
                               disabled={isInstalling}
+                              title="Update to latest version"
                             >
                               {isInstalling ? (
                                 <><span className="loading loading-spinner loading-xs"></span> {pct}%</>
                               ) : (
                                 <>
-                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                     <polyline points="17 8 12 3 7 8"/>
                                     <line x1="12" y1="3" x2="12" y2="15"/>
@@ -859,19 +885,22 @@ export default function ModsPanel(props: ModsPanelProps) {
                               )}
                 </button>
                           )}
-                          <label className="cursor-pointer flex items-center gap-2">
+                          <label className="cursor-pointer flex items-center gap-2 group/toggle" title={m.enabled ? 'Disable mod' : 'Enable mod'}>
                             <input 
                               type="checkbox" 
                               className="toggle-switch" 
                               checked={!!m.enabled} 
                               onChange={() => toggleModEnabled(m)} 
                             />
+                            <span className="text-xs text-base-content/50 group-hover/toggle:text-base-content/70 transition-colors font-medium">
+                              {m.enabled ? 'On' : 'Off'}
+                            </span>
                           </label>
                 <button 
-                            className={`btn btn-sm btn-ghost text-error/60 hover:text-error hover:bg-error/10 ${(!m.hasManifest || isUninstalling) ? 'btn-disabled opacity-40' : ''}`}
+                            className={`btn btn-sm btn-ghost text-error/70 hover:text-error hover:bg-error/10 border border-transparent hover:border-error/20 ${(!m.hasManifest || isUninstalling) ? 'btn-disabled opacity-40' : ''}`}
                             onClick={() => uninstallMod(m)}
                             disabled={!m.hasManifest || isUninstalling}
-                            title="Uninstall"
+                            title="Uninstall mod"
                           >
                             {isUninstalling ? (
                               <span className="loading loading-spinner loading-xs"></span>
@@ -1182,13 +1211,13 @@ export default function ModsPanel(props: ModsPanelProps) {
                     
                     return (
                       <ListItemWrapper key={modId} itemKey={modId} type="mod" delay={index * 20}>
-                        <div className="group relative rounded-xl overflow-hidden bg-base-300/30 border border-white/5 hover:border-white/15 transition-all duration-300 hover:shadow-xl hover:shadow-black/30 hover:-translate-y-1 flex flex-col h-full">
+                        <div className="group relative rounded-xl overflow-hidden bg-gradient-to-br from-base-300/40 to-base-300/20 border border-white/5 hover:border-primary/30 transition-all duration-300 hover:shadow-xl hover:shadow-primary/10 hover:-translate-y-1 flex flex-col h-full">
                           {/* Image */}
-                          <div className="relative aspect-[16/10] bg-base-300/50 overflow-hidden">
+                          <div className="relative aspect-[16/10] bg-gradient-to-br from-base-300/60 to-base-300/40 overflow-hidden">
                           {m?.versions?.[0]?.icon ? (
-                              <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
+                              <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center">
+                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-base-300/50 to-base-300/30">
                                 <svg className="w-12 h-12 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                   <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                                 </svg>
@@ -1196,73 +1225,86 @@ export default function ModsPanel(props: ModsPanelProps) {
                           )}
                           
                             {/* Gradient overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
                             
                             {/* Status Badge */}
                             {state !== 'not' && (
-                              <div className="absolute top-2 left-2">
-                                <span className={`px-2 py-1 rounded text-[10px] font-semibold uppercase tracking-wider shadow ${state === 'update' ? 'bg-amber-500/90 text-white' : 'bg-emerald-500/90 text-white'}`}>
+                              <div className="absolute top-2.5 left-2.5">
+                                <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider backdrop-blur-md border ${
+                                  state === 'update' 
+                                    ? 'bg-amber-500/90 text-white border-amber-400/50 shadow-lg shadow-amber-500/30' 
+                                    : 'bg-emerald-500/90 text-white border-emerald-400/50 shadow-lg shadow-emerald-500/30'
+                                }`}>
                                   {state === 'update' ? 'Update' : 'Installed'}
                                 </span>
                           </div>
                             )}
 
                             {/* Categories */}
-                            <div className="absolute top-2 right-2">
-                              <CategoryTags mod={m} maxVisible={2} />
+                            <div className="absolute top-2.5 right-2.5">
+                              <CategoryTags mod={m} maxVisible={1} />
                             </div>
 
-                            {/* Favorite Button */}
-                            <button 
-                              className={`absolute bottom-2 right-2 p-2 rounded-lg transition-all ${
-                                isFavorite 
-                                  ? 'bg-warning/90 text-warning-content' 
-                                  : 'bg-black/50 backdrop-blur-sm text-white/70 opacity-0 group-hover:opacity-100 hover:text-white hover:bg-black/70'
-                              }`}
-                              onClick={() => toggleFavoriteMod(modId)}
-                              title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
-                            >
-                              <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
-                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-                              </svg>
-                            </button>
-                        </div>
-                        
-                          {/* Content */}
-                          <div className="p-4 flex flex-col flex-1">
-                            <h4 className="font-semibold text-sm mb-1 line-clamp-1 group-hover:text-primary transition-colors">{title}</h4>
-                            
-                            <div className="flex items-center gap-2 text-xs opacity-50 mb-2">
-                              <span>v{ver}</span>
-                              {totalDownloads > 0 && (
-                                <>
-                                  <span>•</span>
-                                  <span className="flex items-center gap-1">
-                                    <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            {/* Stats Overlay - Bottom of image */}
+                            <div className="absolute bottom-0 left-0 right-0 p-3 flex items-center justify-between">
+                              <div className="flex items-center gap-3 text-white">
+                                {totalDownloads > 0 && (
+                                  <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 backdrop-blur-sm">
+                                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                       <polyline points="7 10 12 15 17 10"/>
                                       <line x1="12" y1="15" x2="12" y2="3"/>
                                     </svg>
-                                    {totalDownloads >= 1000 ? `${(totalDownloads / 1000).toFixed(1)}k` : totalDownloads}
-                                  </span>
-                                </>
-                              )}
-                              <span>•</span>
-                              <span className="flex items-center gap-1">★ {(m?.rating_score || 0).toFixed(1)}</span>
+                                    <span className="text-xs font-semibold">
+                                      {totalDownloads >= 1000 ? `${(totalDownloads / 1000).toFixed(1)}k` : totalDownloads}
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/40 backdrop-blur-sm">
+                                  <svg className="w-3.5 h-3.5 fill-amber-400" viewBox="0 0 24 24">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                  </svg>
+                                  <span className="text-xs font-semibold">{(m?.rating_score || 0).toFixed(1)}</span>
+                                </div>
+                              </div>
+                              
+                              {/* Favorite Button */}
+                              <button 
+                                className={`p-1.5 rounded-lg transition-all ${
+                                  isFavorite 
+                                    ? 'bg-amber-500/90 text-white shadow-lg shadow-amber-500/30' 
+                                    : 'bg-black/40 backdrop-blur-sm text-white/70 opacity-0 group-hover:opacity-100 hover:bg-black/60'
+                                }`}
+                                onClick={() => toggleFavoriteMod(modId)}
+                                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+                              >
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                              </button>
+                            </div>
+                        </div>
+                        
+                          {/* Content */}
+                          <div className="p-4 flex flex-col flex-1 bg-gradient-to-b from-base-300/20 to-transparent">
+                            <h4 className="font-bold text-sm mb-1.5 line-clamp-1 group-hover:text-primary transition-colors">{title}</h4>
+                            
+                            <div className="flex items-center gap-1.5 text-[11px] text-base-content/50 mb-2">
+                              <span className="font-mono bg-base-300/30 px-1.5 py-0.5 rounded">v{ver}</span>
                             </div>
                             
                             {m?.versions?.[0]?.description && (
-                              <p className="text-xs opacity-60 line-clamp-2 mb-3 flex-1">{m.versions[0].description}</p>
+                              <p className="text-xs text-base-content/60 line-clamp-2 mb-3 flex-1 leading-relaxed">{m.versions[0].description}</p>
                             )}
                             
                             {/* Actions */}
-                            <div className="flex items-center gap-2 mt-auto pt-2">
+                            <div className="flex items-center gap-2 mt-auto pt-2 border-t border-white/5">
                               {state === 'not' && !installingMods[key] && (
                                 <button 
-                                  className="btn btn-sm btn-success flex-1 gap-1"
+                                  className="btn btn-sm btn-success flex-1 gap-1.5 shadow-lg shadow-emerald-500/20"
                                   onClick={() => installFromAll(m)}
                                 >
-                                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                                     <polyline points="7 10 12 15 17 10"/>
                                     <line x1="12" y1="15" x2="12" y2="3"/>
@@ -1272,7 +1314,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             )}
                               {state === 'installed' && !installingMods[key] && (
                               <button 
-                                  className="btn btn-sm btn-error flex-1"
+                                  className="btn btn-sm btn-outline btn-error flex-1"
                                   onClick={() => uninstallFromAll(m)}
                               >
                                 Uninstall
@@ -1281,13 +1323,13 @@ export default function ModsPanel(props: ModsPanelProps) {
                               {state === 'update' && !installingMods[key] && (
                               <>
                                 <button 
-                                    className="btn btn-sm btn-warning flex-1"
+                                    className="btn btn-sm btn-warning flex-1 shadow-lg shadow-amber-500/20"
                                     onClick={() => updateFromAll(m)}
                                 >
                                     Update
                                 </button>
                                 <button 
-                                    className="btn btn-sm btn-ghost text-error"
+                                    className="btn btn-sm btn-ghost text-error hover:bg-error/10"
                                     onClick={() => uninstallFromAll(m)}
                                   title="Uninstall"
                                 >
@@ -1300,7 +1342,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             )}
                               {!installingMods[key] && (
                             <button 
-                                  className="btn btn-sm btn-ghost opacity-70 hover:opacity-100"
+                                  className="btn btn-sm btn-ghost hover:bg-primary/10 hover:text-primary"
                                   onClick={() => openModDetails(m)}
                               title="View details"
                             >
@@ -1400,14 +1442,14 @@ export default function ModsPanel(props: ModsPanelProps) {
                     
                     return (
                       <ListItemWrapper key={modId} itemKey={modId} type="mod" delay={index * 15}>
-                        <div className="group flex items-center gap-4 p-3 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 hover:bg-base-300/30 transition-all relative">
+                        <div className="group flex items-center gap-4 p-3.5 rounded-xl bg-gradient-to-r from-base-300/30 to-base-300/20 border border-white/5 hover:border-primary/20 hover:bg-base-300/40 transition-all relative hover:shadow-lg hover:shadow-black/10">
                           {/* Icon */}
-                          <div className="w-14 h-14 rounded-lg bg-base-300/50 overflow-hidden flex-shrink-0">
+                          <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-base-300/60 to-base-300/40 overflow-hidden flex-shrink-0 ring-1 ring-white/5 group-hover:ring-primary/20 transition-all">
                           {m?.versions?.[0]?.icon ? (
-                            <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                            <img src={m.versions[0].icon} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
                           ) : (
                               <div className="w-full h-full flex items-center justify-center">
-                                <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                <svg className="w-7 h-7 opacity-20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                                   <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
                                 </svg>
                             </div>
@@ -1416,36 +1458,56 @@ export default function ModsPanel(props: ModsPanelProps) {
                         
                           {/* Info */}
                         <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <h4 className="font-semibold text-sm">{title}</h4>
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <h4 className="font-bold text-sm group-hover:text-primary transition-colors">{title}</h4>
                               <CategoryTags mod={m} maxVisible={2} variant="light" />
-                              {state === 'installed' && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">Installed</span>}
-                              {state === 'update' && <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400">Update</span>}
-                              {isFavorite && <span className="text-warning text-xs">★</span>}
+                              {state === 'installed' && <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">Installed</span>}
+                              {state === 'update' && <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30">Update</span>}
                               </div>
-                            <div className="flex items-center gap-3 text-xs opacity-50 mt-0.5">
-                              <span>v{ver}</span>
-                              {totalDownloads > 0 && <span>{totalDownloads >= 1000 ? `${(totalDownloads / 1000).toFixed(1)}k` : totalDownloads} downloads</span>}
-                              <span>★ {(m?.rating_score || 0).toFixed(1)}</span>
+                            <div className="flex items-center gap-3 text-xs text-base-content/50 mb-1">
+                              <span className="font-mono bg-base-300/30 px-1.5 py-0.5 rounded">v{ver}</span>
+                              {totalDownloads > 0 && (
+                                <span className="flex items-center gap-1">
+                                  <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="7 10 12 15 17 10"/>
+                                    <line x1="12" y1="15" x2="12" y2="3"/>
+                                  </svg>
+                                  {totalDownloads >= 1000 ? `${(totalDownloads / 1000).toFixed(1)}k` : totalDownloads}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-1">
+                                <svg className="w-3 h-3 fill-amber-400" viewBox="0 0 24 24">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
+                                {(m?.rating_score || 0).toFixed(1)}
+                              </span>
                             </div>
                               {m?.versions?.[0]?.description && (
-                              <p className="text-xs opacity-50 line-clamp-1 mt-1">{m.versions[0].description}</p>
+                              <p className="text-xs text-base-content/60 line-clamp-1 leading-relaxed">{m.versions[0].description}</p>
                             )}
                             </div>
                             
                           {/* Actions */}
                             <div className="flex items-center gap-2 flex-shrink-0">
+                              {/* Favorite Button */}
                               <button 
-                              className={`btn btn-xs btn-circle ${isFavorite ? 'btn-warning' : 'btn-ghost opacity-50 hover:opacity-100'}`}
+                                className={`btn btn-sm btn-circle shadow-lg ${
+                                  isFavorite 
+                                    ? 'bg-amber-500 hover:bg-amber-400 text-white border-amber-400/50 shadow-amber-500/30' 
+                                    : 'btn-ghost border border-white/5 text-base-content/40 hover:text-amber-400 hover:border-amber-500/20 hover:bg-amber-500/10'
+                                }`}
                                 onClick={() => toggleFavoriteMod(modId)}
-                              title={isFavorite ? 'Unfavorite' : 'Favorite'}
+                                title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
                               >
-                              ★
+                                <svg className="w-4 h-4" viewBox="0 0 24 24" fill={isFavorite ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
+                                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                                </svg>
                               </button>
                               
                             {/* Installing progress indicator */}
                             {installingMods[key] === 'install' && (
-                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30">
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-emerald-500/20 to-green-500/20 border border-emerald-500/30 shadow-lg shadow-emerald-500/20">
                                 {(() => {
                                   const mp = modProgress[key];
                                   const pct = mp?.total ? Math.min(100, Math.floor((mp.received / mp.total) * 100)) : (mp?.phase === 'extracting' ? 100 : 0);
@@ -1471,7 +1533,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             
                             {/* Uninstalling indicator */}
                             {installingMods[key] === 'uninstall' && (
-                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-500/20 to-rose-500/20 border border-red-500/30">
+                              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-red-500/20 to-rose-500/20 border border-red-500/30 shadow-lg shadow-red-500/20">
                                 <svg className="w-4 h-4 text-red-400 animate-pulse" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                   <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
                                 </svg>
@@ -1483,15 +1545,20 @@ export default function ModsPanel(props: ModsPanelProps) {
                               <>
                               {state === 'not' && (
                                 <button 
-                                    className="btn btn-sm btn-success gap-1"
+                                    className="btn btn-sm btn-success gap-1.5 shadow-lg shadow-emerald-500/20"
                                     onClick={() => installFromAll(m)}
                                 > 
+                                    <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                      <polyline points="7 10 12 15 17 10"/>
+                                      <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
                                     Install
                                 </button>
                               )}
                               {state === 'installed' && (
                                 <button 
-                                    className="btn btn-sm btn-error"
+                                    className="btn btn-sm btn-outline btn-error"
                                     onClick={() => uninstallFromAll(m)}
                                 >
                                   Uninstall
@@ -1500,13 +1567,13 @@ export default function ModsPanel(props: ModsPanelProps) {
                               {state === 'update' && (
                                 <>
                                   <button 
-                                      className="btn btn-sm btn-warning"
+                                      className="btn btn-sm btn-warning shadow-lg shadow-amber-500/20"
                                       onClick={() => updateFromAll(m)}
                                   >
                                       Update
                                   </button>
                                   <button 
-                                      className="btn btn-sm btn-ghost text-error"
+                                      className="btn btn-sm btn-ghost text-error hover:bg-error/10"
                                       onClick={() => uninstallFromAll(m)}
                                     title="Uninstall"
                                   >
@@ -1518,9 +1585,9 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 </>
                               )}
                               <button 
-                                  className="btn btn-sm btn-ghost opacity-60 hover:opacity-100"
+                                  className="btn btn-sm btn-ghost hover:bg-primary/10 hover:text-primary"
                                   onClick={() => openModDetails(m)}
-                                  title="Details"
+                                  title="View details"
                                 >
                                   <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                                     <circle cx="12" cy="12" r="10"/>
