@@ -7,6 +7,7 @@ import SettingsPanel from './panels/SettingsPanel';
 import ModsPanel from './panels/ModsPanel';
 import NewsPanel from './panels/NewsPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
+import DependencyModal from './modals/DependencyModal';
 import SnowEffect from './ui/SnowEffect';
 import UpdaterModal from './modals/UpdaterModal';
 import ConfirmModal from './modals/ConfirmModal';
@@ -16,7 +17,8 @@ import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './panels/LaunchOptionsPanel';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
-import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible } from './common/modUtils';
+import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods } from './common/modUtils';
+import type { DependencyTree } from './common/modUtils';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -436,6 +438,15 @@ export default function LauncherUI() {
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
   const [pendingDeepLink, setPendingDeepLink] = useState<{ name?: string; version?: string; downloadUrls?: string[] } | null>(null);
+  // Dependency modal state
+  const [dependencyModalOpen, setDependencyModalOpen] = useState<boolean>(false);
+  const [pendingDependencyTree, setPendingDependencyTree] = useState<DependencyTree | null>(null);
+  const [dependencyInstallCallback, setDependencyInstallCallback] = useState<(() => Promise<void>) | null>(null);
+  const [isDependencyInstalling, setIsDependencyInstalling] = useState<boolean>(false);
+  // Uninstall dependency warning state
+  const [uninstallWarningOpen, setUninstallWarningOpen] = useState<boolean>(false);
+  const [uninstallWarningMod, setUninstallWarningMod] = useState<any | null>(null);
+  const [dependentMods, setDependentMods] = useState<{ mod: any; pack: any }[]>([]);
   // EULA state
   const [eulaOpen, setEulaOpen] = useState<boolean>(false);
   const [eulaLoading, setEulaLoading] = useState<boolean>(false);
@@ -1267,25 +1278,142 @@ export default function LauncherUI() {
 
 
 
+  // Install a mod with its dependencies (shows confirmation modal if there are deps to install)
+  async function installModWithDependencies(pack: any, version?: any) {
+    const targetVersion = version || (Array.isArray(pack?.versions) ? pack.versions[0] : null);
+    if (!targetVersion) return;
+
+    // Build the dependency tree
+    const tree = buildDependencyTree(
+      pack,
+      targetVersion,
+      allMods || [],
+      installedMods || [],
+      compareVersions
+    );
+
+    // If there are dependencies to install or update, show the modal
+    if (tree.toInstall.length > 0 || tree.toUpdate.length > 0) {
+      const doInstall = async () => {
+        setIsDependencyInstalling(true);
+        try {
+          const dir = (channelsSettings?.[selectedChannel]?.installDir) || installDir;
+          if (!dir) {
+            setModsError('Install the game first to install mods.');
+            return;
+          }
+
+          // Install/update dependencies first
+          for (const dep of [...tree.toInstall, ...tree.toUpdate]) {
+            if (!dep.pack) continue;
+            const depLatest = dep.pack?.versions?.[0];
+            if (!depLatest?.download_url) continue;
+            
+            const depFolderName = sanitizeFolderName(dep.pack.full_name || dep.pack.name || dep.name);
+            setInstallingMods((s) => ({ ...s, [depFolderName]: 'install' }));
+            
+            try {
+              await window.electronAPI?.installMod?.(dir, depFolderName, depLatest.download_url);
+            } catch (e) {
+              console.error(`Failed to install dependency ${dep.name}:`, e);
+            }
+          }
+
+          // Now install the main mod
+          const mainFolderName = sanitizeFolderName(pack.full_name || pack.name || targetVersion.name || 'mod');
+          setInstallingMods((s) => ({ ...s, [mainFolderName]: 'install' }));
+          
+          const res = await window.electronAPI?.installMod?.(dir, mainFolderName, targetVersion.download_url);
+          if (!res || (res as any)?.ok === false) {
+            setModsError(String((res as any)?.error || 'Failed to install mod'));
+          }
+
+          // Refresh installed list
+          const listRes = await window.electronAPI?.listInstalledMods?.(dir);
+          setInstalledMods(listRes?.ok ? (listRes?.mods || []) : (installedMods || []));
+
+          // Show success toast
+          setToastMessage(`Installed ${pack.name || 'mod'} with ${tree.toInstall.length + tree.toUpdate.length} dependencies`);
+          setToastType('success');
+          setFinished(true);
+        } finally {
+          setIsDependencyInstalling(false);
+          setDependencyModalOpen(false);
+          setPendingDependencyTree(null);
+          // Clean up installing states
+          const allFolders = [
+            ...tree.toInstall.map(d => sanitizeFolderName(d.pack?.full_name || d.pack?.name || d.name)),
+            ...tree.toUpdate.map(d => sanitizeFolderName(d.pack?.full_name || d.pack?.name || d.name)),
+            sanitizeFolderName(pack.full_name || pack.name || targetVersion.name || 'mod')
+          ];
+          setInstallingMods((s) => {
+            const n = { ...s };
+            allFolders.forEach(f => delete n[f]);
+            return n;
+          });
+        }
+      };
+
+      setPendingDependencyTree(tree);
+      setDependencyInstallCallback(() => doInstall);
+      setDependencyModalOpen(true);
+    } else {
+      // No dependencies to install, proceed directly
+      await installMod({ name: pack.full_name || pack.name, full_name: pack.full_name, versions: [targetVersion] });
+    }
+  }
+
   async function installFromAll(pack: any) {
     const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
     const baseName = pack?.full_name || pack?.name || latest?.name || 'mod';
     const folderName = sanitizeFolderName(baseName);
     if (installingMods[folderName]) return;
-    await installMod({ name: folderName, versions: pack?.versions });
+    
+    // Use dependency-aware installation
+    await installModWithDependencies(pack, latest);
   }
 
   async function updateFromAll(pack: any) {
     const nameKey = String(pack?.name || '').toLowerCase();
     const installed = (installedMods || []).find((m) => String(m.name || '').toLowerCase() === nameKey);
     if (!installed) return installFromAll(pack);
-    await installMod({ name: installed.folder || installed.name, versions: pack?.versions });
+    
+    // For updates, use the same dependency logic
+    const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
+    if (latest) {
+      await installModWithDependencies(pack, latest);
+    } else {
+      await installMod({ name: installed.folder || installed.name, versions: pack?.versions });
+    }
   }
 
   async function uninstallFromAll(pack: any) {
     const nameKey = String(pack?.name || '').toLowerCase();
     const installed = (installedMods || []).find((m) => String(m.name || '').toLowerCase() === nameKey);
-    if (installed) await uninstallMod(installed);
+    if (installed) await uninstallModWithWarning(installed);
+  }
+
+  // Check for dependent mods before uninstalling
+  async function uninstallModWithWarning(mod: InstalledMod) {
+    const deps = findDependentMods(mod.name || mod.id || '', installedMods || [], allMods || []);
+    
+    if (deps.length > 0) {
+      setUninstallWarningMod(mod);
+      setDependentMods(deps);
+      setUninstallWarningOpen(true);
+    } else {
+      await uninstallMod(mod);
+    }
+  }
+
+  // Confirm uninstall despite dependent mods
+  async function confirmUninstallWithDependents() {
+    if (uninstallWarningMod) {
+      await uninstallMod(uninstallWarningMod);
+    }
+    setUninstallWarningOpen(false);
+    setUninstallWarningMod(null);
+    setDependentMods([]);
   }
 
   async function updateInstalled(mod: InstalledMod) {
@@ -2350,8 +2478,8 @@ export default function LauncherUI() {
   }
 
   async function installSpecificVersion(pack: any, version: any) {
-    const folderName = sanitizeFolderName(pack?.full_name || pack?.name || version?.name || 'mod');
-    await installMod({ name: folderName, full_name: pack?.full_name || pack?.name, versions: [version] });
+    // Use dependency-aware installation
+    await installModWithDependencies(pack, version);
   }
 
   // Handle deep link requests from main: r5v://mod/install?name=...&version=...&downloadUrl=...
@@ -2872,7 +3000,7 @@ export default function LauncherUI() {
                   compareVersions={compareVersions as any}
                   updateInstalled={updateInstalled as any}
                   toggleModEnabled={toggleModEnabled as any}
-                  uninstallMod={uninstallMod as any}
+                  uninstallMod={uninstallModWithWarning as any}
                   installFromAll={installFromAll as any}
                   uninstallFromAll={uninstallFromAll as any}
                   updateFromAll={updateFromAll as any}
@@ -2987,6 +3115,40 @@ export default function LauncherUI() {
         sanitizeFolderName={sanitizeFolderName as any}
         installingMods={installingMods}
         installSpecificVersion={installSpecificVersion as any}
+        allMods={allMods || []}
+        getPackByName={(name: string) => getPackByName(name, allMods || undefined)}
+      />
+
+      {/* Dependency Installation Confirmation Modal */}
+      <DependencyModal
+        open={dependencyModalOpen}
+        dependencyTree={pendingDependencyTree}
+        onConfirm={async () => {
+          if (dependencyInstallCallback) {
+            await dependencyInstallCallback();
+          }
+        }}
+        onCancel={() => {
+          setDependencyModalOpen(false);
+          setPendingDependencyTree(null);
+          setDependencyInstallCallback(null);
+        }}
+        isInstalling={isDependencyInstalling}
+      />
+
+      {/* Uninstall Warning Modal (when mod has dependents) */}
+      <ConfirmModal
+        open={uninstallWarningOpen}
+        title="Mod Has Dependents"
+        message={`${dependentMods.length} installed mod${dependentMods.length !== 1 ? 's' : ''} depend on "${uninstallWarningMod?.name || 'this mod'}". Uninstalling may break these mods:\n\n${dependentMods.map(d => `• ${d.mod.name || d.mod.id}`).join('\n')}\n\nAre you sure you want to uninstall?`}
+        confirmText="Uninstall Anyway"
+        variant="danger"
+        onClose={() => {
+          setUninstallWarningOpen(false);
+          setUninstallWarningMod(null);
+          setDependentMods([]);
+        }}
+        onConfirm={confirmUninstallWithDependents}
       />
 
       <EulaModal

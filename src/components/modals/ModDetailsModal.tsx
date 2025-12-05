@@ -1,4 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { getVersionDependencies, isFrameworkDependency } from '../common/modUtils';
+import type { ParsedDependency } from '../common/modUtils';
 
 type ModDetailsModalProps = {
   open: boolean;
@@ -10,6 +12,8 @@ type ModDetailsModalProps = {
   sanitizeFolderName: (name: string) => string;
   installingMods: Record<string, 'install' | 'uninstall' | undefined>;
   installSpecificVersion: (pack: any, version: any) => void;
+  allMods?: any[];
+  getPackByName?: (name: string) => any | null;
 };
 
 export default function ModDetailsModal(props: ModDetailsModalProps) {
@@ -23,7 +27,11 @@ export default function ModDetailsModal(props: ModDetailsModalProps) {
     sanitizeFolderName,
     installingMods,
     installSpecificVersion,
+    allMods = [],
+    getPackByName,
   } = props;
+
+  const [activeSection, setActiveSection] = useState<'versions' | 'dependencies'>('versions');
 
   if (!open || !modDetailsPack) return null;
 
@@ -140,18 +148,53 @@ export default function ModDetailsModal(props: ModDetailsModalProps) {
 
           {/* Content */}
           <div className="p-6 pt-2">
-            {/* Section Header */}
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center">
-                <svg className="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            {/* Section Tabs */}
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeSection === 'versions'
+                    ? 'bg-primary/20 text-primary border border-primary/30'
+                    : 'bg-base-300/30 text-base-content/60 border border-white/5 hover:border-white/10 hover:text-base-content'
+                }`}
+                onClick={() => setActiveSection('versions')}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
                 </svg>
-              </div>
-              <div>
-                <h3 className="text-base font-semibold">Available Versions</h3>
-                <p className="text-xs text-base-content/50">Select a version to install</p>
-              </div>
+                Versions ({(modDetailsPack?.versions || []).length})
+              </button>
+              <button
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  activeSection === 'dependencies'
+                    ? 'bg-purple-500/20 text-purple-400 border border-purple-500/30'
+                    : 'bg-base-300/30 text-base-content/60 border border-white/5 hover:border-white/10 hover:text-base-content'
+                }`}
+                onClick={() => setActiveSection('dependencies')}
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                  <line x1="12" y1="22.08" x2="12" y2="12"/>
+                </svg>
+                Dependencies ({getVersionDependencies(modDetailsPack?.versions?.[0]).length})
+              </button>
             </div>
+
+            {/* Versions Section */}
+            {activeSection === 'versions' && (
+              <>
+                {/* Section Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500/20 to-indigo-500/20 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold">Available Versions</h3>
+                    <p className="text-xs text-base-content/50">Select a version to install</p>
+                  </div>
+                </div>
             
             {/* Versions List */}
             <div className="max-h-[40vh] overflow-y-auto space-y-2 pr-1">
@@ -262,6 +305,188 @@ export default function ModDetailsModal(props: ModDetailsModalProps) {
                 </svg>
                 <p className="text-sm text-base-content/50">No versions available</p>
               </div>
+            )}
+              </>
+            )}
+
+            {/* Dependencies Section */}
+            {activeSection === 'dependencies' && (
+              <>
+                {/* Section Header */}
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 className="text-base font-semibold">Dependencies</h3>
+                    <p className="text-xs text-base-content/50">Required mods for latest version</p>
+                  </div>
+                </div>
+
+                {/* Dependencies List */}
+                {(() => {
+                  const latestVersion = modDetailsPack?.versions?.[0];
+                  const deps = getVersionDependencies(latestVersion);
+                  
+                  if (deps.length === 0) {
+                    return (
+                      <div className="text-center py-12">
+                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-emerald-500/10 flex items-center justify-center">
+                          <svg className="w-8 h-8 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </div>
+                        <h4 className="text-lg font-semibold mb-1">No Dependencies</h4>
+                        <p className="text-sm text-base-content/50">This mod can be installed without any other mods.</p>
+                      </div>
+                    );
+                  }
+
+                  // Separate framework deps from regular deps
+                  const frameworkDeps = deps.filter(d => isFrameworkDependency(d));
+                  const regularDeps = deps.filter(d => !isFrameworkDependency(d));
+
+                  const DependencyCard = ({ dep }: { dep: ParsedDependency }) => {
+                    const resolvedPack = getPackByName ? getPackByName(`${dep.author}-${dep.name}`) : 
+                      allMods.find((p: any) => {
+                        const fullName = String(p?.full_name || '').toLowerCase();
+                        return fullName === `${dep.author}-${dep.name}`.toLowerCase();
+                      });
+                    
+                    const isInstalled = (installedMods || []).some((m: any) => {
+                      const modName = String(m?.name || m?.id || '').toLowerCase();
+                      return modName === dep.name.toLowerCase() || 
+                             modName === `${dep.author}-${dep.name}`.toLowerCase();
+                    });
+                    const isFramework = isFrameworkDependency(dep);
+                    
+                    return (
+                      <div className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
+                        isInstalled 
+                          ? 'bg-emerald-500/5 border-emerald-500/20' 
+                          : resolvedPack 
+                            ? 'bg-base-300/20 border-white/5 hover:border-white/10' 
+                            : 'bg-amber-500/5 border-amber-500/20'
+                      }`}>
+                        {/* Icon */}
+                        <div className="w-12 h-12 rounded-lg bg-base-300/50 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                          {resolvedPack?.versions?.[0]?.icon ? (
+                            <img src={resolvedPack.versions[0].icon} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <svg className="w-6 h-6 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+                            </svg>
+                          )}
+                        </div>
+                        
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">{resolvedPack?.name || dep.name}</span>
+                            {isFramework && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-500/20 text-purple-400">
+                                Framework
+                              </span>
+                            )}
+                            {isInstalled && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-500/20 text-emerald-400">
+                                Installed
+                              </span>
+                            )}
+                            {!resolvedPack && (
+                              <span className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-400">
+                                Not in Catalog
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-base-content/50 mt-0.5">
+                            <span className="font-mono">v{dep.version}+</span>
+                            <span className="text-base-content/30">•</span>
+                            <span>by {dep.author}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Status Icon */}
+                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          isInstalled 
+                            ? 'bg-emerald-500/20 text-emerald-400' 
+                            : resolvedPack 
+                              ? 'bg-base-300/50 text-base-content/40' 
+                              : 'bg-amber-500/20 text-amber-400'
+                        }`}>
+                          {isInstalled ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="20 6 9 17 4 12"/>
+                            </svg>
+                          ) : resolvedPack ? (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                              <polyline points="7 10 12 15 17 10"/>
+                              <line x1="12" y1="15" x2="12" y2="3"/>
+                            </svg>
+                          ) : (
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <circle cx="12" cy="12" r="10"/>
+                              <line x1="12" y1="8" x2="12" y2="12"/>
+                              <line x1="12" y1="16" x2="12.01" y2="16"/>
+                            </svg>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  };
+
+                  return (
+                    <div className="max-h-[40vh] overflow-y-auto space-y-4 pr-1">
+                      {/* Info Banner */}
+                      <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                        <div className="flex items-start gap-2">
+                          <svg className="w-4 h-4 text-blue-400 mt-0.5 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="12" y1="16" x2="12" y2="12"/>
+                            <line x1="12" y1="8" x2="12.01" y2="8"/>
+                          </svg>
+                          <p className="text-xs text-blue-400/80">
+                            Dependencies will be automatically installed when you install this mod.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Framework Dependencies */}
+                      {frameworkDeps.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-2">
+                            Framework Requirements ({frameworkDeps.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {frameworkDeps.map(dep => (
+                              <DependencyCard key={dep.fullString} dep={dep} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Regular Dependencies */}
+                      {regularDeps.length > 0 && (
+                        <div>
+                          <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-2">
+                            Mod Dependencies ({regularDeps.length})
+                          </h4>
+                          <div className="space-y-2">
+                            {regularDeps.map(dep => (
+                              <DependencyCard key={dep.fullString} dep={dep} />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
         </div>
