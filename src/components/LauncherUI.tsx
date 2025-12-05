@@ -411,6 +411,12 @@ export default function LauncherUI() {
   const [patchNotesSearch, setPatchNotesSearch] = useState<string>('');
   const [readPosts, setReadPosts] = useState<Set<string>>(new Set());
   const [favoritePosts, setFavoritePosts] = useState<Set<string>>(new Set());
+  const [availableNewsCategories, setAvailableNewsCategories] = useState<Set<string>>(new Set(['all']));
+  
+  // Ref to track initial load state (prevents loading skeleton on category switches)
+  const patchInitialLoadRef = useRef<boolean>(true);
+  // Ref to track which filter the current posts belong to
+  const currentPatchFilterRef = useRef<string>('all');
   // Launch options state
   type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
   const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
@@ -1796,7 +1802,16 @@ export default function LauncherUI() {
 
   useEffect(() => {
     const loadPatch = async () => {
-      setPatchLoading(true);
+      // Clear posts immediately if filter changed (prevents showing wrong category)
+      if (currentPatchFilterRef.current !== patchNotesFilter && !patchInitialLoadRef.current) {
+        setPatchPosts([]);
+      }
+      
+      // Only show loading skeleton on initial load
+      if (patchInitialLoadRef.current) {
+        setPatchLoading(true);
+      }
+      
       try {
         // Fetch multiple types of content
         const channelTag = `${(selectedChannel || '').toLowerCase()}-patch-notes`;
@@ -1821,6 +1836,18 @@ export default function LauncherUI() {
         const json = await resp.json();
         let posts = Array.isArray(json?.posts) ? json.posts : [];
         
+        // Detect available categories when loading 'all' filter
+        if (patchNotesFilter === 'all' && posts.length > 0) {
+          const categories = new Set<string>(['all']);
+          posts.forEach((post: any) => {
+            const category = getPostCategoryFromTags((post as any).tags);
+            if (category) {
+              categories.add(category);
+            }
+          });
+          setAvailableNewsCategories(categories);
+        }
+        
         // For "All" tab, prioritize community content first
         if (patchNotesFilter === 'all') {
           posts = posts.sort((a: any, b: any) => {
@@ -1842,13 +1869,24 @@ export default function LauncherUI() {
         }
         
         setPatchPosts(posts);
+        currentPatchFilterRef.current = patchNotesFilter; // Update current filter ref
+        patchInitialLoadRef.current = false; // Mark as loaded after first successful fetch
       } catch {
         setPatchPosts([]);
       } finally {
-        setPatchLoading(false);
+        if (patchInitialLoadRef.current) {
+          setPatchLoading(false);
+        }
       }
     };
-    if (activeTab === 'general' && selectedChannel) loadPatch();
+    
+    // Reset initial load flag when changing tabs or channels
+    if (activeTab === 'general' && selectedChannel) {
+      loadPatch();
+    } else {
+      patchInitialLoadRef.current = true;
+      currentPatchFilterRef.current = 'all';
+    }
   }, [activeTab, selectedChannel, patchNotesFilter]);
 
   // Helper functions for patch notes
@@ -3338,6 +3376,7 @@ export default function LauncherUI() {
                 toggleFavoritePost={toggleFavoritePost}
                 getPostCategory={getPostCategory as any}
                 openNewsPost={openNewsPost}
+                availableCategories={availableNewsCategories}
               />
             )}
             </div>
