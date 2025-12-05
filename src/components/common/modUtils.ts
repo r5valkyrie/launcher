@@ -1,4 +1,5 @@
 // Mod-related utility functions
+import pako from 'pako';
 
 type InstalledMod = {
   id?: string;
@@ -181,6 +182,245 @@ export function isFrameworkDependency(dep: ParsedDependency): boolean {
   const frameworkNames = ['bepinex', 'bepinexpack', 'r2modman', 'hookgen'];
   return frameworkNames.some(f => dep.name.toLowerCase().includes(f));
 }
+
+// ============================================
+// MOD PROFILES
+// ============================================
+
+export type ModProfile = {
+  id: string;
+  name: string;
+  description?: string;
+  createdAt: number;
+  updatedAt: number;
+  mods: ModProfileEntry[];
+};
+
+export type ModProfileEntry = {
+  name: string;
+  fullName?: string; // Author-ModName format for reliable matching
+  version?: string;
+  enabled: boolean;
+};
+
+/**
+ * Generate a unique profile ID
+ */
+export function generateProfileId(): string {
+  return `profile_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/**
+ * Create a profile from currently installed mods
+ * @param allMods - Optional Thunderstore catalog to look up full names
+ */
+export function createProfileFromMods(
+  name: string,
+  installedMods: any[],
+  description?: string,
+  allMods?: any[]
+): ModProfile {
+  const now = Date.now();
+  return {
+    id: generateProfileId(),
+    name,
+    description,
+    createdAt: now,
+    updatedAt: now,
+    mods: installedMods.map(m => {
+      const modName = m.name || m.id || '';
+      const folder = m.folder || '';
+      
+      // Try to find full name from folder (often Author-ModName format)
+      // or look up in allMods catalog
+      let fullName = folder.includes('-') ? folder : undefined;
+      
+      if (!fullName && allMods) {
+        const pack = allMods.find((p: any) => {
+          const pName = String(p.name || '').toLowerCase();
+          const pFullName = String(p.full_name || '').toLowerCase();
+          const searchName = modName.toLowerCase();
+          return pName === searchName || pFullName.endsWith(`-${searchName}`);
+        });
+        if (pack?.full_name) {
+          fullName = pack.full_name;
+        }
+      }
+      
+      return {
+        name: modName,
+        fullName,
+        version: m.version || undefined,
+        enabled: !!m.enabled,
+      };
+    }),
+  };
+}
+
+/**
+ * Encode a profile to a shareable string
+ * Format: Compressed, chunked code for readability
+ */
+export function encodeProfileToShareCode(profile: ModProfile): string {
+  try {
+    // Create a minimal shareable version (exclude timestamps, id, and empty values)
+    const shareData = {
+      n: profile.name,
+      ...(profile.description ? { d: profile.description } : {}),
+      m: profile.mods.map(m => {
+        const entry: Record<string, any> = { n: m.name };
+        if (m.fullName) entry.f = m.fullName;
+        if (m.version) entry.v = m.version;
+        if (m.enabled) entry.e = 1;
+        return entry;
+      }),
+    };
+    const json = JSON.stringify(shareData);
+    
+    // Compress with pako (deflate)
+    const compressed = pako.deflate(json, { level: 9 });
+    
+    // Convert to base64
+    let base64 = btoa(String.fromCharCode(...compressed));
+    
+    // Make URL-safe
+    base64 = base64.replace(/\+/g, '.').replace(/\//g, '_').replace(/=+$/, '');
+    
+    // Split into chunks of 8 for readability (balance between length and aesthetics)
+    const chunks: string[] = [];
+    for (let i = 0; i < base64.length; i += 8) {
+      chunks.push(base64.slice(i, i + 8));
+    }
+    
+    return `R5V-${chunks.join('-')}`;
+  } catch (e) {
+    console.error('Failed to encode profile:', e);
+    return '';
+  }
+}
+
+/**
+ * Decode a share code back to a profile
+ */
+export function decodeShareCodeToProfile(code: string): ModProfile | null {
+  try {
+    if (!code.startsWith('R5V-')) {
+      return null;
+    }
+    
+    // Remove prefix and rejoin chunks
+    let base64 = code.replace('R5V-', '').replace(/-/g, '');
+    // Restore URL-safe characters (. back to +, _ back to /)
+    base64 = base64.replace(/\./g, '+').replace(/_/g, '/');
+    // Add padding if needed
+    while (base64.length % 4) base64 += '=';
+    
+    // Decode base64 to binary
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    
+    // Decompress with pako
+    const json = pako.inflate(bytes, { to: 'string' });
+    const shareData = JSON.parse(json);
+    
+    const now = Date.now();
+    return {
+      id: generateProfileId(),
+      name: shareData.n || 'Imported Profile',
+      description: shareData.d || '',
+      createdAt: now,
+      updatedAt: now,
+      mods: (shareData.m || []).map((m: any) => ({
+        name: m.n || '',
+        fullName: m.f || undefined,
+        version: m.v || undefined,
+        enabled: m.e === 1,
+      })),
+    };
+  } catch (e) {
+    console.error('Failed to decode profile code:', e);
+    return null;
+  }
+}
+
+/**
+ * Calculate what mods need to be installed/enabled for a profile
+ */
+export function calculateProfileDiff(
+  profile: ModProfile,
+  installedMods: any[]
+): {
+  toEnable: string[];
+  toDisable: string[];
+  toInstall: ModProfileEntry[];
+  alreadyCorrect: string[];
+} {
+  // Create lookup maps for installed mods by name and folder
+  const installedByName = new Map(
+    installedMods.map(m => [String(m.name || m.id || '').toLowerCase(), m])
+  );
+  const installedByFolder = new Map(
+    installedMods.filter(m => m.folder).map(m => [String(m.folder).toLowerCase(), m])
+  );
+  
+  const toEnable: string[] = [];
+  const toDisable: string[] = [];
+  const toInstall: ModProfileEntry[] = [];
+  const alreadyCorrect: string[] = [];
+  const matchedInstalled = new Set<string>();
+  
+  // Check each mod in the profile
+  for (const profileMod of profile.mods) {
+    const nameKey = profileMod.name.toLowerCase();
+    const fullNameKey = (profileMod.fullName || '').toLowerCase();
+    
+    // Try to find installed mod by: fullName -> folder -> name
+    let installed = fullNameKey ? installedByFolder.get(fullNameKey) : undefined;
+    if (!installed) installed = installedByFolder.get(nameKey);
+    if (!installed) installed = installedByName.get(nameKey);
+    
+    if (!installed) {
+      // Mod not installed
+      if (profileMod.enabled) {
+        toInstall.push(profileMod);
+      }
+    } else {
+      // Track that we matched this installed mod
+      matchedInstalled.add(String(installed.name || installed.id || '').toLowerCase());
+      if (installed.folder) matchedInstalled.add(installed.folder.toLowerCase());
+      
+      // Mod is installed, check enabled state
+      if (profileMod.enabled && !installed.enabled) {
+        toEnable.push(installed.name || installed.id);
+      } else if (!profileMod.enabled && installed.enabled) {
+        toDisable.push(installed.name || installed.id);
+      } else {
+        alreadyCorrect.push(installed.name || installed.id);
+      }
+    }
+  }
+  
+  // Check for mods that are installed but not in profile (should be disabled)
+  for (const installed of installedMods) {
+    const nameKey = String(installed.name || installed.id || '').toLowerCase();
+    const folderKey = String(installed.folder || '').toLowerCase();
+    
+    if (!matchedInstalled.has(nameKey) && !matchedInstalled.has(folderKey)) {
+      if (installed.enabled) {
+        toDisable.push(installed.name || installed.id);
+      }
+    }
+  }
+  
+  return { toEnable, toDisable, toInstall, alreadyCorrect };
+}
+
+// ============================================
+// MOD UTILITIES
+// ============================================
 
 export function getModIconUrl(nameOrId?: string, allMods?: any[]): string | undefined {
   if (!nameOrId || !Array.isArray(allMods)) return undefined;

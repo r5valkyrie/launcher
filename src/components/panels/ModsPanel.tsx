@@ -57,6 +57,10 @@ type ModsPanelProps = {
   getModTags: (m: any) => string[];
   installingMods: Record<string, 'install' | 'uninstall' | undefined>;
   modProgress: Record<string, { received: number; total: number; phase: string }>;
+  // Profiles
+  onOpenProfiles?: () => void;
+  hasProfiles?: boolean;
+  activeProfileName?: string | null;
 };
 
 const CATEGORIES = [
@@ -140,6 +144,9 @@ export default function ModsPanel(props: ModsPanelProps) {
     getModTags,
     installingMods,
     modProgress,
+    onOpenProfiles,
+    hasProfiles,
+    activeProfileName,
   } = props;
 
   const [installedSearchQuery, setInstalledSearchQuery] = useState('');
@@ -341,6 +348,24 @@ export default function ModsPanel(props: ModsPanelProps) {
                 </button>
               </div>
               
+            {/* Profiles Button */}
+            {onOpenProfiles && (
+              <button 
+                className={`btn btn-sm gap-2 ${activeProfileName 
+                  ? 'btn-primary' 
+                  : 'btn-ghost text-base-content/70 hover:text-base-content hover:bg-base-300/50'}`}
+                onClick={onOpenProfiles}
+                title="Manage mod profiles"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                  <polyline points="17 21 17 13 7 13 7 21"/>
+                  <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                <span className="hidden sm:inline">{activeProfileName || 'Profiles'}</span>
+              </button>
+            )}
+
             {/* Refresh Button */}
               <button 
               className="btn btn-sm btn-ghost gap-2 text-base-content/70 hover:text-base-content hover:bg-base-300/50" 

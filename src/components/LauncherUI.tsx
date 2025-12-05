@@ -17,8 +17,9 @@ import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './panels/LaunchOptionsPanel';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
-import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods } from './common/modUtils';
-import type { DependencyTree } from './common/modUtils';
+import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff } from './common/modUtils';
+import type { DependencyTree, ModProfile } from './common/modUtils';
+import ModProfilesModal from './modals/ModProfilesModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -299,6 +300,8 @@ export default function LauncherUI() {
       if (typeof s?.snowEffectEnabled === 'boolean') setSnowEffectEnabled(Boolean(s.snowEffectEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
+      if (Array.isArray(s?.modProfiles)) setModProfiles(s.modProfiles);
+      if (typeof s?.activeProfileId === 'string') setActiveProfileId(s.activeProfileId);
       if (typeof s?.easterEggDiscovered === 'boolean') setEasterEggDiscovered(Boolean(s.easterEggDiscovered));
       if (typeof s?.emojiMode === 'boolean') setEmojiMode(Boolean(s.emojiMode));
       if (typeof s?.patchNotesView === 'string') setPatchNotesView(s.patchNotesView as 'grid' | 'timeline');
@@ -447,6 +450,10 @@ export default function LauncherUI() {
   const [uninstallWarningOpen, setUninstallWarningOpen] = useState<boolean>(false);
   const [uninstallWarningMod, setUninstallWarningMod] = useState<any | null>(null);
   const [dependentMods, setDependentMods] = useState<{ mod: any; pack: any }[]>([]);
+  // Mod profiles state
+  const [modProfilesOpen, setModProfilesOpen] = useState<boolean>(false);
+  const [modProfiles, setModProfiles] = useState<ModProfile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
   // EULA state
   const [eulaOpen, setEulaOpen] = useState<boolean>(false);
   const [eulaLoading, setEulaLoading] = useState<boolean>(false);
@@ -1163,6 +1170,11 @@ export default function LauncherUI() {
       if (!dir) { setModsError('Install the game first to manage mods.'); return; }
       await window.electronAPI?.setModEnabled?.(dir, String(mod.id || mod.name), next);
       setInstalledMods((prev) => (prev || []).map(m => m.name === mod.name ? { ...m, enabled: next } : m));
+      // Clear active profile since mod config has changed
+      if (activeProfileId) {
+        setActiveProfileId(null);
+        window.electronAPI?.setSetting?.('activeProfileId', null);
+      }
     } catch {}
   }
 
@@ -1173,6 +1185,11 @@ export default function LauncherUI() {
       setInstallingMods((s) => ({ ...s, [mod.folder || mod.name]: 'uninstall' }));
       await window.electronAPI?.uninstallMod?.(dir, mod.folder || mod.name);
       setInstalledMods((prev) => (prev || []).filter(m => m.name !== mod.name));
+      // Clear active profile since mod config has changed
+      if (activeProfileId) {
+        setActiveProfileId(null);
+        window.electronAPI?.setSetting?.('activeProfileId', null);
+      }
     } catch {}
     finally { setInstallingMods((s) => { const n = { ...s }; delete n[mod.folder || mod.name]; return n; }); }
   }
@@ -1195,6 +1212,11 @@ export default function LauncherUI() {
       // refresh installed list
       const res = await window.electronAPI?.listInstalledMods?.(dir || '');
       setInstalledMods(res?.ok ? (res?.mods || []) : (installedMods || []));
+      // Clear active profile since mod config has changed
+      if (activeProfileId) {
+        setActiveProfileId(null);
+        window.electronAPI?.setSetting?.('activeProfileId', null);
+      }
     } catch {}
     finally { setInstallingMods((s) => { const n = { ...s }; const k = (mod?.full_name || mod?.name || (mod?.full_name?.split('-')?.[0]) || 'mod').replace(/[\\/:*?"<>|]/g, '_'); delete n[k]; return n; }); }
   }
@@ -1414,6 +1436,134 @@ export default function LauncherUI() {
     setUninstallWarningOpen(false);
     setUninstallWarningMod(null);
     setDependentMods([]);
+  }
+
+  // ============================================
+  // MOD PROFILES
+  // ============================================
+
+  async function saveModProfiles(profiles: ModProfile[], activeId: string | null) {
+    setModProfiles(profiles);
+    setActiveProfileId(activeId);
+    try {
+      await window.electronAPI?.setSetting?.('modProfiles', profiles);
+      await window.electronAPI?.setSetting?.('activeProfileId', activeId);
+    } catch (e) {
+      console.error('Failed to save profiles:', e);
+    }
+  }
+
+  function handleCreateProfile(name: string, description?: string) {
+    // Pass allMods so we can look up full names for better matching
+    const profile = createProfileFromMods(name, installedMods || [], description, allMods || undefined);
+    const newProfiles = [...modProfiles, profile];
+    saveModProfiles(newProfiles, profile.id);
+    setToastMessage(`Profile "${name}" created`);
+    setToastType('success');
+  }
+
+  function handleDeleteProfile(id: string) {
+    const newProfiles = modProfiles.filter(p => p.id !== id);
+    const newActiveId = activeProfileId === id ? null : activeProfileId;
+    saveModProfiles(newProfiles, newActiveId);
+    setToastMessage('Profile deleted');
+    setToastType('info');
+  }
+
+  function handleImportProfile(profile: ModProfile) {
+    const newProfiles = [...modProfiles, profile];
+    saveModProfiles(newProfiles, null);
+    setToastMessage(`Profile "${profile.name}" imported`);
+    setToastType('success');
+  }
+
+  function handleUpdateProfile(id: string, updates: Partial<ModProfile>) {
+    const newProfiles = modProfiles.map(p => 
+      p.id === id ? { ...p, ...updates } : p
+    );
+    saveModProfiles(newProfiles, activeProfileId);
+  }
+
+  async function handleApplyProfile(profile: ModProfile) {
+    const dir = channelsSettings?.[selectedChannel]?.installDir || installDir;
+    if (!dir) {
+      setModsError('Install the game first to manage mods.');
+      return;
+    }
+
+    const diff = calculateProfileDiff(profile, installedMods || []);
+    
+    // Enable mods
+    for (const modName of diff.toEnable) {
+      const mod = (installedMods || []).find(m => 
+        String(m.name || '').toLowerCase() === modName.toLowerCase()
+      );
+      if (mod) {
+        try {
+          await window.electronAPI?.setModEnabled?.(dir, String(mod.id || mod.name), true);
+        } catch {}
+      }
+    }
+    
+    // Disable mods
+    for (const modName of diff.toDisable) {
+      const mod = (installedMods || []).find(m => 
+        String(m.name || '').toLowerCase() === modName.toLowerCase()
+      );
+      if (mod) {
+        try {
+          await window.electronAPI?.setModEnabled?.(dir, String(mod.id || mod.name), false);
+        } catch {}
+      }
+    }
+    
+    // Install missing mods (find in allMods by fullName or name)
+    for (const profileMod of diff.toInstall) {
+      const searchFullName = (profileMod.fullName || '').toLowerCase();
+      const searchName = profileMod.name.toLowerCase();
+      const targetVersion = profileMod.version;
+      
+      // Try exact full_name match first, then name match
+      const pack = (searchFullName ? (allMods || []).find(p => 
+        String(p.full_name || '').toLowerCase() === searchFullName
+      ) : null) || (allMods || []).find(p => {
+        const name = String(p.name || '').toLowerCase();
+        const fullName = String(p.full_name || '').toLowerCase();
+        return name === searchName || fullName === searchName || fullName.endsWith(`-${searchName}`);
+      }) || (allMods || []).find(p => {
+        const name = String(p.name || '').toLowerCase();
+        const fullName = String(p.full_name || '').toLowerCase();
+        return name.includes(searchName) || fullName.includes(searchName);
+      });
+      
+      if (pack) {
+        // Find specific version if requested, otherwise use latest
+        let versionToInstall = pack.versions?.[0];
+        if (targetVersion && Array.isArray(pack.versions)) {
+          const exactVersion = pack.versions.find((v: any) => v.version_number === targetVersion);
+          if (exactVersion) {
+            versionToInstall = exactVersion;
+          }
+        }
+        
+        if (versionToInstall) {
+          await installFromAll({ 
+            name: pack.full_name || pack.name, 
+            full_name: pack.full_name, 
+            versions: [versionToInstall] 
+          });
+        }
+      }
+    }
+    
+    // Refresh installed mods
+    setModsRefreshNonce(n => n + 1);
+    setActiveProfileId(profile.id);
+    await window.electronAPI?.setSetting?.('activeProfileId', profile.id);
+    
+    setToastMessage(`Profile "${profile.name}" applied`);
+    setToastType('success');
+    setModProfilesOpen(false);
   }
 
   async function updateInstalled(mod: InstalledMod) {
@@ -3012,6 +3162,9 @@ export default function LauncherUI() {
                   getModTags={getModTags as any}
                   installingMods={installingMods}
                   modProgress={modProgress}
+                  onOpenProfiles={() => setModProfilesOpen(true)}
+                  hasProfiles={modProfiles.length > 0}
+                  activeProfileName={modProfiles.find(p => p.id === activeProfileId)?.name || null}
                 />
               )}
 
@@ -3134,6 +3287,20 @@ export default function LauncherUI() {
           setDependencyInstallCallback(null);
         }}
         isInstalling={isDependencyInstalling}
+      />
+
+      {/* Mod Profiles Modal */}
+      <ModProfilesModal
+        open={modProfilesOpen}
+        onClose={() => setModProfilesOpen(false)}
+        profiles={modProfiles}
+        activeProfileId={activeProfileId}
+        installedMods={installedMods || []}
+        onCreateProfile={handleCreateProfile}
+        onDeleteProfile={handleDeleteProfile}
+        onApplyProfile={handleApplyProfile}
+        onImportProfile={handleImportProfile}
+        onUpdateProfile={handleUpdateProfile}
       />
 
       {/* Uninstall Warning Modal (when mod has dependents) */}
