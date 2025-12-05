@@ -61,6 +61,10 @@ type ModsPanelProps = {
   onOpenProfiles?: () => void;
   hasProfiles?: boolean;
   activeProfileName?: string | null;
+  // Queue
+  onOpenQueue?: () => void;
+  queueCount?: number;
+  isQueueProcessing?: boolean;
 };
 
 const CATEGORIES = [
@@ -147,6 +151,9 @@ export default function ModsPanel(props: ModsPanelProps) {
     onOpenProfiles,
     hasProfiles,
     activeProfileName,
+    onOpenQueue,
+    queueCount,
+    isQueueProcessing,
   } = props;
 
   const [installedSearchQuery, setInstalledSearchQuery] = useState('');
@@ -348,6 +355,28 @@ export default function ModsPanel(props: ModsPanelProps) {
                 </button>
               </div>
               
+            {/* Queue Button */}
+            {onOpenQueue && (queueCount || 0) > 0 && (
+              <button 
+                className={`btn btn-sm gap-2 ${isQueueProcessing ? 'btn-info' : 'btn-primary'}`}
+                onClick={onOpenQueue}
+                title="Download queue"
+              >
+                {isQueueProcessing ? (
+                  <span className="loading loading-spinner loading-xs"></span>
+                ) : (
+                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                )}
+                <span className="hidden sm:inline">
+                  {isQueueProcessing ? `Installing (${queueCount})` : `Queue (${queueCount})`}
+                </span>
+              </button>
+            )}
+
             {/* Profiles Button */}
             {onOpenProfiles && (
               <button 
@@ -1131,7 +1160,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             {/* Actions */}
                             <div className="flex items-center gap-2 mt-auto pt-2">
                               {state === 'not' && !installingMods[key] && (
-                              <button 
+                                <button 
                                   className="btn btn-sm btn-success flex-1 gap-1"
                                   onClick={() => installFromAll(m)}
                                 >
@@ -1141,7 +1170,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                     <line x1="12" y1="15" x2="12" y2="3"/>
                                   </svg>
                                   Install
-                              </button>
+                                </button>
                             )}
                               {state === 'installed' && !installingMods[key] && (
                               <button 

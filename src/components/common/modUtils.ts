@@ -1,6 +1,10 @@
 // Mod-related utility functions
 import pako from 'pako';
 
+// Thunderstore Profile API
+const THUNDERSTORE_PROFILE_CREATE_URL = 'https://thunderstore.io/api/experimental/legacyprofile/create/';
+const THUNDERSTORE_PROFILE_GET_URL = 'https://thunderstore.io/api/experimental/legacyprofile/get/';
+
 type InstalledMod = {
   id?: string;
   name: string;
@@ -221,13 +225,16 @@ export function createProfileFromMods(
   allMods?: any[]
 ): ModProfile {
   const now = Date.now();
+  // Only include enabled mods in profiles
+  const enabledMods = installedMods.filter(m => m.enabled);
+  
   return {
     id: generateProfileId(),
     name,
     description,
     createdAt: now,
     updatedAt: now,
-    mods: installedMods.map(m => {
+    mods: enabledMods.map(m => {
       const modName = m.name || m.id || '';
       const folder = m.folder || '';
       
@@ -251,7 +258,7 @@ export function createProfileFromMods(
         name: modName,
         fullName,
         version: m.version || undefined,
-        enabled: !!m.enabled,
+        enabled: true, // All mods in profile are enabled
       };
     }),
   };
@@ -344,6 +351,140 @@ export function decodeShareCodeToProfile(code: string): ModProfile | null {
     console.error('Failed to decode profile code:', e);
     return null;
   }
+}
+
+/**
+ * Upload a profile to Thunderstore and get a short share code
+ */
+export async function uploadProfileToThunderstore(profile: ModProfile): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
+  try {
+    // Create profile data in r2modman compatible format
+    const exportData = {
+      profileName: profile.name,
+      mods: profile.mods.map(m => ({
+        name: m.fullName || m.name,
+        version: {
+          major: 0,
+          minor: 0,
+          patch: 0,
+          ...(m.version ? parseVersionString(m.version) : {}),
+        },
+        enabled: m.enabled,
+      })),
+    };
+    
+    // Create the payload (r2modman format: #r2modman\n + base64 compressed data)
+    const jsonData = JSON.stringify(exportData);
+    const compressed = pako.deflate(jsonData, { level: 9 });
+    const base64 = btoa(String.fromCharCode(...compressed));
+    const payload = `#r2modman\n${base64}`;
+    
+    // Upload to Thunderstore
+    const response = await fetch(THUNDERSTORE_PROFILE_CREATE_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+      body: payload,
+    });
+    
+    if (!response.ok) {
+      if (response.status === 429) {
+        return { ok: false, error: 'Rate limited. Please wait and try again.' };
+      }
+      return { ok: false, error: `Server error: ${response.status}` };
+    }
+    
+    const data = await response.json();
+    return { ok: true, code: data.key };
+  } catch (e) {
+    console.error('Failed to upload profile:', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Download a profile from Thunderstore using a share code
+ */
+export async function downloadProfileFromThunderstore(code: string): Promise<{ ok: true; profile: ModProfile } | { ok: false; error: string }> {
+  try {
+    const url = `${THUNDERSTORE_PROFILE_GET_URL}${encodeURIComponent(code)}/`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        return { ok: false, error: 'Profile not found. The code may be expired or invalid.' };
+      }
+      if (response.status === 429) {
+        return { ok: false, error: 'Rate limited. Please wait and try again.' };
+      }
+      return { ok: false, error: `Server error: ${response.status}` };
+    }
+    
+    const text = await response.text();
+    
+    // Parse r2modman format: #r2modman\n + base64 data
+    if (!text.startsWith('#r2modman\n')) {
+      return { ok: false, error: 'Invalid profile format' };
+    }
+    
+    const base64Data = text.replace('#r2modman\n', '');
+    
+    // Try to decode - could be compressed or raw
+    let jsonData: string;
+    try {
+      // Try decompressing first
+      const binary = atob(base64Data);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      jsonData = pako.inflate(bytes, { to: 'string' });
+    } catch {
+      // Fall back to raw base64
+      jsonData = atob(base64Data);
+    }
+    
+    const exportData = JSON.parse(jsonData);
+    
+    // Convert to our profile format
+    const now = Date.now();
+    const profile: ModProfile = {
+      id: generateProfileId(),
+      name: exportData.profileName || 'Imported Profile',
+      description: `Imported from Thunderstore code: ${code}`,
+      createdAt: now,
+      updatedAt: now,
+      mods: (exportData.mods || []).map((m: any) => {
+        const nameParts = String(m.name || '').split('-');
+        const modName = nameParts.length > 1 ? nameParts.slice(1).join('-') : m.name;
+        const version = m.version ? `${m.version.major || 0}.${m.version.minor || 0}.${m.version.patch || 0}` : undefined;
+        return {
+          name: modName,
+          fullName: m.name,
+          version: version !== '0.0.0' ? version : undefined,
+          enabled: m.enabled !== false,
+        };
+      }),
+    };
+    
+    return { ok: true, profile };
+  } catch (e) {
+    console.error('Failed to download profile:', e);
+    return { ok: false, error: String(e) };
+  }
+}
+
+/**
+ * Parse a version string like "1.2.3" into components
+ */
+function parseVersionString(version: string): { major: number; minor: number; patch: number } {
+  const parts = version.split('.');
+  return {
+    major: parseInt(parts[0] || '0', 10) || 0,
+    minor: parseInt(parts[1] || '0', 10) || 0,
+    patch: parseInt(parts[2] || '0', 10) || 0,
+  };
 }
 
 /**

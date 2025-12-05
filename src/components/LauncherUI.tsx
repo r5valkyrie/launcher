@@ -20,6 +20,7 @@ import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriv
 import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff } from './common/modUtils';
 import type { DependencyTree, ModProfile } from './common/modUtils';
 import ModProfilesModal from './modals/ModProfilesModal';
+import ModQueueModal from './modals/ModQueueModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -454,6 +455,11 @@ export default function LauncherUI() {
   const [modProfilesOpen, setModProfilesOpen] = useState<boolean>(false);
   const [modProfiles, setModProfiles] = useState<ModProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  // Mod download queue
+  type QueuedMod = { pack: any; version?: any; addedAt: number };
+  const [modQueue, setModQueue] = useState<QueuedMod[]>([]);
+  const [isProcessingQueue, setIsProcessingQueue] = useState<boolean>(false);
+  const [modQueueOpen, setModQueueOpen] = useState<boolean>(false);
   // EULA state
   const [eulaOpen, setEulaOpen] = useState<boolean>(false);
   const [eulaLoading, setEulaLoading] = useState<boolean>(false);
@@ -1387,12 +1393,8 @@ export default function LauncherUI() {
 
   async function installFromAll(pack: any) {
     const latest = Array.isArray(pack?.versions) && pack.versions[0] ? pack.versions[0] : null;
-    const baseName = pack?.full_name || pack?.name || latest?.name || 'mod';
-    const folderName = sanitizeFolderName(baseName);
-    if (installingMods[folderName]) return;
-    
-    // Use dependency-aware installation
-    await installModWithDependencies(pack, latest);
+    // Add to queue - it will auto-start processing
+    addToQueue(pack, latest);
   }
 
   async function updateFromAll(pack: any) {
@@ -1517,7 +1519,8 @@ export default function LauncherUI() {
       }
     }
     
-    // Install missing mods (find in allMods by fullName or name)
+    // Queue missing mods for download
+    let queuedCount = 0;
     for (const profileMod of diff.toInstall) {
       const searchFullName = (profileMod.fullName || '').toLowerCase();
       const searchName = profileMod.name.toLowerCase();
@@ -1547,13 +1550,16 @@ export default function LauncherUI() {
         }
         
         if (versionToInstall) {
-          await installFromAll({ 
-            name: pack.full_name || pack.name, 
-            full_name: pack.full_name, 
-            versions: [versionToInstall] 
-          });
+          // Add to queue instead of installing directly
+          addToQueue({ ...pack, versions: [versionToInstall] }, versionToInstall);
+          queuedCount++;
         }
       }
+    }
+    
+    // If we queued mods, open the queue modal to show progress
+    if (queuedCount > 0) {
+      setModQueueOpen(true);
     }
     
     // Refresh installed mods
@@ -1564,6 +1570,110 @@ export default function LauncherUI() {
     setToastMessage(`Profile "${profile.name}" applied`);
     setToastType('success');
     setModProfilesOpen(false);
+  }
+
+  // ============================================
+  // MOD DOWNLOAD QUEUE
+  // ============================================
+
+  function addToQueue(pack: any, version?: any) {
+    const packName = pack?.full_name || pack?.name || '';
+    // Check if already in queue
+    const exists = modQueue.some(q => 
+      (q.pack?.full_name || q.pack?.name) === packName
+    );
+    if (exists) {
+      setToastMessage(`${pack?.name || 'Mod'} is already in queue`);
+      setToastType('info');
+      return;
+    }
+    // Check if already installed
+    const isAlreadyInstalled = (installedMods || []).some(m => 
+      String(m.name || '').toLowerCase() === String(pack?.name || '').toLowerCase() ||
+      String(m.folder || '').toLowerCase() === packName.toLowerCase()
+    );
+    if (isAlreadyInstalled) {
+      setToastMessage(`${pack?.name || 'Mod'} is already installed`);
+      setToastType('info');
+      return;
+    }
+    
+    const newItem = { pack, version, addedAt: Date.now() };
+    setModQueue(prev => [...prev, newItem]);
+    
+    // Auto-start processing if not already running
+    if (!processingRef.current) {
+      setTimeout(() => processQueueInternal(), 50);
+    }
+  }
+
+  function removeFromQueue(index: number) {
+    setModQueue(prev => prev.filter((_, i) => i !== index));
+  }
+
+  function clearQueue() {
+    setModQueue([]);
+  }
+
+  function moveInQueue(fromIndex: number, toIndex: number) {
+    setModQueue(prev => {
+      const newQueue = [...prev];
+      const [moved] = newQueue.splice(fromIndex, 1);
+      newQueue.splice(toIndex, 0, moved);
+      return newQueue;
+    });
+  }
+
+  // Internal queue processor - called automatically
+  const processingRef = React.useRef(false);
+  const queueRef = React.useRef<QueuedMod[]>([]);
+  
+  // Keep queueRef in sync with modQueue state
+  React.useEffect(() => {
+    queueRef.current = modQueue;
+  }, [modQueue]);
+  
+  async function processQueueInternal() {
+    if (processingRef.current) return;
+    processingRef.current = true;
+    setIsProcessingQueue(true);
+    
+    while (queueRef.current.length > 0) {
+      const item = queueRef.current[0];
+      if (!item?.pack) {
+        setModQueue(prev => prev.slice(1));
+        await new Promise(r => setTimeout(r, 50));
+        continue;
+      }
+      
+      try {
+        // Use the dependency-aware install
+        await installModWithDependencies(item.pack, item.version);
+      } catch (e) {
+        console.error('Failed to install from queue:', e);
+        setToastMessage(`Failed to install ${item.pack?.name || 'mod'}`);
+        setToastType('error');
+      }
+      
+      // Remove processed item
+      setModQueue(prev => prev.slice(1));
+      
+      // Small delay between installs
+      await new Promise(r => setTimeout(r, 100));
+    }
+    
+    processingRef.current = false;
+    setIsProcessingQueue(false);
+    
+    // Auto-close queue modal when done (always try, harmless if already closed)
+    setTimeout(() => setModQueueOpen(false), 100);
+  }
+  
+  // Keep processQueue for manual trigger from modal
+  function processQueue() {
+    if (!processingRef.current) {
+      processQueueInternal();
+    }
   }
 
   async function updateInstalled(mod: InstalledMod) {
@@ -3165,6 +3275,9 @@ export default function LauncherUI() {
                   onOpenProfiles={() => setModProfilesOpen(true)}
                   hasProfiles={modProfiles.length > 0}
                   activeProfileName={modProfiles.find(p => p.id === activeProfileId)?.name || null}
+                  onOpenQueue={() => setModQueueOpen(true)}
+                  queueCount={modQueue.length}
+                  isQueueProcessing={isProcessingQueue}
                 />
               )}
 
@@ -3301,6 +3414,20 @@ export default function LauncherUI() {
         onApplyProfile={handleApplyProfile}
         onImportProfile={handleImportProfile}
         onUpdateProfile={handleUpdateProfile}
+      />
+
+      {/* Mod Download Queue Modal */}
+      <ModQueueModal
+        open={modQueueOpen}
+        onClose={() => setModQueueOpen(false)}
+        queue={modQueue}
+        isProcessing={isProcessingQueue}
+        onRemove={removeFromQueue}
+        onClear={clearQueue}
+        onProcess={processQueue}
+        onMove={moveInQueue}
+        installingMods={installingMods}
+        modProgress={modProgress}
       />
 
       {/* Uninstall Warning Modal (when mod has dependents) */}
