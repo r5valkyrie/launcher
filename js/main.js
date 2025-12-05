@@ -665,6 +665,113 @@ ipcMain.handle('mods:iconDataUrl', async (_e, { installDir, folder }) => {
   }
 });
 
+// Thunderstore Profile API - upload profile
+ipcMain.handle('thunderstore:uploadProfile', async (_e, { payload }) => {
+  try {
+    const https = require('https');
+    
+    return new Promise((resolve, reject) => {
+      const req = https.request({
+        hostname: 'thunderstore.io',
+        port: 443,
+        path: '/api/experimental/legacyprofile/create/',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': Buffer.byteLength(payload),
+        },
+      }, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          if (res.statusCode === 429) {
+            resolve({ ok: false, error: 'Rate limited. Please wait and try again.' });
+          } else if (res.statusCode >= 200 && res.statusCode < 300) {
+            try {
+              const json = JSON.parse(data);
+              resolve({ ok: true, code: json.key });
+            } catch (e) {
+              resolve({ ok: false, error: 'Invalid response from server' });
+            }
+          } else {
+            resolve({ ok: false, error: `Server error: ${res.statusCode}` });
+          }
+        });
+      });
+      
+      req.on('error', (e) => {
+        resolve({ ok: false, error: String(e.message || e) });
+      });
+      
+      req.write(payload);
+      req.end();
+    });
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
+// Thunderstore Profile API - download profile
+ipcMain.handle('thunderstore:downloadProfile', async (_e, { code }) => {
+  try {
+    const https = require('https');
+    const http = require('http');
+    
+    const fetchUrl = (url, maxRedirects = 5) => {
+      return new Promise((resolve) => {
+        if (maxRedirects <= 0) {
+          resolve({ ok: false, error: 'Too many redirects' });
+          return;
+        }
+        
+        const parsedUrl = new URL(url);
+        const protocol = parsedUrl.protocol === 'https:' ? https : http;
+        
+        const req = protocol.request({
+          hostname: parsedUrl.hostname,
+          port: parsedUrl.port || (parsedUrl.protocol === 'https:' ? 443 : 80),
+          path: parsedUrl.pathname + parsedUrl.search,
+          method: 'GET',
+        }, (res) => {
+          // Handle redirects
+          if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+            const redirectUrl = res.headers.location.startsWith('http') 
+              ? res.headers.location 
+              : `${parsedUrl.protocol}//${parsedUrl.host}${res.headers.location}`;
+            fetchUrl(redirectUrl, maxRedirects - 1).then(resolve);
+            return;
+          }
+          
+          let data = '';
+          res.on('data', chunk => data += chunk);
+          res.on('end', () => {
+            if (res.statusCode === 404) {
+              resolve({ ok: false, error: 'Profile not found. The code may be expired or invalid.' });
+            } else if (res.statusCode === 429) {
+              resolve({ ok: false, error: 'Rate limited. Please wait and try again.' });
+            } else if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({ ok: true, data });
+            } else {
+              resolve({ ok: false, error: `Server error: ${res.statusCode}` });
+            }
+          });
+        });
+        
+        req.on('error', (e) => {
+          resolve({ ok: false, error: String(e.message || e) });
+        });
+        
+        req.end();
+      });
+    };
+    
+    const url = `https://thunderstore.io/api/experimental/legacyprofile/get/${encodeURIComponent(code)}/`;
+    return await fetchUrl(url);
+  } catch (e) {
+    return { ok: false, error: String(e?.message || e) };
+  }
+});
+
 // Basic IPC placeholders
 ipcMain.handle('select-directory', async () => {
   const res = await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });

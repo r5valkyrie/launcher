@@ -198,6 +198,7 @@ export type ModProfile = {
   createdAt: number;
   updatedAt: number;
   mods: ModProfileEntry[];
+  thunderstoreCode?: string; // Saved Thunderstore share code
 };
 
 export type ModProfileEntry = {
@@ -265,95 +266,6 @@ export function createProfileFromMods(
 }
 
 /**
- * Encode a profile to a shareable string
- * Format: Compressed, chunked code for readability
- */
-export function encodeProfileToShareCode(profile: ModProfile): string {
-  try {
-    // Create a minimal shareable version (exclude timestamps, id, and empty values)
-    const shareData = {
-      n: profile.name,
-      ...(profile.description ? { d: profile.description } : {}),
-      m: profile.mods.map(m => {
-        const entry: Record<string, any> = { n: m.name };
-        if (m.fullName) entry.f = m.fullName;
-        if (m.version) entry.v = m.version;
-        if (m.enabled) entry.e = 1;
-        return entry;
-      }),
-    };
-    const json = JSON.stringify(shareData);
-    
-    // Compress with pako (deflate)
-    const compressed = pako.deflate(json, { level: 9 });
-    
-    // Convert to base64
-    let base64 = btoa(String.fromCharCode(...compressed));
-    
-    // Make URL-safe
-    base64 = base64.replace(/\+/g, '.').replace(/\//g, '_').replace(/=+$/, '');
-    
-    // Split into chunks of 8 for readability (balance between length and aesthetics)
-    const chunks: string[] = [];
-    for (let i = 0; i < base64.length; i += 8) {
-      chunks.push(base64.slice(i, i + 8));
-    }
-    
-    return `R5V-${chunks.join('-')}`;
-  } catch (e) {
-    console.error('Failed to encode profile:', e);
-    return '';
-  }
-}
-
-/**
- * Decode a share code back to a profile
- */
-export function decodeShareCodeToProfile(code: string): ModProfile | null {
-  try {
-    if (!code.startsWith('R5V-')) {
-      return null;
-    }
-    
-    // Remove prefix and rejoin chunks
-    let base64 = code.replace('R5V-', '').replace(/-/g, '');
-    // Restore URL-safe characters (. back to +, _ back to /)
-    base64 = base64.replace(/\./g, '+').replace(/_/g, '/');
-    // Add padding if needed
-    while (base64.length % 4) base64 += '=';
-    
-    // Decode base64 to binary
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    
-    // Decompress with pako
-    const json = pako.inflate(bytes, { to: 'string' });
-    const shareData = JSON.parse(json);
-    
-    const now = Date.now();
-    return {
-      id: generateProfileId(),
-      name: shareData.n || 'Imported Profile',
-      description: shareData.d || '',
-      createdAt: now,
-      updatedAt: now,
-      mods: (shareData.m || []).map((m: any) => ({
-        name: m.n || '',
-        fullName: m.f || undefined,
-        version: m.v || undefined,
-        enabled: m.e === 1,
-      })),
-    };
-  } catch (e) {
-    console.error('Failed to decode profile code:', e);
-    return null;
-  }
-}
-
-/**
  * Upload a profile to Thunderstore and get a short share code
  */
 export async function uploadProfileToThunderstore(profile: ModProfile): Promise<{ ok: true; code: string } | { ok: false; error: string }> {
@@ -361,6 +273,7 @@ export async function uploadProfileToThunderstore(profile: ModProfile): Promise<
     // Create profile data in r2modman compatible format
     const exportData = {
       profileName: profile.name,
+      description: profile.description || '',
       mods: profile.mods.map(m => ({
         name: m.fullName || m.name,
         version: {
@@ -379,7 +292,14 @@ export async function uploadProfileToThunderstore(profile: ModProfile): Promise<
     const base64 = btoa(String.fromCharCode(...compressed));
     const payload = `#r2modman\n${base64}`;
     
-    // Upload to Thunderstore
+    // Upload via IPC (avoids CORS)
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.thunderstoreUploadProfile) {
+      const result = await electronAPI.thunderstoreUploadProfile(payload);
+      return result;
+    }
+    
+    // Fallback to fetch (for dev mode without Electron)
     const response = await fetch(THUNDERSTORE_PROFILE_CREATE_URL, {
       method: 'POST',
       headers: {
@@ -408,20 +328,33 @@ export async function uploadProfileToThunderstore(profile: ModProfile): Promise<
  */
 export async function downloadProfileFromThunderstore(code: string): Promise<{ ok: true; profile: ModProfile } | { ok: false; error: string }> {
   try {
-    const url = `${THUNDERSTORE_PROFILE_GET_URL}${encodeURIComponent(code)}/`;
-    const response = await fetch(url);
+    let text: string;
     
-    if (!response.ok) {
-      if (response.status === 404) {
-        return { ok: false, error: 'Profile not found. The code may be expired or invalid.' };
+    // Download via IPC (avoids CORS)
+    const electronAPI = (window as any).electronAPI;
+    if (electronAPI?.thunderstoreDownloadProfile) {
+      const result = await electronAPI.thunderstoreDownloadProfile(code);
+      if (!result.ok) {
+        return result;
       }
-      if (response.status === 429) {
-        return { ok: false, error: 'Rate limited. Please wait and try again.' };
+      text = result.data;
+    } else {
+      // Fallback to fetch (for dev mode without Electron)
+      const url = `${THUNDERSTORE_PROFILE_GET_URL}${encodeURIComponent(code)}/`;
+      const response = await fetch(url);
+      
+      if (!response.ok) {
+        if (response.status === 404) {
+          return { ok: false, error: 'Profile not found. The code may be expired or invalid.' };
+        }
+        if (response.status === 429) {
+          return { ok: false, error: 'Rate limited. Please wait and try again.' };
+        }
+        return { ok: false, error: `Server error: ${response.status}` };
       }
-      return { ok: false, error: `Server error: ${response.status}` };
+      
+      text = await response.text();
     }
-    
-    const text = await response.text();
     
     // Parse r2modman format: #r2modman\n + base64 data
     if (!text.startsWith('#r2modman\n')) {
@@ -452,7 +385,8 @@ export async function downloadProfileFromThunderstore(code: string): Promise<{ o
     const profile: ModProfile = {
       id: generateProfileId(),
       name: exportData.profileName || 'Imported Profile',
-      description: `Imported from Thunderstore code: ${code}`,
+      description: exportData.description || '',
+      thunderstoreCode: code, // Save the code we imported from
       createdAt: now,
       updatedAt: now,
       mods: (exportData.mods || []).map((m: any) => {

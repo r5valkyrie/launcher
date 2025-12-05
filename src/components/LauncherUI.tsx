@@ -17,7 +17,7 @@ import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './panels/LaunchOptionsPanel';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
-import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff } from './common/modUtils';
+import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff, uploadProfileToThunderstore } from './common/modUtils';
 import type { DependencyTree, ModProfile } from './common/modUtils';
 import ModProfilesModal from './modals/ModProfilesModal';
 import ModQueueModal from './modals/ModQueueModal';
@@ -1455,12 +1455,24 @@ export default function LauncherUI() {
     }
   }
 
-  function handleCreateProfile(name: string, description?: string) {
+  async function handleCreateProfile(name: string, description?: string) {
     // Pass allMods so we can look up full names for better matching
     const profile = createProfileFromMods(name, installedMods || [], description, allMods || undefined);
+    
+    // Auto-upload to Thunderstore to get share code
+    const uploadResult = await uploadProfileToThunderstore(profile);
+    if (uploadResult.ok) {
+      profile.thunderstoreCode = uploadResult.code;
+    }
+    
     const newProfiles = [...modProfiles, profile];
     saveModProfiles(newProfiles, profile.id);
-    setToastMessage(`Profile "${name}" created`);
+    
+    if (uploadResult.ok) {
+      setToastMessage(`Profile "${name}" created! Share code: ${uploadResult.code}`);
+    } else {
+      setToastMessage(`Profile "${name}" created (share code upload failed)`);
+    }
     setToastType('success');
   }
 

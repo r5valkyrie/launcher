@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { encodeProfileToShareCode, decodeShareCodeToProfile, calculateProfileDiff } from '../common/modUtils';
+import React, { useState, useRef, useEffect } from 'react';
+import { calculateProfileDiff, uploadProfileToThunderstore, downloadProfileFromThunderstore } from '../common/modUtils';
 import type { ModProfile, ModProfileEntry } from '../common/modUtils';
 
 type ModProfilesModalProps = {
@@ -42,6 +42,18 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
   const [editingProfile, setEditingProfile] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
+  // Thunderstore upload state
+  const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [thunderstoreCode, setThunderstoreCode] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const debounceRef = useRef<number | null>(null);
+
+  // Clear debounce on unmount
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   if (!open) return null;
 
@@ -53,10 +65,28 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
     }
   };
 
-  const handleCopyCode = async (profile: ModProfile) => {
-    const code = encodeProfileToShareCode(profile);
+  const handleUploadToThunderstore = async (profile: ModProfile) => {
+    setUploadingId(profile.id);
+    setThunderstoreCode(null);
+    setExpandedProfile(profile.id); // Expand to show the code
+    
+    const result = await uploadProfileToThunderstore(profile);
+    
+    if (result.ok) {
+      setThunderstoreCode(result.code);
+      // Save the code to the profile
+      onUpdateProfile(profile.id, { thunderstoreCode: result.code });
+      await navigator.clipboard.writeText(result.code);
+    } else {
+      setImportError(result.error);
+    }
+    
+    setUploadingId(null);
+  };
+
+  const handleCopyCode = async (code: string, profileId: string) => {
     await navigator.clipboard.writeText(code);
-    setCopiedId(profile.id);
+    setCopiedId(profileId);
     setTimeout(() => setCopiedId(null), 2000);
   };
 
@@ -64,14 +94,29 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
     setImportCode(code);
     setImportError(null);
     setImportedPreview(null);
+    setThunderstoreCode(null);
     
-    if (code.trim()) {
-      const profile = decodeShareCodeToProfile(code.trim());
-      if (profile) {
-        setImportedPreview(profile);
-      } else {
-        setImportError('Invalid profile code. Make sure you copied the entire code.');
-      }
+    // Clear any pending debounce
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    
+    const trimmedCode = code.trim();
+    if (!trimmedCode) return;
+    
+    // Thunderstore code format (UUID like 019aecc3-74c8-bdd1-659e-5e99e98a1f2c)
+    if (/^[a-zA-Z0-9_-]{6,50}$/.test(trimmedCode)) {
+      debounceRef.current = window.setTimeout(async () => {
+        setIsDownloading(true);
+        const result = await downloadProfileFromThunderstore(trimmedCode);
+        setIsDownloading(false);
+        
+        if (result.ok) {
+          setImportedPreview(result.profile);
+        } else {
+          setImportError(result.error);
+        }
+      }, 500);
+    } else {
+      setImportError('Invalid code format. Enter a Thunderstore profile code.');
     }
   };
 
@@ -179,7 +224,10 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
               <div className="flex items-center gap-1">
                 <button
                   className="btn btn-xs btn-ghost"
-                  onClick={() => setExpandedProfile(isExpanded ? null : profile.id)}
+                  onClick={() => {
+                    setExpandedProfile(isExpanded ? null : profile.id);
+                    setThunderstoreCode(null);
+                  }}
                   title="View details"
                 >
                   <svg className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -196,22 +244,42 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                   </svg>
                 </button>
-                <button
-                  className={`btn btn-xs ${copiedId === profile.id ? 'btn-success' : 'btn-ghost'}`}
-                  onClick={() => handleCopyCode(profile)}
-                  title="Copy share code"
-                >
-                  {copiedId === profile.id ? (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
-                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                {/* Share button - copy if code exists, upload if not */}
+                {profile.thunderstoreCode ? (
+                  <button
+                    className={`btn btn-xs ${copiedId === profile.id ? 'btn-success' : 'btn-ghost'}`}
+                    onClick={() => handleCopyCode(profile.thunderstoreCode!, profile.id)}
+                    title={`Copy share code: ${profile.thunderstoreCode}`}
+                  >
+                    {copiedId === profile.id ? (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                      </svg>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    className={`btn btn-xs ${uploadingId === profile.id ? 'btn-info' : thunderstoreCode && expandedProfile === profile.id ? 'btn-success' : 'btn-ghost'}`}
+                    onClick={() => handleUploadToThunderstore(profile)}
+                    disabled={uploadingId !== null}
+                    title="Upload to Thunderstore to get share code"
+                  >
+                    {uploadingId === profile.id ? (
+                      <span className="loading loading-spinner loading-xs"></span>
+                    ) : (
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                      <line x1="12" y1="3" x2="12" y2="15"/>
                     </svg>
                   )}
                 </button>
+                )}
                 <button
                   className="btn btn-xs btn-ghost text-error"
                   onClick={() => onDeleteProfile(profile.id)}
@@ -256,6 +324,31 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
         {isExpanded && (
           <div className="px-4 pb-4 pt-0 border-t border-white/5">
             <div className="pt-3 space-y-3">
+              {/* Thunderstore Code Display - show saved code or newly uploaded code */}
+              {(thunderstoreCode || profile.thunderstoreCode) && (
+                <div className="p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-medium text-emerald-400">
+                      {thunderstoreCode ? 'Share Code (copied!)' : 'Share Code'}
+                    </div>
+                    {!thunderstoreCode && profile.thunderstoreCode && (
+                      <button
+                        className={`btn btn-xs ${copiedId === profile.id ? 'btn-success' : 'btn-ghost'}`}
+                        onClick={() => handleCopyCode(profile.thunderstoreCode!, profile.id)}
+                      >
+                        {copiedId === profile.id ? 'Copied!' : 'Copy'}
+                      </button>
+                    )}
+                  </div>
+                  <div className="font-mono text-lg text-center py-2 bg-base-300/30 rounded-lg select-all">
+                    {thunderstoreCode || profile.thunderstoreCode}
+                  </div>
+                  <div className="text-[10px] text-base-content/50 mt-2 text-center">
+                    Share this code with others!
+                  </div>
+                </div>
+              )}
+              
               {/* Changes Preview */}
               {hasChanges && (
                 <div className="p-3 rounded-lg bg-base-300/30 space-y-2">
@@ -414,12 +507,20 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
                 {/* Import Code Input */}
                 <div className="p-4 rounded-xl bg-base-300/20 border border-white/5 space-y-3">
                   <div className="text-sm font-medium">Paste a profile share code</div>
-                  <textarea
-                    className="textarea textarea-bordered w-full bg-base-300/30 border-white/10 font-mono text-xs h-24 resize-none"
-                    placeholder="R5V-xxxxx-xxxxx-..."
-                    value={importCode}
-                    onChange={(e) => handleImportCodeChange(e.target.value)}
-                  />
+                  <div className="relative">
+                    <textarea
+                      className="textarea textarea-bordered w-full bg-base-300/30 border-white/10 font-mono text-xs h-24 resize-none"
+                      placeholder="Paste Thunderstore code (e.g. 019aecc3-74c8-bdd1-659e-...)"
+                      value={importCode}
+                      onChange={(e) => handleImportCodeChange(e.target.value)}
+                      disabled={isDownloading}
+                    />
+                    {isDownloading && (
+                      <div className="absolute inset-0 bg-base-300/50 rounded-lg flex items-center justify-center">
+                        <span className="loading loading-spinner loading-md text-primary"></span>
+                      </div>
+                    )}
+                  </div>
                   {importError && (
                     <div className="flex items-center gap-2 text-xs text-error">
                       <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -494,8 +595,8 @@ export default function ModProfilesModal(props: ModProfilesModalProps) {
                       </svg>
                     </div>
                     <div className="text-xs text-base-content/60">
-                      <p className="mb-1"><strong className="text-base-content/80">Share codes</strong> let you share your mod setup with friends.</p>
-                      <p>To get a code, create a profile and click the copy button. Others can paste it here to import.</p>
+                      <p className="mb-2"><strong className="text-base-content/80">Share codes</strong></p>
+                      <p className="mb-1">Upload a profile to Thunderstore to get a short code you can share.</p>
                     </div>
                   </div>
                 </div>

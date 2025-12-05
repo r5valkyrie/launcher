@@ -44,6 +44,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   watchMods: (installDir) => ipcRenderer.invoke('mods:watch', { installDir }),
   unwatchMods: (installDir) => ipcRenderer.invoke('mods:unwatch', { installDir }),
   onModsChanged: (listener) => ipcRenderer.on('mods:changed', (_e, payload) => listener(payload)),
+  // Thunderstore Profile API
+  thunderstoreUploadProfile: (payload) => ipcRenderer.invoke('thunderstore:uploadProfile', { payload }),
+  thunderstoreDownloadProfile: (code) => ipcRenderer.invoke('thunderstore:downloadProfile', { code }),
   // Permissions
   fixFolderPermissions: (payload) => ipcRenderer.invoke('fix-folder-permissions', payload),
   // Uninstall
