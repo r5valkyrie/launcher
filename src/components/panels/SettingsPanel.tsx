@@ -597,148 +597,176 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         </div>
       </div>
 
-      {/* Channel Management */}
-      {enabledChannels.map((c) => {
-        const ch = channelsSettings?.[c.name];
-        const dir = c.isCustom ? c.installDir : ch?.installDir;
-        const ver = ch?.gameVersion;
-        const isInstalled = !!dir;
-        const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
-        const isCustom = !!c.isCustom;
-        
-        return (
-          <div key={c.name} className="glass rounded-xl p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className={`w-10 h-10 rounded-xl flex items-center justify-center shadow-lg ${
-                isCustom 
-                  ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20' 
-                  : 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'
-              }`}>
-                {isCustom ? (
-                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="3"/>
-                    <path d="M12 1v6m0 6v10"/>
-                  </svg>
-                )}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-3 flex-wrap">
-                  <h3 className="text-lg font-semibold">{c.name}</h3>
-                  {isCustom && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
-                      Custom
-                    </span>
-                  )}
-                  {ver && !isCustom && (
-                    <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-base-300/50 text-base-content/60">
-                      v{ver}
-                    </span>
-                  )}
+      {/* Channel Management - Improved Balance */}
+      <div className="glass rounded-xl p-6">
+        <SectionHeader
+          icon={
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="12" cy="12" r="10"/>
+              <circle cx="12" cy="12" r="6"/>
+              <circle cx="12" cy="12" r="2"/>
+            </svg>
+          }
+          title="Release Channels"
+          description="Manage installed game versions"
+          gradient="from-blue-500 to-indigo-600"
+        />
+
+        <div className="space-y-4">
+          {enabledChannels.map((c) => {
+            const ch = channelsSettings?.[c.name];
+            const dir = c.isCustom ? c.installDir : ch?.installDir;
+            const ver = ch?.gameVersion;
+            const isInstalled = !!dir;
+            const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
+            const isCustom = !!c.isCustom;
+            
+            return (
+              <div key={c.name} className="p-4 rounded-xl bg-base-300/20 border border-white/5 hover:border-white/10 transition-all">
+                {/* Header */}
+                <div className="flex items-center gap-3 mb-3">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-lg ${
+                    isCustom 
+                      ? 'bg-gradient-to-br from-violet-500 to-purple-600 shadow-violet-500/20' 
+                      : 'bg-gradient-to-br from-blue-500 to-indigo-600 shadow-blue-500/20'
+                  }`}>
+                    {isCustom ? (
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                      </svg>
+                    ) : (
+                      <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 1v6m0 6v10"/>
+                      </svg>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <h4 className="font-semibold text-base">{c.name}</h4>
+                      {isCustom && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-violet-500/20 text-violet-400 border border-violet-500/30">
+                          Custom
+                        </span>
+                      )}
+                      {ver && !isCustom && (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-base-300/50 text-base-content/60">
+                          v{ver}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-base-content/50 mt-0.5">
+                      {isCustom ? 'Custom local installation' : 'Official release channel'}
+                    </p>
+                  </div>
+                  <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${isInstalled ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-base-content/20'}`}></div>
                 </div>
-                <p className="text-xs text-base-content/50 mt-0.5">
-                  {isCustom ? 'Custom local game installation' : 'Official release channel'}
-                </p>
-              </div>
-              <div className={`w-3 h-3 rounded-full ${isInstalled ? 'bg-emerald-500 shadow-lg shadow-emerald-500/50' : 'bg-base-content/20'}`}></div>
-            </div>
-            
-            <div className="p-3 rounded-xl bg-base-300/20 border border-white/5 mb-4">
-              <code className="text-xs text-base-content/50 font-mono break-all">
-                {dir || 'Not installed'}
-              </code>
-            </div>
-            
-            <div className="flex flex-wrap gap-2">
-              <button 
-                className="btn btn-sm btn-ghost border border-white/10 hover:border-white/20 gap-2" 
-                disabled={!dir} 
-                onClick={() => dir && openFolder(dir)}
-              >
-                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-                </svg>
-                Browse
-              </button>
-              
-              {!isCustom && (
-                <>
+                
+                {/* Path Display */}
+                {isInstalled && (
+                  <div className="mb-3 px-3 py-2 rounded-lg bg-base-300/30 border border-white/5">
+                    <code className="text-xs text-base-content/50 font-mono break-all">
+                      {dir}
+                    </code>
+                  </div>
+                )}
+                
+                {/* Action Buttons - Full Text with Tooltips */}
+                <div className="flex flex-wrap gap-2">
                   <button 
-                    className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
-                    disabled={!dir || busy} 
-                    onClick={() => repairChannel(c.name)}
+                    className="btn btn-sm btn-ghost border border-white/10 hover:border-white/20 gap-2" 
+                    disabled={!dir} 
+                    onClick={() => dir && openFolder(dir)}
+                    title="Open installation folder"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+                      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                     </svg>
-                    Repair
+                    Browse
                   </button>
-                  <button 
-                    className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
-                    disabled={!dir || busy} 
-                    onClick={() => fixChannelPermissions(c.name)}
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                    Permissions
-                  </button>
-                  <button 
-                    className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
-                    disabled={!dir || busy} 
-                    onClick={() => hdTexturesInstalled ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
-                  >
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
-                      <line x1="8" y1="21" x2="16" y2="21"/>
-                      <line x1="12" y1="17" x2="12" y2="21"/>
-                    </svg>
-                    {hdTexturesInstalled ? 'Remove HD' : 'HD Textures'}
-                  </button>
-                  {(() => {
-                    const dedi = (c as any)?.dedi_url as string | undefined;
-                    if (!dedi) return null;
-                    return (
-                      <a 
+                  
+                  {!isCustom && (
+                    <>
+                      <button 
                         className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
-                        href={dedi}                        
+                        disabled={!dir || busy} 
+                        onClick={() => repairChannel(c.name)}
+                        title="Verify and repair game files"
                       >
                         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
-                          <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
-                          <line x1="6" y1="6" x2="6.01" y2="6"/>
-                          <line x1="6" y1="18" x2="6.01" y2="18"/>
+                          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                         </svg>
-                        Server
-                      </a>
-                    );
-                  })()}
-                </>
-              )}
-              
-              {isInstalled && (
-                <button 
-                  className="btn btn-sm btn-ghost border border-red-500/20 hover:border-red-500/40 hover:bg-red-500/10 text-red-400 hover:text-red-300 gap-2 ml-auto" 
-                  disabled={busy} 
-                  onClick={() => onUninstallClick(c.name)}
-                >
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="3 6 5 6 21 6"/>
-                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-                    <line x1="10" y1="11" x2="10" y2="17"/>
-                    <line x1="14" y1="11" x2="14" y2="17"/>
-                  </svg>
-                  Uninstall
-                </button>
-              )}
-            </div>
-          </div>
-        );
-      })}
+                        Repair
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
+                        disabled={!dir || busy} 
+                        onClick={() => fixChannelPermissions(c.name)}
+                        title="Fix folder read/write permissions"
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                        </svg>
+                        Permissions
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
+                        disabled={!dir || busy} 
+                        onClick={() => hdTexturesInstalled ? uninstallHdTextures(c.name) : installHdTextures(c.name)}
+                        title={hdTexturesInstalled ? 'Remove high resolution textures' : 'Install high resolution textures'}
+                      >
+                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                          <line x1="8" y1="21" x2="16" y2="21"/>
+                          <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        {hdTexturesInstalled ? 'Remove HD' : 'HD Textures'}
+                      </button>
+                      {(() => {
+                        const dedi = (c as any)?.dedi_url as string | undefined;
+                        if (!dedi) return null;
+                        return (
+                          <a 
+                            className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
+                            href={dedi}
+                            title="Download dedicated server"
+                          >
+                            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                              <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                              <line x1="6" y1="6" x2="6.01" y2="6"/>
+                              <line x1="6" y1="18" x2="6.01" y2="18"/>
+                            </svg>
+                            Dedicated Server
+                          </a>
+                        );
+                      })()}
+                    </>
+                  )}
+                  
+                  {isInstalled && (
+                    <button 
+                      className="btn btn-sm btn-ghost border border-red-500/20 hover:border-red-500/40 hover:bg-red-500/10 text-red-400 hover:text-red-300 gap-2 ml-auto" 
+                      disabled={busy} 
+                      onClick={() => onUninstallClick(c.name)}
+                      title="Uninstall this channel"
+                    >
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                        <line x1="10" y1="11" x2="10" y2="17"/>
+                        <line x1="14" y1="11" x2="14" y2="17"/>
+                      </svg>
+                      Uninstall
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

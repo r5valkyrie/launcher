@@ -3246,6 +3246,7 @@ export default function LauncherUI() {
                   setModsRefreshNonce={setModsRefreshNonce}
                   installedMods={installedMods as any}
                   installedModsLoading={installedModsLoading}
+                  allModsLoading={allModsLoading}
                   installedModsAugmented={installedModsAugmented as any}
                   isInstalledModVisible={isInstalledModVisible as any}
                   draggingModName={draggingModName}

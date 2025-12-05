@@ -196,22 +196,34 @@ export default function NewsPanel(props: NewsPanelProps) {
         {/* Posts Content */}
         <div>
           {/* Loading State */}
-          {patchLoading && (
+          {patchLoading && filteredPatchPosts.length === 0 && (
             <div className={patchNotesView === 'grid' ? 'grid grid-cols-1 lg:grid-cols-2 gap-4' : 'space-y-4'}>
               {Array.from({ length: 6 }).map((_, i) => (
-                <div key={`ps-${i}`} className="rounded-xl overflow-hidden bg-base-300/20 border border-white/5 animate-pulse">
-                  {patchNotesView === 'grid' && <div className="w-full pb-[40%] bg-base-300/30" />}
+                <div key={`ps-${i}`} className="rounded-xl overflow-hidden bg-gradient-to-br from-base-300/30 via-base-300/20 to-base-300/30 border border-white/5 relative">
+                  {/* Shimmer effect */}
+                  <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animationDelay: `${i * 0.1}s` }} />
+                  
+                  {patchNotesView === 'grid' && (
+                    <div className="w-full pb-[45%] bg-gradient-to-br from-base-300/50 via-base-300/40 to-base-300/30 relative overflow-hidden">
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                      {/* Badge placeholder */}
+                      <div className="absolute top-3 left-3 w-20 h-5 bg-white/5 rounded backdrop-blur-sm" />
+                    </div>
+                  )}
                   <div className="p-4 space-y-3">
-                    <div className="h-4 bg-base-300/40 rounded w-3/4" />
-                    <div className="h-3 bg-base-300/30 rounded w-full" />
-                    <div className="h-3 bg-base-300/30 rounded w-2/3" />
+                    <div className="h-4 bg-gradient-to-r from-base-300/50 via-base-300/40 to-base-300/50 rounded-lg w-3/4" />
+                    <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-full" />
+                    <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-2/3" />
+                    {patchNotesView === 'grid' && (
+                      <div className="h-8 bg-gradient-to-r from-blue-500/10 via-blue-500/5 to-blue-500/10 rounded-lg w-24 mt-2" />
+                    )}
                   </div>
                 </div>
               ))}
             </div>
           )}
 
-          {!patchLoading && (
+          {(!patchLoading || filteredPatchPosts.length > 0) && (
             <>
               {/* Grid View */}
               {patchNotesView === 'grid' ? (

@@ -15,6 +15,7 @@ type ModsPanelProps = {
   // Data/state
   installedMods: any[] | null;
   installedModsLoading: boolean;
+  allModsLoading: boolean;
   installedModsAugmented: any[];
   isInstalledModVisible: (m: any) => boolean;
   draggingModName: string | null;
@@ -110,6 +111,7 @@ export default function ModsPanel(props: ModsPanelProps) {
     setModsRefreshNonce,
     installedMods,
     installedModsLoading,
+    allModsLoading,
     installedModsAugmented,
     isInstalledModVisible,
     draggingModName,
@@ -445,11 +447,52 @@ export default function ModsPanel(props: ModsPanelProps) {
 
           {/* Installed Mods Content */}
           <div className="glass rounded-xl p-4">
-            {installedModsLoading ? (
-              <div className="text-center py-16">
-                <div className="loading loading-spinner loading-lg text-primary mb-4"></div>
-                <div className="text-sm opacity-70">Loading installed mods...</div>
-              </div>
+            {installedModsLoading && !installedMods ? (
+              installedModsView === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={`skeleton-${i}`} className="rounded-2xl overflow-hidden bg-gradient-to-br from-base-300/30 via-base-300/20 to-base-300/30 border border-white/5 relative">
+                      {/* Shimmer effect */}
+                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animationDelay: `${i * 0.1}s` }} />
+                      
+                      {/* Image skeleton */}
+                      <div className="aspect-[16/9] bg-gradient-to-br from-base-300/50 via-base-300/40 to-base-300/30 relative overflow-hidden">
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                      </div>
+                      
+                      {/* Content skeleton */}
+                      <div className="p-4 space-y-3">
+                        <div className="h-4 bg-gradient-to-r from-base-300/50 via-base-300/40 to-base-300/50 rounded-lg w-3/4" />
+                        <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-full" />
+                        <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-2/3" />
+                        <div className="flex gap-2 pt-2">
+                          <div className="h-8 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg flex-1" />
+                          <div className="h-8 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-20" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={`skeleton-${i}`} className="flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-base-300/30 via-base-300/20 to-base-300/30 border border-white/5 relative overflow-hidden">
+                      {/* Shimmer effect */}
+                      <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animationDelay: `${i * 0.08}s` }} />
+                      
+                      <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-base-300/50 to-base-300/30 flex-shrink-0" />
+                      <div className="flex-1 space-y-2.5">
+                        <div className="h-4 bg-gradient-to-r from-base-300/50 via-base-300/40 to-base-300/50 rounded-lg w-1/3" />
+                        <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-1/4" />
+                      </div>
+                      <div className="flex gap-2 relative z-10">
+                        <div className="h-8 w-20 bg-gradient-to-r from-base-300/40 to-base-300/30 rounded-lg" />
+                        <div className="h-8 w-8 bg-gradient-to-r from-base-300/40 to-base-300/30 rounded-lg" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
             ) : visibleInstalledMods.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-green-500/10 flex items-center justify-center">
@@ -1043,7 +1086,62 @@ export default function ModsPanel(props: ModsPanelProps) {
           {/* Mods Grid/List */}
           {isInstalled && (
             <div className="glass rounded-xl p-4">
-              {filteredAndSortedMods.length === 0 ? (
+              {allModsLoading && filteredAndSortedMods.length === 0 ? (
+                browseModsView === 'grid' ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    {Array.from({ length: 12 }).map((_, i) => (
+                      <div key={`skeleton-${i}`} className="rounded-xl overflow-hidden bg-gradient-to-br from-base-300/30 via-base-300/20 to-base-300/30 border border-white/5 relative">
+                        {/* Shimmer effect */}
+                        <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animationDelay: `${i * 0.08}s` }} />
+                        
+                        {/* Image skeleton */}
+                        <div className="aspect-[16/10] bg-gradient-to-br from-base-300/50 via-base-300/40 to-base-300/30 relative overflow-hidden">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                          {/* Badge placeholders */}
+                          <div className="absolute top-2 left-2 w-16 h-5 bg-white/5 rounded backdrop-blur-sm" />
+                          <div className="absolute top-2 right-2 w-12 h-5 bg-white/5 rounded backdrop-blur-sm" />
+                        </div>
+                        
+                        {/* Content skeleton */}
+                        <div className="p-4 space-y-3">
+                          <div className="h-4 bg-gradient-to-r from-base-300/50 via-base-300/40 to-base-300/50 rounded-lg w-3/4" />
+                          <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-1/2" />
+                          <div className="space-y-1.5">
+                            <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-full" />
+                            <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-2/3" />
+                          </div>
+                          <div className="flex gap-2 pt-2">
+                            <div className="h-8 bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-emerald-500/10 rounded-lg flex-1" />
+                            <div className="h-8 bg-gradient-to-r from-base-300/40 to-base-300/30 rounded-lg w-8" />
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {Array.from({ length: 15 }).map((_, i) => (
+                      <div key={`skeleton-${i}`} className="flex items-center gap-4 p-3 rounded-xl bg-gradient-to-r from-base-300/30 via-base-300/20 to-base-300/30 border border-white/5 relative overflow-hidden">
+                        {/* Shimmer effect */}
+                        <div className="absolute inset-0 -translate-x-full animate-[shimmer_2s_infinite] bg-gradient-to-r from-transparent via-white/5 to-transparent" style={{ animationDelay: `${i * 0.06}s` }} />
+                        
+                        <div className="w-14 h-14 rounded-lg bg-gradient-to-br from-base-300/50 to-base-300/30 flex-shrink-0" />
+                        <div className="flex-1 space-y-2.5">
+                          <div className="flex items-center gap-2">
+                            <div className="h-4 bg-gradient-to-r from-base-300/50 via-base-300/40 to-base-300/50 rounded-lg w-1/3" />
+                            <div className="h-4 w-12 bg-gradient-to-r from-base-300/40 to-base-300/30 rounded" />
+                          </div>
+                          <div className="h-3 bg-gradient-to-r from-base-300/40 via-base-300/30 to-base-300/40 rounded-lg w-1/4" />
+                        </div>
+                        <div className="flex gap-2 relative z-10">
+                          <div className="h-8 w-20 bg-gradient-to-r from-emerald-500/10 to-emerald-500/5 rounded-lg" />
+                          <div className="h-8 w-8 bg-gradient-to-r from-base-300/40 to-base-300/30 rounded-lg" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              ) : filteredAndSortedMods.length === 0 ? (
                 <div className="text-center py-16">
                   <div className="w-20 h-20 mx-auto mb-6 rounded-2xl bg-base-300/30 flex items-center justify-center">
                     <svg className="w-10 h-10 opacity-30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">

@@ -127,6 +127,8 @@ export default function HeroBanner(props: HeroBannerProps) {
   const buttonsRef = useRef<HTMLDivElement>(null);
   const tabNavRef = useRef<HTMLDivElement>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [channelDropdownOpen, setChannelDropdownOpen] = useState(false);
+  const channelDropdownRef = useRef<HTMLDivElement>(null);
 
   // Should we show the progress instead of buttons?
   const showProgress = busy && hasStarted;
@@ -152,6 +154,19 @@ export default function HeroBanner(props: HeroBannerProps) {
       animations.slideInRight(tabNavRef.current, 200);
     }
   }, []);
+
+  // Close channel dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (channelDropdownRef.current && !channelDropdownRef.current.contains(e.target as Node)) {
+        setChannelDropdownOpen(false);
+      }
+    };
+    if (channelDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [channelDropdownOpen]);
 
   const handleButtonHover = (e: React.MouseEvent<HTMLButtonElement>) => {
     animations.buttonHover(e.currentTarget);
@@ -247,25 +262,84 @@ export default function HeroBanner(props: HeroBannerProps) {
               ))}
             </nav>
 
-            {/* Channel Selector - Moved to top right */}
+            {/* Channel Selector - Smart switcher: pills for ≤3 channels, dropdown for 4+ */}
             {enabledChannels.length > 0 && (
               <div className="flex items-center gap-3">
+                {/* Label */}
                 <span className="text-[10px] text-white/40 uppercase tracking-wider font-medium">Release Channel</span>
-                <div className="flex gap-1 bg-white/[0.03] rounded-lg p-0.5 border border-white/[0.06]">
-                  {enabledChannels.map((c) => (
+                
+                {/* Pills for 3 or fewer channels */}
+                {enabledChannels.length <= 3 ? (
+                  <div className="flex gap-1 p-1 bg-white/[0.03] rounded-lg border border-white/[0.06]">
+                    {enabledChannels.map((c) => (
+                      <button
+                        key={c.name}
+                        className={`relative px-4 py-2 rounded-md text-xs font-medium transition-all duration-200 ${
+                          selectedChannel === c.name 
+                            ? 'bg-gradient-to-br from-primary/15 to-primary/10 text-white border border-primary/25 shadow-sm shadow-primary/10' 
+                            : 'text-white/55 hover:text-white/90 hover:bg-white/[0.05]'
+                        }`}
+                        onClick={() => setSelectedChannel(c.name)}
+                      >
+                        {/* Channel name */}
+                        <span className="relative z-10">{c.name}</span>
+                        
+                        {/* Subtle active indicator */}
+                        {selectedChannel === c.name && (
+                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/5 h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent rounded-full" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  /* Dropdown for 4+ channels */
+                  <div className="relative" ref={channelDropdownRef}>
                     <button
-                      key={c.name}
-                      className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200 ${
-                        selectedChannel === c.name 
-                          ? 'bg-gradient-to-r from-primary/90 to-primary/70 text-white shadow-md shadow-primary/20' 
-                          : 'text-white/50 hover:text-white/80 hover:bg-white/[0.05]'
-                      }`}
-                      onClick={() => setSelectedChannel(c.name)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-gradient-to-br from-primary/15 to-primary/10 text-white border border-primary/25 shadow-sm shadow-primary/10 hover:from-primary/20 hover:to-primary/15 transition-all duration-200 min-w-[140px]"
+                      onClick={() => setChannelDropdownOpen(!channelDropdownOpen)}
                     >
-                      {c.name}
+                      <span className="text-xs font-medium flex-1 text-left">{selectedChannel}</span>
+                      <svg 
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${channelDropdownOpen ? 'rotate-180' : ''}`} 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2"
+                      >
+                        <polyline points="6,9 12,15 18,9" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
                     </button>
-                  ))}
-                </div>
+                    
+                    {/* Dropdown menu */}
+                    {channelDropdownOpen && (
+                      <div className="absolute top-full right-0 mt-2 w-48 bg-[#1b2026] border border-white/10 rounded-lg shadow-2xl shadow-black/40 overflow-hidden backdrop-blur-xl z-50 dropdown-enter">
+                        <div className="py-1 max-h-80 overflow-y-auto scrollbar-thin">
+                          {enabledChannels.map((c) => (
+                            <button
+                              key={c.name}
+                              className={`w-full flex items-center justify-between px-4 py-2.5 text-left text-sm transition-colors ${
+                                selectedChannel === c.name
+                                  ? 'bg-primary/15 text-white border-l-2 border-primary'
+                                  : 'text-white/70 hover:bg-white/[0.05] hover:text-white'
+                              }`}
+                              onClick={() => {
+                                setSelectedChannel(c.name);
+                                setChannelDropdownOpen(false);
+                              }}
+                            >
+                              <span className="font-medium">{c.name}</span>
+                              {selectedChannel === c.name && (
+                                <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                                  <polyline points="20,6 9,17 4,12" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
