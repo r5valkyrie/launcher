@@ -255,11 +255,11 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
           <div className={`w-9 h-9 rounded-lg flex items-center justify-center transition-colors ${colorMap[accentColor]}`}>
             {icon}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium text-sm">{label}</span>
               {tooltip && (
-                <div className="tooltip tooltip-right" data-tip={tooltip}>
+                <div className="tooltip tooltip-top" data-tip={tooltip}>
                   <svg className="w-3.5 h-3.5 text-base-content/30 hover:text-base-content/60 transition-colors cursor-help" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <circle cx="12" cy="12" r="10"/>
                     <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
@@ -268,7 +268,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 </div>
               )}
             </div>
-            {description && <p className="text-xs text-base-content/40 mt-0.5 leading-relaxed">{description}</p>}
+            {description && <p className="text-xs text-base-content/40 mt-0.5 leading-relaxed break-words">{description}</p>}
           </div>
         </div>
         <input 
@@ -476,9 +476,9 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
   );
 
   return (
-    <div key="content-launch" className="launch-panels space-y-6 overflow-y-auto pb-6 fade-in">
+    <div key="content-launch" className="launch-panels space-y-6 overflow-y-auto overflow-x-hidden pb-6 fade-in">
       {/* Session Mode - Launch Mode Cards */}
-      <div className="glass rounded-xl p-6">
+      <div className="glass rounded-xl p-6 min-w-0">
         <SectionHeader
           icon={
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -749,7 +749,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       {/* Two Column Grid for Settings */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Graphics Settings */}
-        <div className="glass rounded-xl p-6">
+        <div className="glass rounded-xl p-6 min-w-0">
           <SectionHeader
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -829,7 +829,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         </div>
 
         {/* Performance Settings */}
-        <div className="glass rounded-xl p-6">
+        <div className="glass rounded-xl p-6 min-w-0">
           <SectionHeader
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -890,7 +890,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         </div>
 
         {/* Network Settings */}
-        <div className="glass rounded-xl p-6">
+        <div className="glass rounded-xl p-6 min-w-0">
           <SectionHeader
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -963,7 +963,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         </div>
 
         {/* Console & Playlist */}
-        <div className="glass rounded-xl p-6">
+        <div className="glass rounded-xl p-6 min-w-0">
           <SectionHeader
             icon={
               <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1023,7 +1023,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       </div>
 
       {/* Advanced Options - Full Width */}
-      <div className="glass rounded-xl p-6">
+      <div className="glass rounded-xl p-6 min-w-0">
         <SectionHeader
           icon={
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1122,7 +1122,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
       </div>
 
       {/* Command Preview */}
-      <div className="glass rounded-xl p-6">
+      <div className="glass rounded-xl p-6 min-w-0">
         <SectionHeader
           icon={
             <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1134,7 +1134,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
           gradient="from-emerald-500 to-green-600"
         />
         
-        <div className="p-4 rounded-xl bg-base-300/30 border border-white/5">
+        <div className="p-4 rounded-xl bg-base-300/30 border border-white/5 overflow-hidden">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 text-xs text-base-content/40">
               <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1145,7 +1145,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
             </div>
             <button
               onClick={() => navigator.clipboard.writeText(buildLaunchParameters())}
-              className="btn btn-ghost btn-xs gap-1.5 text-base-content/50 hover:text-base-content"
+              className="btn btn-ghost btn-xs gap-1.5 text-base-content/50 hover:text-base-content flex-shrink-0"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
@@ -1154,9 +1154,11 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               Copy
             </button>
           </div>
-          <code className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed block">
-            {buildLaunchParameters()}
-          </code>
+          <div className="overflow-x-auto overlay-scroll">
+            <code className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed block whitespace-pre-wrap">
+              {buildLaunchParameters()}
+            </code>
+          </div>
         </div>
       </div>
     </div>
