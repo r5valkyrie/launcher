@@ -615,7 +615,20 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
   const seen = new Set();
   const filtered = [];
   for (const f of (checksums.files || [])) {
-    if (!(includeOptional || !f.optional)) continue;
+    // Include file if: includeOptional is true, OR file is not optional, OR the file already exists on disk
+    // This ensures repair/update always validates optional files that were previously installed
+    let shouldInclude = includeOptional || !f.optional;
+    if (!shouldInclude && f.optional) {
+      // Check if this optional file exists on disk - if so, include it for validation
+      try {
+        const relPath = normalizeRelative(f.path).split('/').join(path.sep);
+        const targetPath = path.join(installDir, relPath);
+        if (fs.existsSync(targetPath)) {
+          shouldInclude = true;
+        }
+      } catch {}
+    }
+    if (!shouldInclude) continue;
     const key = pathKey(f.path);
     if (!key) continue;
     if (seen.has(key)) continue;
