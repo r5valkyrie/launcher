@@ -63,6 +63,7 @@ declare global {
       cacheBackgroundVideo: (filename: string) => Promise<string>;
       isInstalledInDir: (path: string) => Promise<boolean | { isInstalled: boolean; needsRepair: boolean }>;
       readFile?: (filePath: string) => Promise<string | null>;
+      listDir?: (dirPath: string) => Promise<Array<{name: string; isDirectory: boolean; isFile: boolean}>>;
       pauseDownload?: () => Promise<boolean>;
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
@@ -426,6 +427,7 @@ export default function LauncherUI() {
   // Launch options state
   type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
   const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
+  const [hostConfigEnabled, setHostConfigEnabled] = useState<boolean>(false);
   const [hostname, setHostname] = useState<string>('');
   const [hostdesc, setHostdesc] = useState<string>('');
   const [visibility, setVisibility] = useState<number>(0);
@@ -1785,6 +1787,7 @@ export default function LauncherUI() {
         const lo = s?.launchOptions?.[selectedChannel];
         if (lo) {
           setLaunchMode(lo.mode || 'HOST');
+          setHostConfigEnabled(Boolean(lo.hostConfigEnabled));
           setHostname(lo.hostname || '');
           setVisibility(Number(lo.visibility || 0));
           setWindowed(Boolean(lo.windowed));
@@ -2156,6 +2159,7 @@ export default function LauncherUI() {
   function buildLaunchParametersLocal(): string {
     return buildLaunchParameters({
       launchMode: launchMode as any,
+      hostConfigEnabled,
       hostname,
       hostdesc,
       visibility: String(visibility),
@@ -2190,80 +2194,100 @@ export default function LauncherUI() {
 
   async function parsePlaylistFile(installDirectory: string) {
     try {
-      const playlistPath = `${installDirectory}/platform/playlists_r5_patch.txt`;
-      const content = await window.electronAPI?.readFile?.(playlistPath);
-      if (!content) {
-        setAvailableMaps([]);
-        setAvailablePlaylists([]);
-        return;
-      }
-
-      const lines = content.split('\n');
       const playlists: Array<{id: string, name: string}> = [];
       const mapsSet = new Set<string>();
       
-      let inPlaylistsSection = false;
-      let currentPlaylistId = '';
-      let currentPlaylistName = '';
-      let inMapsSection = false;
-      let braceDepth = 0;
+      // Parse playlist file for maps and playlists
+      const playlistPath = `${installDirectory}/platform/playlists_r5_patch.txt`;
+      const content = await window.electronAPI?.readFile?.(playlistPath);
+      if (content) {
+        const lines = content.split('\n');
+        
+        let inPlaylistsSection = false;
+        let currentPlaylistId = '';
+        let currentPlaylistName = '';
+        let inMapsSection = false;
+        let braceDepth = 0;
+        
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          
+          // Track brace depth
+          const openBraces = (line.match(/{/g) || []).length;
+          const closeBraces = (line.match(/}/g) || []).length;
+          
+          // Check if we're entering Playlists section
+          if (line.startsWith('Playlists') || line === 'Playlists') {
+            inPlaylistsSection = true;
+            braceDepth = 0;
+            continue;
+          }
+          
+          if (!inPlaylistsSection) continue;
+          
+          braceDepth += openBraces - closeBraces;
+          
+          // Exit Playlists section when braces close
+          if (inPlaylistsSection && braceDepth < 0) {
+            break;
+          }
+          
+          // Detect playlist ID (e.g., "survival", "survival_duos")
+          if (braceDepth === 1 && !line.includes('//') && !line.includes('{') && !line.includes('}') && line.length > 0) {
+            currentPlaylistId = line;
+            currentPlaylistName = '';
+          }
+          
+          // Extract playlist name
+          if (currentPlaylistId && line.includes('name') && !line.startsWith('//')) {
+            const match = line.match(/name\s+"([^"]+)"/);
+            if (match) {
+              currentPlaylistName = match[1];
+              playlists.push({ id: currentPlaylistId, name: currentPlaylistName });
+              currentPlaylistId = '';
+            }
+          }
+          
+          // Detect maps section
+          if (line.includes('maps') && line.includes('{')) {
+            inMapsSection = true;
+          }
+          
+          // Extract map names
+          if (inMapsSection && !line.startsWith('//') && line.includes('1') && !line.includes('{') && !line.includes('}')) {
+            const mapMatch = line.match(/^\s*([a-zA-Z0-9_]+)\s+1/);
+            if (mapMatch) {
+              mapsSet.add(mapMatch[1]);
+            }
+          }
+          
+          // Exit maps section
+          if (inMapsSection && closeBraces > 0) {
+            inMapsSection = false;
+          }
+        }
+      }
       
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        
-        // Track brace depth
-        const openBraces = (line.match(/{/g) || []).length;
-        const closeBraces = (line.match(/}/g) || []).length;
-        
-        // Check if we're entering Playlists section
-        if (line.startsWith('Playlists') || line === 'Playlists') {
-          inPlaylistsSection = true;
-          braceDepth = 0;
-          continue;
-        }
-        
-        if (!inPlaylistsSection) continue;
-        
-        braceDepth += openBraces - closeBraces;
-        
-        // Exit Playlists section when braces close
-        if (inPlaylistsSection && braceDepth < 0) {
-          break;
-        }
-        
-        // Detect playlist ID (e.g., "survival", "survival_duos")
-        if (braceDepth === 1 && !line.includes('//') && !line.includes('{') && !line.includes('}') && line.length > 0) {
-          currentPlaylistId = line;
-          currentPlaylistName = '';
-        }
-        
-        // Extract playlist name
-        if (currentPlaylistId && line.includes('name') && !line.startsWith('//')) {
-          const match = line.match(/name\s+"([^"]+)"/);
-          if (match) {
-            currentPlaylistName = match[1];
-            playlists.push({ id: currentPlaylistId, name: currentPlaylistName });
-            currentPlaylistId = '';
+      // Also scan the vpk folder for additional maps
+      // VPK files follow pattern: client_mp_rr_desertlands_64k_x_64k.bsp.pak000_000.vpk
+      // Map name would be: mp_rr_desertlands_64k_x_64k
+      try {
+        const vpkPath = `${installDirectory}/vpk`;
+        const vpkFiles = await window.electronAPI?.listDir?.(vpkPath);
+        if (vpkFiles && vpkFiles.length > 0) {
+          for (const file of vpkFiles) {
+            if (file.isFile && file.name.endsWith('.vpk') && file.name.includes('mp_rr_')) {
+              // Extract map name from VPK filename
+              // Pattern: client_mp_rr_*.bsp.pak000_000.vpk
+              const match = file.name.match(/client_(mp_rr_[a-zA-Z0-9_]+)\.bsp/);
+              if (match && match[1]) {
+                mapsSet.add(match[1]);
+              }
+            }
           }
         }
-        
-        // Detect maps section
-        if (line.includes('maps') && line.includes('{')) {
-          inMapsSection = true;
-        }
-        
-        // Extract map names
-        if (inMapsSection && !line.startsWith('//') && line.includes('1') && !line.includes('{') && !line.includes('}')) {
-          const mapMatch = line.match(/^\s*([a-zA-Z0-9_]+)\s+1/);
-          if (mapMatch) {
-            mapsSet.add(mapMatch[1]);
-          }
-        }
-        
-        // Exit maps section
-        if (inMapsSection && closeBraces > 0) {
-          inMapsSection = false;
-        }
+      } catch (vpkError) {
+        // VPK folder might not exist, that's fine
       }
       
       setAvailableMaps(Array.from(mapsSet).sort());
@@ -2276,7 +2300,7 @@ export default function LauncherUI() {
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
+    const lo = { mode: launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -2291,7 +2315,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+  }, [selectedChannel, launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
 
   // Parse playlist file when channel or install directory changes
   useEffect(() => {
@@ -3299,6 +3323,8 @@ export default function LauncherUI() {
             <GameLaunchSection
             launchMode={launchMode as any}
             setLaunchMode={setLaunchMode as any}
+            hostConfigEnabled={hostConfigEnabled}
+            setHostConfigEnabled={setHostConfigEnabled}
             hostname={hostname}
             setHostname={setHostname}
             hostdesc={hostdesc}

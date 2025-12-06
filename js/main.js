@@ -1215,6 +1215,18 @@ ipcMain.handle('fs:read-file', async (_e, { filePath }) => {
   }
 });
 
+ipcMain.handle('fs:list-dir', async (_e, { dirPath }) => {
+  try {
+    if (!dirPath) {
+      return [];
+    }
+    const entries = await fs.promises.readdir(dirPath, { withFileTypes: true });
+    return entries.map(e => ({ name: e.name, isDirectory: e.isDirectory(), isFile: e.isFile() }));
+  } catch (error) {
+    return [];
+  }
+});
+
 ipcMain.handle('fs:is-installed-in-dir', async (_e, { path: targetPath }) => {
   let hasClient = false;
   let hasServer = false;

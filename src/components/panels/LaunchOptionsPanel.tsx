@@ -8,6 +8,10 @@ type GameLaunchSectionProps = {
   launchMode: LaunchMode;
   setLaunchMode: (mode: LaunchMode) => void;
   
+  // Host config toggle (for HOST mode)
+  hostConfigEnabled: boolean;
+  setHostConfigEnabled: (enabled: boolean) => void;
+  
   // Server settings
   hostname: string;
   setHostname: (hostname: string) => void;
@@ -258,6 +262,8 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
   const {
     launchMode,
     setLaunchMode,
+    hostConfigEnabled,
+    setHostConfigEnabled,
     hostname,
     setHostname,
     hostdesc,
@@ -744,6 +750,201 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 />
               )}
             </div>
+          </div>
+        )}
+
+        {/* Host Configuration - Only for HOST mode */}
+        {launchMode === 'HOST' && (
+          <div className={`mt-5 p-5 rounded-xl bg-gradient-to-br border transition-all ${
+            hostConfigEnabled 
+              ? 'from-amber-500/5 to-orange-500/5 border-amber-500/20' 
+              : 'from-base-300/5 to-base-300/10 border-white/5'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-lg transition-all ${
+                  hostConfigEnabled 
+                    ? 'bg-gradient-to-br from-amber-500 to-orange-600' 
+                    : 'bg-base-300/50'
+                }`}>
+                  <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                    <circle cx="9" cy="7" r="4"/>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                    <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="font-semibold text-base">Host Configuration</h4>
+                  <p className="text-xs text-base-content/50">
+                    {hostConfigEnabled ? 'Configure your listen server settings' : 'Enable to customize server settings'}
+                  </p>
+                </div>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={hostConfigEnabled}
+                  onChange={(e) => setHostConfigEnabled(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-base-300 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+
+            {hostConfigEnabled && <div className="space-y-4">
+              {/* Basic Info */}
+              <div className="grid grid-cols-1 gap-3">
+                <InputField
+                  label="Server Name"
+                  value={hostname}
+                  onChange={setHostname}
+                  placeholder="My Game Session"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                      <circle cx="12" cy="7" r="4"/>
+                    </svg>
+                  }
+                />
+                <InputField
+                  label="Server Description"
+                  value={hostdesc}
+                  onChange={setHostdesc}
+                  placeholder="Join my game!"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                      <polyline points="14 2 14 8 20 8"/>
+                      <line x1="16" y1="13" x2="8" y2="13"/>
+                      <line x1="16" y1="17" x2="8" y2="17"/>
+                      <polyline points="10 9 9 9 8 9"/>
+                    </svg>
+                  }
+                />
+              </div>
+
+              {/* Visibility & Password */}
+              <div className="p-4 rounded-lg bg-base-300/20 border border-white/5 space-y-3">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
+                    <svg className="w-4 h-4 text-base-content/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    Server Visibility
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { value: 0, label: 'Offline', desc: 'Not listed', color: 'rose' },
+                      { value: 1, label: 'Hidden', desc: 'Join via IP', color: 'amber' },
+                      { value: 2, label: 'Public', desc: 'Visible to all', color: 'emerald' }
+                    ].map((opt) => (
+                      <button
+                        key={opt.value}
+                        onClick={() => setVisibility(opt.value)}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          visibility === opt.value
+                            ? `border-${opt.color}-500 bg-${opt.color}-500/10`
+                            : 'border-white/10 bg-base-300/20 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="text-sm font-semibold">{opt.label}</div>
+                        <div className="text-[10px] text-base-content/40 mt-0.5">{opt.desc}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <InputField
+                  label="Server Password (optional)"
+                  value={serverPassword}
+                  onChange={setServerPassword}
+                  placeholder="Leave blank for no password"
+                  type="password"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  }
+                />
+              </div>
+
+              {/* Port & Playlist */}
+              <div className="grid grid-cols-2 gap-3">
+                <InputField
+                  label="Host Port"
+                  value={hostport}
+                  onChange={setHostport}
+                  placeholder="37015"
+                  type="number"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="2" y1="12" x2="22" y2="12"/>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                    </svg>
+                  }
+                />
+                {availablePlaylists.length > 0 ? (
+                  <SelectField
+                    label="Playlist/Gamemode"
+                    value={playlist}
+                    onChange={setPlaylist}
+                    options={availablePlaylists.map(p => ({ value: p.id, label: p.name }))}
+                    placeholder="Select playlist..."
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                    }
+                  />
+                ) : (
+                  <InputField
+                    label="Playlist/Gamemode"
+                    value={playlist}
+                    onChange={setPlaylist}
+                    placeholder="e.g., survival, survival_duos"
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                    }
+                  />
+                )}
+              </div>
+
+              {/* Map Selection */}
+              {availableMaps.length > 0 ? (
+                <SelectField
+                  label="Map"
+                  value={map}
+                  onChange={setMap}
+                  options={availableMaps.map(m => ({ value: m, label: m }))}
+                  placeholder="Select map..."
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                  }
+                />
+              ) : (
+                <InputField
+                  label="Map"
+                  value={map}
+                  onChange={setMap}
+                  placeholder="e.g., mp_rr_canyonlands_mu1"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                      <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                  }
+                />
+              )}
+            </div>}
           </div>
         )}
       </div>

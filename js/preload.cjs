@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cacheBackgroundVideo: (filename) => ipcRenderer.invoke('video:cache', { filename }),
   isInstalledInDir: (path) => ipcRenderer.invoke('fs:is-installed-in-dir', { path }),
   readFile: (filePath) => ipcRenderer.invoke('fs:read-file', { filePath }),
+  listDir: (dirPath) => ipcRenderer.invoke('fs:list-dir', { dirPath }),
   openExternal: (url) => ipcRenderer.invoke('open-external', { url }),
   pauseDownload: () => ipcRenderer.invoke('download:pause'),
   resumeDownload: () => ipcRenderer.invoke('download:resume'),

@@ -4,6 +4,7 @@ type LaunchMode = 'CLIENT' | 'HOST' | 'SERVER';
 
 type LaunchOptions = {
   launchMode: LaunchMode;
+  hostConfigEnabled: boolean;
   hostname: string;
   hostdesc: string;
   visibility: string;
@@ -38,6 +39,7 @@ type LaunchOptions = {
 export function buildLaunchParameters(options: LaunchOptions): string {
   const {
     launchMode,
+    hostConfigEnabled,
     hostname,
     hostdesc,
     visibility,
@@ -90,8 +92,8 @@ export function buildLaunchParameters(options: LaunchOptions): string {
   if (offlineMode) params.push('-offline');
   if (!discordRichPresence) params.push('+discord_enable 0');
   
-  // Hostname/visibility only for dedicated server mode
-  if (mode === 'SERVER') {
+  // Hostname/visibility for SERVER mode, and HOST mode when config is enabled
+  if (mode === 'SERVER' || (mode === 'HOST' && hostConfigEnabled)) {
     if (hostname) params.push(`+hostname "${hostname}"`);
     if (hostdesc) params.push(`+sv_serverbrowserdescription "${hostdesc}"`);
     params.push(`+pylon_host_visibility ${visibility}`);
