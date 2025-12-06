@@ -201,6 +201,14 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
       reqOptions.headers.Range = `bytes=${resumeFrom}-`;
     }
     
+    // On retry attempts, add cache-busting to bypass potentially stale cached responses
+    let fetchUrl = url;
+    if (attempt > 1) {
+      fetchUrl = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
+      reqOptions.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate';
+      reqOptions.headers['Pragma'] = 'no-cache';
+    }
+    
     let received = 0;
     let watchdog = null;
     
@@ -227,7 +235,7 @@ async function downloadToFile(url, dest, onProgress, attempt = 1, token, resumeF
       return false; // Could not retry
     };
     
-    const req = https.get(url, reqOptions, (res) => {
+    const req = https.get(fetchUrl, reqOptions, (res) => {
       if (res.statusCode !== 200) {
         if (resumeFrom > 0 && res.statusCode === 206) {
           // ok partial content
@@ -369,6 +377,35 @@ export async function downloadFileObject(baseUrl, fileObj, installDir, emit, par
   }
 
   if (token?.cancelled) throw new Error('cancelled');
+
+  // Clean up stale/corrupt state before downloading multipart files
+  if (Array.isArray(fileObj.parts) && fileObj.parts.length > 0) {
+    try {
+      const mainFileExists = fs.existsSync(targetPath);
+      if (mainFileExists) {
+        // Main file exists but is invalid (we already checked above) - corrupted
+        // Delete both main file and all part files to ensure clean re-download
+        try { fs.unlinkSync(targetPath); } catch {}
+        for (let i = 0; i < fileObj.parts.length; i++) {
+          try { fs.unlinkSync(`${targetPath}.part${i}`); } catch {}
+        }
+      } else {
+        // Main file doesn't exist - check if we have incomplete/stale part files
+        // Count how many part files exist
+        let existingParts = 0;
+        for (let i = 0; i < fileObj.parts.length; i++) {
+          if (fs.existsSync(`${targetPath}.part${i}`)) existingParts++;
+        }
+        // If we have some but not all parts, they may be stale - clean up
+        // (If all parts exist with valid checksums, the download loop will reuse them)
+        if (existingParts > 0 && existingParts < fileObj.parts.length) {
+          for (let i = 0; i < fileObj.parts.length; i++) {
+            try { fs.unlinkSync(`${targetPath}.part${i}`); } catch {}
+          }
+        }
+      }
+    } catch {}
+  }
 
   if (Array.isArray(fileObj.parts) && fileObj.parts.length > 0) {
     const totalParts = fileObj.parts.length;
