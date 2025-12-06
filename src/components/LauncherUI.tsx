@@ -224,7 +224,9 @@ export default function LauncherUI() {
       try {
         const json: LauncherConfig = await (window.electronAPI?.fetchLauncherConfig
           ? window.electronAPI.fetchLauncherConfig(CONFIG_URL)
-          : fetch(CONFIG_URL).then((r) => r.json()));
+          : fetch(`${CONFIG_URL}${CONFIG_URL.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
+              headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
+            }).then((r) => r.json()));
         
         // Load settings to get custom install directories
         const settings = await window.electronAPI?.getSettings();

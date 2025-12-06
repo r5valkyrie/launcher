@@ -117,6 +117,8 @@ function ensureDir(dir) {
 
 function fetchJson(url) {
   return new Promise((resolve, reject) => {
+    // Add cache-busting query param to prevent stale responses
+    const bustUrl = url + (url.includes('?') ? '&' : '?') + '_t=' + Date.now();
     const reqOptions = {
       agent: keepAliveAgent,
       headers: {
@@ -124,9 +126,11 @@ function fetchJson(url) {
         'Accept': 'application/json',
         'Accept-Encoding': 'identity',  // No compression to avoid decompression complexity
         'Connection': 'keep-alive',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       },
     };
-    const req = https.get(url, reqOptions, (res) => {
+    const req = https.get(bustUrl, reqOptions, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode} for ${url}`));
         res.resume();

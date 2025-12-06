@@ -1080,7 +1080,15 @@ ipcMain.handle('set-download-speed-limit', async (_e, { bytesPerSecond }) => {
 
 ipcMain.handle('launcher:config', async (_e, { url }) => {
   const fetchJson = (targetUrl) => new Promise((resolve, reject) => {
-    https.get(targetUrl, (res) => {
+    // Add cache-busting query param to prevent stale responses
+    const bustUrl = targetUrl + (targetUrl.includes('?') ? '&' : '?') + '_t=' + Date.now();
+    https.get(bustUrl, {
+      headers: {
+        'User-Agent': 'R5Valkyrie-Launcher/1.0',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+      },
+    }, (res) => {
       if (res.statusCode !== 200) {
         reject(new Error(`HTTP ${res.statusCode} for ${targetUrl}`));
         res.resume();
