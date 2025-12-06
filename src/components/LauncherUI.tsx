@@ -6,6 +6,7 @@ import EulaModal from './modals/EulaModal';
 import SettingsPanel from './panels/SettingsPanel';
 import ModsPanel from './panels/ModsPanel';
 import NewsPanel from './panels/NewsPanel';
+import ServerBrowserPanel from './panels/ServerBrowserPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
 import DependencyModal from './modals/DependencyModal';
 import SnowEffect from './ui/SnowEffect';
@@ -17,10 +18,11 @@ import ToastNotification from './modals/ToastNotification';
 import GameLaunchSection from './panels/LaunchOptionsPanel';
 import PageTransition from './ui/PageTransition';
 import { sanitizeFolderName, deriveFolderFromDownloadUrl, compareVersions, deriveBaseFromDir } from './common/utils';
-import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff, uploadProfileToThunderstore } from './common/modUtils';
+import { getModIconUrl, getPackageUrlFromPack, getPackageUrlByName, getLatestVersionForName, getPackByName, isInstalledModVisible, buildDependencyTree, findDependentMods, createProfileFromMods, calculateProfileDiff, uploadProfileToThunderstore, downloadProfileFromThunderstore } from './common/modUtils';
 import type { DependencyTree, ModProfile } from './common/modUtils';
 import ModProfilesModal from './modals/ModProfilesModal';
 import ModQueueModal from './modals/ModQueueModal';
+import ServerModProfileModal from './modals/ServerModProfileModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -84,6 +86,7 @@ declare global {
       setModEnabled?: (installDir: string, name: string, enabled: boolean) => Promise<{ok:boolean; error?: string}>;
       uninstallMod?: (installDir: string, folder: string) => Promise<{ok:boolean; error?: string}>;
       fetchAllMods?: (query?: string) => Promise<{ok:boolean; mods?: any[]; error?: string}>;
+      fetchServers?: () => Promise<{ok:boolean; data?: any; error?: string}>;
       installMod?: (installDir: string, name: string, downloadUrl: string) => Promise<{ok:boolean; error?: string}>;
       onModsProgress?: (listener: (payload: any) => void) => void;
       reorderMods?: (installDir: string, orderIds: string[]) => Promise<{ok:boolean; error?: string}>;
@@ -131,7 +134,7 @@ export default function LauncherUI() {
   const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [snowEffectEnabled, setSnowEffectEnabled] = useState<boolean>(true);
-  const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'settings'>('general');
+  const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'servers'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
   const [progressItems, setProgressItems] = useState<Record<string, FileInfo>>({});
@@ -469,6 +472,11 @@ export default function LauncherUI() {
   const [modProfilesOpen, setModProfilesOpen] = useState<boolean>(false);
   const [modProfiles, setModProfiles] = useState<ModProfile[]>([]);
   const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  // Server mod profile modal state
+  const [serverModProfileModalOpen, setServerModProfileModalOpen] = useState<boolean>(false);
+  const [serverModProfile, setServerModProfile] = useState<ModProfile | null>(null);
+  const [serverModProfileServerName, setServerModProfileServerName] = useState<string>('');
+  const [serverModProfileDownloading, setServerModProfileDownloading] = useState<boolean>(false);
   // Mod download queue
   type QueuedMod = { pack: any; version?: any; addedAt: number };
   const [modQueue, setModQueue] = useState<QueuedMod[]>([]);
@@ -3439,6 +3447,122 @@ export default function LauncherUI() {
                   </div>
                 </div>
               )}
+              {activeTab === 'servers' && (
+                <ServerBrowserPanel
+                  activeProfileCode={activeProfileId ? modProfiles.find(p => p.id === activeProfileId)?.thunderstoreCode : null}
+                  existingProfiles={modProfiles}
+                  onApplyProfile={async (profileCode: string) => {
+                    // Find the saved profile with this thunderstore code
+                    const savedProfile = modProfiles.find(p => p.thunderstoreCode === profileCode);
+                    if (savedProfile) {
+                      // Apply it (which installs missing mods and sets it as active)
+                      await handleApplyProfile(savedProfile);
+                      
+                      setToastMessage(`Applied profile "${savedProfile.name}"`);
+                      setToastType('success');
+                      setFinished(true);
+                      setTimeout(() => setFinished(false), 3000);
+                      
+                      // Open the mod queue modal so users can see downloads
+                      setModQueueOpen(true);
+                    }
+                  }}
+                  launchGame={async (server) => {
+                    try {
+                      // Prepare launch options for connecting to this server
+                      const args = [
+                        `+connect ${server.ip}:${server.port}`,
+                        server.key ? `+serverfilter ${server.key}` : '',
+                      ].filter(Boolean).join(' ');
+                      
+                      const s: any = await window.electronAPI?.getSettings();
+                      let dir: string;
+                      if (channel?.isCustom && channel.installDir) {
+                        dir = channel.installDir;
+                      } else {
+                        dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                      }
+                      
+                      const res = await window.electronAPI?.launchGame?.({ 
+                        channelName: selectedChannel, 
+                        installDir: dir, 
+                        mode: 'NORMAL', 
+                        argsString: args 
+                      });
+                      
+                      if (res && !res.ok) {
+                        console.error('Failed to launch', res.error);
+                        alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+                      }
+                    } catch (error) {
+                      console.error('Error launching game for server:', error);
+                      alert('Failed to connect to server');
+                    }
+                  }}
+                  onClickInstallModProfile={async (server) => {
+                    try {
+                      if (!server.modsProfile && !server.enabledModsList) return;
+                      
+                      setServerModProfileDownloading(true);
+                      
+                      // If server has a Thunderstore profile code, download it
+                      if (server.modsProfile) {
+                        const result = await downloadProfileFromThunderstore(server.modsProfile);
+                        setServerModProfileDownloading(false);
+                        
+                        if (!result.ok) {
+                          setToastMessage(`Failed to download profile: ${result.error}`);
+                          setToastType('error');
+                          setFinished(true);
+                          setTimeout(() => setFinished(false), 5000);
+                          return;
+                        }
+                        
+                        // Ensure the profile has the thunderstoreCode for matching
+                        const profileWithCode = {
+                          ...result.profile,
+                          thunderstoreCode: server.modsProfile,
+                        };
+                        
+                        setServerModProfile(profileWithCode);
+                        setServerModProfileServerName(server.name || 'Unknown Server');
+                        setServerModProfileModalOpen(true);
+                      } 
+                      // Otherwise, create a profile from the server's mod list
+                      else if (server.enabledModsList && server.enabledModsList.length > 0) {
+                        const profile: ModProfile = {
+                          id: `server-${Date.now()}`,
+                          name: `${server.name || 'Server'} Mods`,
+                          description: `Mod configuration for ${server.name || 'this server'}`,
+                          mods: server.enabledModsList.map(modFullName => {
+                            const parts = modFullName.split('-');
+                            return {
+                              name: parts.length > 1 ? parts.slice(1).join('-') : modFullName,
+                              fullName: modFullName,
+                              enabled: true,
+                            };
+                          }),
+                          createdAt: Date.now(),
+                          updatedAt: Date.now(),
+                          thunderstoreCode: server.modsProfile, // Store the server's profile code for matching
+                        };
+                        
+                        setServerModProfile(profile);
+                        setServerModProfileServerName(server.name || 'Unknown Server');
+                        setServerModProfileModalOpen(true);
+                        setServerModProfileDownloading(false);
+                      }
+                    } catch (error) {
+                      console.error('Error loading server mod profile:', error);
+                      setToastMessage('Failed to load server mod profile');
+                      setToastType('error');
+                      setFinished(true);
+                      setTimeout(() => setFinished(false), 5000);
+                      setServerModProfileDownloading(false);
+                    }
+                  }}
+                />
+              )}
               {activeTab === 'mods' && (
                 <ModsPanel
                   modsSubtab={modsSubtab as any}
@@ -3652,6 +3776,92 @@ export default function LauncherUI() {
         onMove={moveInQueue}
         installingMods={installingMods}
         modProgress={modProgress}
+      />
+
+      {/* Server Mod Profile Modal */}
+      <ServerModProfileModal
+        open={serverModProfileModalOpen}
+        onClose={() => {
+          setServerModProfileModalOpen(false);
+          setServerModProfile(null);
+        }}
+        profile={serverModProfile}
+        serverName={serverModProfileServerName}
+        isDownloading={serverModProfileDownloading}
+        isAlreadySaved={serverModProfile ? modProfiles.some(p => 
+          p.name === serverModProfile.name || 
+          p.thunderstoreCode === serverModProfile.thunderstoreCode
+        ) : false}
+        isActiveProfile={serverModProfile && serverModProfile.thunderstoreCode ? 
+          modProfiles.some(p => p.id === activeProfileId && p.thunderstoreCode === serverModProfile.thunderstoreCode) : 
+          false
+        }
+        onConfirm={async (saveProfile: boolean) => {
+          if (!serverModProfile) return;
+          
+          try {
+            setServerModProfileDownloading(true);
+            
+            // Show applying notification
+            setToastMessage(`Applying profile "${serverModProfile.name}"...`);
+            setToastType('info');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 3000);
+            
+            // If user wants to save it, add to their profiles
+            if (saveProfile) {
+              // Check if profile with same name already exists
+              const existingProfile = modProfiles.find(p => p.name === serverModProfile.name);
+              
+              if (existingProfile) {
+                // Update existing profile
+                const newProfiles = modProfiles.map(p => 
+                  p.name === serverModProfile.name ? serverModProfile : p
+                );
+                saveModProfiles(newProfiles, activeProfileId);
+                
+                setToastMessage(`Profile "${serverModProfile.name}" updated`);
+                setToastType('success');
+                setFinished(true);
+                setTimeout(() => setFinished(false), 3000);
+              } else {
+                // Add as new profile
+                const newProfiles = [...modProfiles, serverModProfile];
+                saveModProfiles(newProfiles, serverModProfile.id);
+                
+                setToastMessage(`Profile "${serverModProfile.name}" saved to My Profiles`);
+                setToastType('success');
+                setFinished(true);
+                setTimeout(() => setFinished(false), 3000);
+              }
+            }
+            
+            // Close the server mod profile modal immediately
+            setServerModProfileModalOpen(false);
+            setServerModProfile(null);
+            
+            // Apply the profile (installs missing mods)
+            await handleApplyProfile(serverModProfile);
+            
+            // Show final success message
+            setToastMessage(`${serverModProfile.mods.length} mod${serverModProfile.mods.length !== 1 ? 's' : ''} queued for installation`);
+            setToastType('success');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 5000);
+            
+            // Open the mod queue modal so users can see downloads
+            setModQueueOpen(true);
+          } catch (error) {
+            console.error('Error installing server mod profile:', error);
+            setToastMessage('Failed to install server mod profile');
+            setToastType('error');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 5000);
+            setServerModProfileModalOpen(false);
+          } finally {
+            setServerModProfileDownloading(false);
+          }
+        }}
       />
 
       {/* Uninstall Warning Modal (when mod has dependents) */}

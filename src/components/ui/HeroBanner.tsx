@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useState } from 'react';
 import { animations } from '../common/animations';
 
 type Channel = { name: string };
-export type ActiveTab = 'general' | 'mods' | 'launch' | 'settings';
+export type ActiveTab = 'general' | 'mods' | 'servers' | 'launch' | 'settings';
 
 type PartInfo = { received: number; total: number };
 type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
@@ -62,6 +62,18 @@ const tabs: { id: ActiveTab; label: string; icon: React.ReactNode }[] = [
         <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
         <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
         <line x1="12" y1="22.08" x2="12" y2="12"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'servers',
+    label: 'Servers',
+    icon: (
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+        <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+        <line x1="6" y1="6" x2="6.01" y2="6"/>
+        <line x1="6" y1="18" x2="6.01" y2="18"/>
       </svg>
     ),
   },

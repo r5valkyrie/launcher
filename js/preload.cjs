@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   reorderMods: (installDir, orderIds) => ipcRenderer.invoke('mods:reorder', { installDir, orderIds }),
   uninstallMod: (installDir, folder) => ipcRenderer.invoke('mods:uninstall', { installDir, folder }),
   fetchAllMods: (query) => ipcRenderer.invoke('mods:fetchAll', { query }),
+  fetchServers: () => ipcRenderer.invoke('servers:fetch'),
   installMod: (installDir, name, downloadUrl) => ipcRenderer.invoke('mods:install', { installDir, name, downloadUrl }),
   onModsProgress: (listener) => ipcRenderer.on('mods:progress', (_e, payload) => listener(payload)),
   getModIconDataUrl: (installDir, folder) => ipcRenderer.invoke('mods:iconDataUrl', { installDir, folder }),

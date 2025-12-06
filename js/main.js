@@ -463,6 +463,52 @@ ipcMain.handle('mods:uninstall', async (_e, { installDir, folder }) => {
   } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 
+ipcMain.handle('servers:fetch', async () => {
+  return new Promise((resolve) => {
+    const url = new URL('https://playvalkyrie.org/api/servers');
+    const postData = JSON.stringify({});
+    
+    const options = {
+      hostname: url.hostname,
+      port: url.port || 443,
+      path: url.pathname,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData),
+        'User-Agent': 'R5Valkyrie-Launcher/1.0',
+      },
+    };
+
+    const req = https.request(options, (res) => {
+      let data = '';
+      
+      res.on('data', (chunk) => {
+        data += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          if (res.statusCode !== 200) {
+            return resolve({ ok: false, error: `HTTP ${res.statusCode}` });
+          }
+          const json = JSON.parse(data);
+          resolve({ ok: true, data: json });
+        } catch (e) {
+          resolve({ ok: false, error: String(e?.message || e) });
+        }
+      });
+    });
+
+    req.on('error', (e) => {
+      resolve({ ok: false, error: String(e?.message || e) });
+    });
+
+    req.write(postData);
+    req.end();
+  });
+});
+
 ipcMain.handle('mods:fetchAll', async (_e, { query }) => {
   const indexUrl = 'https://thunderstore.io/c/r5valkyrie/api/v1/package-listing-index/';
   const fetchBuffer = (url) => new Promise((resolve, reject) => {
