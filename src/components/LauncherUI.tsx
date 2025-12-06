@@ -23,6 +23,7 @@ import type { DependencyTree, ModProfile } from './common/modUtils';
 import ModProfilesModal from './modals/ModProfilesModal';
 import ModQueueModal from './modals/ModQueueModal';
 import ServerModProfileModal from './modals/ServerModProfileModal';
+import ServerJoinModPromptModal from './modals/ServerJoinModPromptModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -435,6 +436,7 @@ export default function LauncherUI() {
   const [hostport, setHostport] = useState<string>('37015');
   const [map, setMap] = useState<string>('');
   const [playlist, setPlaylist] = useState<string>('');
+  const [serverModsProfile, setServerModsProfile] = useState<string>('');
   const [availableMaps, setAvailableMaps] = useState<string[]>([]);
   const [availablePlaylists, setAvailablePlaylists] = useState<Array<{id: string, name: string}>>([]);
   const [windowed, setWindowed] = useState<boolean>(false);
@@ -485,6 +487,12 @@ export default function LauncherUI() {
   const [serverPasswordModalOpen, setServerPasswordModalOpen] = useState<boolean>(false);
   const [serverPasswordInput, setServerPasswordInput] = useState<string>('');
   const [pendingServerConnection, setPendingServerConnection] = useState<any>(null);
+  // Server join mod prompt modal state
+  const [serverJoinModPromptOpen, setServerJoinModPromptOpen] = useState<boolean>(false);
+  const [pendingJoinServer, setPendingJoinServer] = useState<any>(null);
+  const [pendingJoinPassword, setPendingJoinPassword] = useState<string | undefined>(undefined);
+  // Track if we should join server after mod profile install
+  const [joinAfterModInstall, setJoinAfterModInstall] = useState<boolean>(false);
   // Mod download queue
   type QueuedMod = { pack: any; version?: any; addedAt: number };
   const [modQueue, setModQueue] = useState<QueuedMod[]>([]);
@@ -2167,6 +2175,7 @@ export default function LauncherUI() {
       hostport,
       map,
       playlist,
+      serverModsProfile,
       windowed,
       borderless,
       maxFps,
@@ -3339,6 +3348,8 @@ export default function LauncherUI() {
             setMap={setMap}
             playlist={playlist}
             setPlaylist={setPlaylist}
+            serverModsProfile={serverModsProfile}
+            setServerModsProfile={setServerModsProfile}
             availableMaps={availableMaps}
             availablePlaylists={availablePlaylists}
             windowed={windowed}
@@ -3501,6 +3512,19 @@ export default function LauncherUI() {
                   }}
                   launchGame={async (server, password?: string) => {
                     try {
+                      // Check if server has mod profile and if it's not currently applied
+                      const currentActiveProfileCode = activeProfileId ? modProfiles.find(p => p.id === activeProfileId)?.thunderstoreCode : null;
+                      const serverHasModProfile = server.modsProfile || (server.enabledModsList && server.enabledModsList.length > 0);
+                      const isProfileActive = server.modsProfile && currentActiveProfileCode === server.modsProfile;
+                      
+                      // If server has mods and they're not currently active, prompt user
+                      if (serverHasModProfile && !isProfileActive) {
+                        setPendingJoinServer(server);
+                        setPendingJoinPassword(password);
+                        setServerJoinModPromptOpen(true);
+                        return;
+                      }
+                      
                       // If server has password and no password provided, open modal
                       if (server.hasPassword === 'true' && !password) {
                         setPendingServerConnection(server);
@@ -3511,6 +3535,7 @@ export default function LauncherUI() {
 
                       // Prepare launch options for connecting to this server
                       const args = [
+                        `-novid`, // Disable video for faster launch
                         `+connect [${server.ip}]:${server.port}`,
                         server.key ? `+sv_netkey ${server.key}` : '',
                         password ? `+sv_password ${password}` : '',
@@ -3825,6 +3850,12 @@ export default function LauncherUI() {
         onClose={() => {
           setServerModProfileModalOpen(false);
           setServerModProfile(null);
+          // Clear join-after-install state if user cancels
+          if (joinAfterModInstall) {
+            setJoinAfterModInstall(false);
+            setPendingJoinServer(null);
+            setPendingJoinPassword(undefined);
+          }
         }}
         profile={serverModProfile}
         serverName={serverModProfileServerName}
@@ -3892,6 +3923,55 @@ export default function LauncherUI() {
             
             // Open the mod queue modal so users can see downloads
             setModQueueOpen(true);
+            
+            // If we need to join a server after installing mods
+            if (joinAfterModInstall && pendingJoinServer) {
+              const server = pendingJoinServer;
+              const password = pendingJoinPassword;
+              
+              // Small delay to let mods apply
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Check for password
+              if (server.hasPassword === 'true' && !password) {
+                setPendingServerConnection(server);
+                setServerPasswordInput('');
+                setServerPasswordModalOpen(true);
+              } else {
+                // Launch game
+                const args = [
+                  `-novid`,
+                  `+connect [${server.ip}]:${server.port}`,
+                  server.key ? `+sv_netkey ${server.key}` : '',
+                  password ? `+sv_password ${password}` : '',
+                ].filter(Boolean).join(' ');
+                
+                const s: any = await window.electronAPI?.getSettings();
+                let dir: string;
+                if (channel?.isCustom && channel.installDir) {
+                  dir = channel.installDir;
+                } else {
+                  dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                }
+                
+                const res = await window.electronAPI?.launchGame?.({ 
+                  channelName: selectedChannel, 
+                  installDir: dir, 
+                  mode: 'NORMAL', 
+                  argsString: args 
+                });
+                
+                if (res && !res.ok) {
+                  console.error('Failed to launch', res.error);
+                  alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+                }
+              }
+              
+              // Clear pending states
+              setJoinAfterModInstall(false);
+              setPendingJoinServer(null);
+              setPendingJoinPassword(undefined);
+            }
           } catch (error) {
             console.error('Error installing server mod profile:', error);
             setToastMessage('Failed to install server mod profile');
@@ -3899,6 +3979,11 @@ export default function LauncherUI() {
             setFinished(true);
             setTimeout(() => setFinished(false), 5000);
             setServerModProfileModalOpen(false);
+            
+            // Clear join-after-install state on error
+            setJoinAfterModInstall(false);
+            setPendingJoinServer(null);
+            setPendingJoinPassword(undefined);
           } finally {
             setServerModProfileDownloading(false);
           }
@@ -4086,6 +4171,219 @@ export default function LauncherUI() {
           }} />
         </div>
       )}
+
+      {/* Server Join Mod Prompt Modal */}
+      <ServerJoinModPromptModal
+        open={serverJoinModPromptOpen}
+        onClose={() => {
+          setServerJoinModPromptOpen(false);
+          setPendingJoinServer(null);
+          setPendingJoinPassword(undefined);
+        }}
+        serverName={pendingJoinServer?.name || 'Server'}
+        modCount={
+          (() => {
+            // If profile is saved, get count from it
+            if (pendingJoinServer?.modsProfile) {
+              const savedProfile = modProfiles.find(p => p.thunderstoreCode === pendingJoinServer.modsProfile);
+              if (savedProfile) {
+                return savedProfile.mods.length;
+              }
+            }
+            // Otherwise use the server's mod lists
+            return pendingJoinServer?.enabledModsList?.length || 
+                   pendingJoinServer?.requiredModsList?.length || 
+                   0;
+          })()
+        }
+        isProfileSaved={
+          pendingJoinServer?.modsProfile ? 
+            modProfiles.some(p => p.thunderstoreCode === pendingJoinServer.modsProfile) : 
+            false
+        }
+        hasModProfile={!!pendingJoinServer?.modsProfile}
+        onJoinWithMods={async () => {
+          const server = pendingJoinServer;
+          const password = pendingJoinPassword;
+          
+          setServerJoinModPromptOpen(false);
+          
+          if (!server) return;
+          
+          try {
+            // Check if profile is already saved
+            const isProfileSaved = server.modsProfile && modProfiles.some(p => p.thunderstoreCode === server.modsProfile);
+            
+            if (isProfileSaved && server.modsProfile) {
+              // Apply the saved profile directly
+              const savedProfile = modProfiles.find(p => p.thunderstoreCode === server.modsProfile);
+              if (savedProfile) {
+                await handleApplyProfile(savedProfile);
+                
+                setToastMessage('Server mods applied successfully');
+                setToastType('success');
+                setFinished(true);
+                setTimeout(() => setFinished(false), 3000);
+                
+                // Small delay to let mods apply, then launch
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Check for password
+                if (server.hasPassword === 'true' && !password) {
+                  setPendingServerConnection(server);
+                  setServerPasswordInput('');
+                  setServerPasswordModalOpen(true);
+                  return;
+                }
+                
+                // Launch game
+                const args = [
+                  `-novid`,
+                  `+connect [${server.ip}]:${server.port}`,
+                  server.key ? `+sv_netkey ${server.key}` : '',
+                  password ? `+sv_password ${password}` : '',
+                ].filter(Boolean).join(' ');
+                
+                const s: any = await window.electronAPI?.getSettings();
+                let dir: string;
+                if (channel?.isCustom && channel.installDir) {
+                  dir = channel.installDir;
+                } else {
+                  dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                }
+                
+                const res = await window.electronAPI?.launchGame?.({ 
+                  channelName: selectedChannel, 
+                  installDir: dir, 
+                  mode: 'NORMAL', 
+                  argsString: args 
+                });
+                
+                if (res && !res.ok) {
+                  console.error('Failed to launch', res.error);
+                  alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+                }
+                
+                // Clear pending state
+                setPendingJoinServer(null);
+                setPendingJoinPassword(undefined);
+              }
+            } else {
+              // Profile not saved - trigger the install flow (same as clicking Install Server Mods button)
+              setJoinAfterModInstall(true);
+              setServerModProfileDownloading(true);
+              
+              if (server.modsProfile) {
+                const result = await downloadProfileFromThunderstore(server.modsProfile);
+                setServerModProfileDownloading(false);
+                
+                if (!result.ok) {
+                  setToastMessage(`Failed to download profile: ${result.error}`);
+                  setToastType('error');
+                  setFinished(true);
+                  setTimeout(() => setFinished(false), 5000);
+                  setJoinAfterModInstall(false);
+                  setPendingJoinServer(null);
+                  setPendingJoinPassword(undefined);
+                  return;
+                }
+                
+                const profileWithCode = {
+                  ...result.profile,
+                  thunderstoreCode: server.modsProfile,
+                };
+                
+                setServerModProfile(profileWithCode);
+                setServerModProfileServerName(server.name || 'Unknown Server');
+                setServerModProfileModalOpen(true);
+              } else if (server.enabledModsList && server.enabledModsList.length > 0) {
+                const profile: ModProfile = {
+                  id: `server-${Date.now()}`,
+                  name: `${server.name || 'Server'} Mods`,
+                  description: `Mod configuration for ${server.name || 'this server'}`,
+                  mods: server.enabledModsList.map((modFullName: string) => {
+                    const parts = modFullName.split('-');
+                    return {
+                      name: parts.length > 1 ? parts.slice(1).join('-') : modFullName,
+                      fullName: modFullName,
+                      enabled: true,
+                    };
+                  }),
+                  createdAt: Date.now(),
+                  updatedAt: Date.now(),
+                  thunderstoreCode: server.modsProfile,
+                };
+                
+                setServerModProfile(profile);
+                setServerModProfileServerName(server.name || 'Unknown Server');
+                setServerModProfileModalOpen(true);
+                setServerModProfileDownloading(false);
+              }
+            }
+          } catch (error) {
+            console.error('Error installing mods and joining server:', error);
+            setToastMessage('Failed to install server mods');
+            setToastType('error');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 5000);
+            setJoinAfterModInstall(false);
+            setPendingJoinServer(null);
+            setPendingJoinPassword(undefined);
+            setServerModProfileDownloading(false);
+          }
+        }}
+        onJoinWithoutMods={async () => {
+          const server = pendingJoinServer;
+          const password = pendingJoinPassword;
+          
+          setServerJoinModPromptOpen(false);
+          setPendingJoinServer(null);
+          setPendingJoinPassword(undefined);
+          
+          if (!server) return;
+          
+          try {
+            // Check for password
+            if (server.hasPassword === 'true' && !password) {
+              setPendingServerConnection(server);
+              setServerPasswordInput('');
+              setServerPasswordModalOpen(true);
+              return;
+            }
+            
+            // Launch game without installing mods
+            const args = [
+              `-novid`,
+              `+connect [${server.ip}]:${server.port}`,
+              server.key ? `+sv_netkey ${server.key}` : '',
+              password ? `+sv_password ${password}` : '',
+            ].filter(Boolean).join(' ');
+            
+            const s: any = await window.electronAPI?.getSettings();
+            let dir: string;
+            if (channel?.isCustom && channel.installDir) {
+              dir = channel.installDir;
+            } else {
+              dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+            }
+            
+            const res = await window.electronAPI?.launchGame?.({ 
+              channelName: selectedChannel, 
+              installDir: dir, 
+              mode: 'NORMAL', 
+              argsString: args 
+            });
+            
+            if (res && !res.ok) {
+              console.error('Failed to launch', res.error);
+              alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+            }
+          } catch (error) {
+            console.error('Error joining server:', error);
+            alert('Failed to connect to server');
+          }
+        }}
+      />
       </div>
     </>
   );

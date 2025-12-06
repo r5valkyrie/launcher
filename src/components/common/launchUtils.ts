@@ -12,6 +12,7 @@ type LaunchOptions = {
   hostport: string;
   map: string;
   playlist: string;
+  serverModsProfile: string;
   windowed: boolean;
   borderless: boolean;
   maxFps: string;
@@ -47,6 +48,7 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     hostport,
     map,
     playlist,
+    serverModsProfile,
     windowed,
     borderless,
     maxFps,
@@ -101,6 +103,7 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     if (hostport && /^\d+$/.test(hostport)) params.push(`+hostport ${hostport}`);
     if (map) params.push(`+map ${map}`);
     if (playlist) params.push(`+launchplaylist ${playlist}`);
+    if (serverModsProfile) params.push(`+sv_modsProfile "${serverModsProfile}"`);
   }
   
   // Video
