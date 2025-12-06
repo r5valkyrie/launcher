@@ -5,7 +5,12 @@ type LaunchMode = 'CLIENT' | 'HOST' | 'SERVER';
 type LaunchOptions = {
   launchMode: LaunchMode;
   hostname: string;
+  hostdesc: string;
   visibility: string;
+  serverPassword: string;
+  hostport: string;
+  map: string;
+  playlist: string;
   windowed: boolean;
   borderless: boolean;
   maxFps: string;
@@ -34,7 +39,12 @@ export function buildLaunchParameters(options: LaunchOptions): string {
   const {
     launchMode,
     hostname,
+    hostdesc,
     visibility,
+    serverPassword,
+    hostport,
+    map,
+    playlist,
     windowed,
     borderless,
     maxFps,
@@ -81,9 +91,14 @@ export function buildLaunchParameters(options: LaunchOptions): string {
   if (!discordRichPresence) params.push('+discord_enable 0');
   
   // Hostname/visibility only for dedicated server mode
-  if (mode === 'SERVER' && hostname) {
-    params.push(`+hostname "${hostname}"`);
-    params.push(`+sv_pylonVisibility ${visibility}`);
+  if (mode === 'SERVER') {
+    if (hostname) params.push(`+hostname "${hostname}"`);
+    if (hostdesc) params.push(`+sv_serverbrowserdescription "${hostdesc}"`);
+    params.push(`+pylon_host_visibility ${visibility}`);
+    if (serverPassword) params.push(`+sv_password "${serverPassword}"`);
+    if (hostport && /^\d+$/.test(hostport)) params.push(`+hostport ${hostport}`);
+    if (map) params.push(`+map ${map}`);
+    if (playlist) params.push(`+playlist ${playlist}`);
   }
   
   // Video

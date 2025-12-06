@@ -60,6 +60,7 @@ declare global {
       setDownloadSpeedLimit: (bytesPerSecond: number) => Promise<{ok: boolean; error?: string}>;
       cacheBackgroundVideo: (filename: string) => Promise<string>;
       isInstalledInDir: (path: string) => Promise<boolean | { isInstalled: boolean; needsRepair: boolean }>;
+      readFile?: (filePath: string) => Promise<string | null>;
       pauseDownload?: () => Promise<boolean>;
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
@@ -421,7 +422,14 @@ export default function LauncherUI() {
   type LaunchMode = 'HOST'|'SERVER'|'CLIENT';
   const [launchMode, setLaunchMode] = useState<LaunchMode>('HOST');
   const [hostname, setHostname] = useState<string>('');
+  const [hostdesc, setHostdesc] = useState<string>('');
   const [visibility, setVisibility] = useState<number>(0);
+  const [serverPassword, setServerPassword] = useState<string>('');
+  const [hostport, setHostport] = useState<string>('37015');
+  const [map, setMap] = useState<string>('');
+  const [playlist, setPlaylist] = useState<string>('');
+  const [availableMaps, setAvailableMaps] = useState<string[]>([]);
+  const [availablePlaylists, setAvailablePlaylists] = useState<Array<{id: string, name: string}>>([]);
   const [windowed, setWindowed] = useState<boolean>(false);
   const [borderless, setBorderless] = useState<boolean>(false);
   const [maxFps, setMaxFps] = useState<string>('');
@@ -1064,6 +1072,16 @@ export default function LauncherUI() {
       setVideoSrc(null);
       return;
     }
+    
+    // In development mode (localhost), skip cache and use remote URL directly to avoid 404 errors
+    const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    
+    if (isDev) {
+      setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
+      return;
+    }
+    
+    // In production, use cache
     window.electronAPI?.cacheBackgroundVideo(videoFilename)
       .then((url: string) => {
         setBgCached(url);
@@ -1073,7 +1091,7 @@ export default function LauncherUI() {
         setBgCached(undefined);
         setVideoSrc(`https://blaze.playvalkyrie.org/video_backgrounds/${videoFilename}`);
       });
-  }, [videoFilename]);
+  }, [videoFilename, bannerVideoEnabled]);
   useEffect(() => { if (bgCached) setVideoSrc(bgCached); }, [bgCached]);
   const bgVideo = bannerVideoEnabled ? (videoSrc || undefined) : undefined;
 
@@ -2125,7 +2143,12 @@ export default function LauncherUI() {
     return buildLaunchParameters({
       launchMode: launchMode as any,
       hostname,
+      hostdesc,
       visibility: String(visibility),
+      serverPassword,
+      hostport,
+      map,
+      playlist,
       windowed,
       borderless,
       maxFps,
@@ -2151,8 +2174,95 @@ export default function LauncherUI() {
     });
   }
 
+  async function parsePlaylistFile(installDirectory: string) {
+    try {
+      const playlistPath = `${installDirectory}/platform/playlists_r5_patch.txt`;
+      const content = await window.electronAPI?.readFile?.(playlistPath);
+      if (!content) {
+        setAvailableMaps([]);
+        setAvailablePlaylists([]);
+        return;
+      }
+
+      const lines = content.split('\n');
+      const playlists: Array<{id: string, name: string}> = [];
+      const mapsSet = new Set<string>();
+      
+      let inPlaylistsSection = false;
+      let currentPlaylistId = '';
+      let currentPlaylistName = '';
+      let inMapsSection = false;
+      let braceDepth = 0;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        
+        // Track brace depth
+        const openBraces = (line.match(/{/g) || []).length;
+        const closeBraces = (line.match(/}/g) || []).length;
+        
+        // Check if we're entering Playlists section
+        if (line.startsWith('Playlists') || line === 'Playlists') {
+          inPlaylistsSection = true;
+          braceDepth = 0;
+          continue;
+        }
+        
+        if (!inPlaylistsSection) continue;
+        
+        braceDepth += openBraces - closeBraces;
+        
+        // Exit Playlists section when braces close
+        if (inPlaylistsSection && braceDepth < 0) {
+          break;
+        }
+        
+        // Detect playlist ID (e.g., "survival", "survival_duos")
+        if (braceDepth === 1 && !line.includes('//') && !line.includes('{') && !line.includes('}') && line.length > 0) {
+          currentPlaylistId = line;
+          currentPlaylistName = '';
+        }
+        
+        // Extract playlist name
+        if (currentPlaylistId && line.includes('name') && !line.startsWith('//')) {
+          const match = line.match(/name\s+"([^"]+)"/);
+          if (match) {
+            currentPlaylistName = match[1];
+            playlists.push({ id: currentPlaylistId, name: currentPlaylistName });
+            currentPlaylistId = '';
+          }
+        }
+        
+        // Detect maps section
+        if (line.includes('maps') && line.includes('{')) {
+          inMapsSection = true;
+        }
+        
+        // Extract map names
+        if (inMapsSection && !line.startsWith('//') && line.includes('1') && !line.includes('{') && !line.includes('}')) {
+          const mapMatch = line.match(/^\s*([a-zA-Z0-9_]+)\s+1/);
+          if (mapMatch) {
+            mapsSet.add(mapMatch[1]);
+          }
+        }
+        
+        // Exit maps section
+        if (inMapsSection && closeBraces > 0) {
+          inMapsSection = false;
+        }
+      }
+      
+      setAvailableMaps(Array.from(mapsSet).sort());
+      setAvailablePlaylists(playlists.filter(p => p.name)); // Only include playlists with names
+    } catch (error) {
+      console.error('Failed to parse playlist file:', error);
+      setAvailableMaps([]);
+      setAvailablePlaylists([]);
+    }
+  }
+
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
+    const lo = { mode: launchMode, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -2167,7 +2277,34 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostname, visibility, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+  }, [selectedChannel, launchMode, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+
+  // Parse playlist file when channel or install directory changes
+  useEffect(() => {
+    if (!selectedChannel || !installDir) return;
+    
+    // Get the correct install directory for this channel
+    const getInstallDirForChannel = async () => {
+      const s: any = await window.electronAPI?.getSettings();
+      let dir: string;
+      
+      if (channel?.isCustom && channel.installDir) {
+        dir = channel.installDir;
+      } else {
+        dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+      }
+      
+      if (dir) {
+        await parsePlaylistFile(dir);
+      }
+    };
+    
+    getInstallDirForChannel().catch(() => {
+      // If parsing fails, just use empty arrays (fallback to text inputs)
+      setAvailableMaps([]);
+      setAvailablePlaylists([]);
+    });
+  }, [selectedChannel, installDir, channel]);
 
   useEffect(() => {
     // Decide primary action
@@ -3150,6 +3287,20 @@ export default function LauncherUI() {
             setLaunchMode={setLaunchMode as any}
             hostname={hostname}
             setHostname={setHostname}
+            hostdesc={hostdesc}
+            setHostdesc={setHostdesc}
+            visibility={visibility}
+            setVisibility={setVisibility}
+            serverPassword={serverPassword}
+            setServerPassword={setServerPassword}
+            hostport={hostport}
+            setHostport={setHostport}
+            map={map}
+            setMap={setMap}
+            playlist={playlist}
+            setPlaylist={setPlaylist}
+            availableMaps={availableMaps}
+            availablePlaylists={availablePlaylists}
             windowed={windowed}
             setWindowed={setWindowed}
             borderless={borderless}

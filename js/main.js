@@ -1148,6 +1148,19 @@ ipcMain.handle('video:cache', async (_e, { filename }) => {
   }
 });
 
+ipcMain.handle('fs:read-file', async (_e, { filePath }) => {
+  try {
+    if (!filePath) {
+      return null;
+    }
+    const content = await fs.promises.readFile(filePath, 'utf-8');
+    return content;
+  } catch (error) {
+    console.error(`Failed to read file ${filePath}:`, error);
+    return null;
+  }
+});
+
 ipcMain.handle('fs:is-installed-in-dir', async (_e, { path: targetPath }) => {
   let hasClient = false;
   let hasServer = false;
