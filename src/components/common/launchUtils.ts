@@ -98,7 +98,7 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     if (serverPassword) params.push(`+sv_password "${serverPassword}"`);
     if (hostport && /^\d+$/.test(hostport)) params.push(`+hostport ${hostport}`);
     if (map) params.push(`+map ${map}`);
-    if (playlist) params.push(`+playlist ${playlist}`);
+    if (playlist) params.push(`+launchplaylist ${playlist}`);
   }
   
   // Video
