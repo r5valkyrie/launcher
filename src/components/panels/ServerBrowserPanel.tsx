@@ -460,9 +460,6 @@ const ServerBrowserPanel: React.FC<ServerBrowserPanelProps> = ({
               const isFull = playerCount >= maxPlayers;
               const isEmpty = playerCount === 0;
 
-              server.modsProfile = '019af18f-d7d4-34dd-4562-82542f9e9038';
-
-
               return (
                 <div 
                   key={index}
@@ -487,10 +484,15 @@ const ServerBrowserPanel: React.FC<ServerBrowserPanelProps> = ({
                       <div className="flex items-center gap-2 mb-1">
                         <h3 className="font-semibold text-base truncate">{server.name || 'Unnamed Server'}</h3>
                         {server.hasPassword === 'true' && (
-                          <svg className="w-4 h-4 text-amber-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                          </svg>
+                          <div className="tooltip tooltip-top" data-tip="Password Protected">
+                            <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                              </svg>
+                              Locked
+                            </span>
+                          </div>
                         )}
 
                         <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
@@ -628,10 +630,15 @@ const ServerBrowserPanel: React.FC<ServerBrowserPanelProps> = ({
                       <h3 className="font-semibold text-base truncate mb-1">{server.name || 'Unnamed Server'}</h3>
                       <div className="flex items-center gap-2 flex-wrap">
                         {server.hasPassword === 'true' && (
-                          <svg className="w-3.5 h-3.5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                          </svg>
+                          <div className="tooltip tooltip-top" data-tip="Password Protected">
+                            <span className="text-xs px-2 py-0.5 rounded-full flex-shrink-0 bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                              </svg>
+                              Locked
+                            </span>
+                          </div>
                         )}
                         {(server.modsProfile || (server.enabledModsList && server.enabledModsList.length > 0)) && (
                           <div 

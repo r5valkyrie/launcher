@@ -477,6 +477,10 @@ export default function LauncherUI() {
   const [serverModProfile, setServerModProfile] = useState<ModProfile | null>(null);
   const [serverModProfileServerName, setServerModProfileServerName] = useState<string>('');
   const [serverModProfileDownloading, setServerModProfileDownloading] = useState<boolean>(false);
+  // Server password modal state
+  const [serverPasswordModalOpen, setServerPasswordModalOpen] = useState<boolean>(false);
+  const [serverPasswordInput, setServerPasswordInput] = useState<string>('');
+  const [pendingServerConnection, setPendingServerConnection] = useState<any>(null);
   // Mod download queue
   type QueuedMod = { pack: any; version?: any; addedAt: number };
   const [modQueue, setModQueue] = useState<QueuedMod[]>([]);
@@ -3467,12 +3471,21 @@ export default function LauncherUI() {
                       setModQueueOpen(true);
                     }
                   }}
-                  launchGame={async (server) => {
+                  launchGame={async (server, password?: string) => {
                     try {
+                      // If server has password and no password provided, open modal
+                      if (server.hasPassword === 'true' && !password) {
+                        setPendingServerConnection(server);
+                        setServerPasswordInput('');
+                        setServerPasswordModalOpen(true);
+                        return;
+                      }
+
                       // Prepare launch options for connecting to this server
                       const args = [
-                        `+connect ${server.ip}:${server.port}`,
-                        server.key ? `+serverfilter ${server.key}` : '',
+                        `+connect [${server.ip}]:${server.port}`,
+                        server.key ? `+sv_netkey ${server.key}` : '',
+                        password ? `+sv_password ${password}` : '',
                       ].filter(Boolean).join(' ');
                       
                       const s: any = await window.electronAPI?.getSettings();
@@ -3894,6 +3907,157 @@ export default function LauncherUI() {
         isFixingPermissions={isFixingPermissions}
         installDir={(channelsSettings?.[selectedChannel]?.installDir) || installDir}
       />
+
+      {/* Server Password Modal */}
+      {serverPasswordModalOpen && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-md bg-base-100 border border-white/10 shadow-2xl">
+            {/* Header */}
+            <div className="flex items-start gap-4 mb-6">
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <svg className="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold mb-1">Server Password Required</h3>
+                <p className="text-sm text-base-content/60">Enter the password to join:</p>
+              </div>
+            </div>
+
+            {/* Server Name */}
+            <div className="mb-4">
+              <p className="text-base font-semibold text-blue-400">{pendingServerConnection?.name || 'Server'}</p>
+            </div>
+
+            {/* Password Input */}
+            <div className="mb-6">
+              <input
+                type="password"
+                value={serverPasswordInput}
+                onChange={(e) => setServerPasswordInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && serverPasswordInput.trim()) {
+                    const server = pendingServerConnection;
+                    const password = serverPasswordInput;
+                    setServerPasswordModalOpen(false);
+                    setPendingServerConnection(null);
+                    setServerPasswordInput('');
+                    // Launch with password
+                    if (server) {
+                      const launchWithPassword = async () => {
+                        try {
+                          const args = [
+                            `+connect [${server.ip}]:${server.port}`,
+                            server.key ? `+sv_netkey ${server.key}` : '',
+                            password ? `+sv_password ${password}` : '',
+                          ].filter(Boolean).join(' ');
+                          
+                          const s: any = await window.electronAPI?.getSettings();
+                          let dir: string;
+                          if (channel?.isCustom && channel.installDir) {
+                            dir = channel.installDir;
+                          } else {
+                            dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                          }
+                          
+                          const res = await window.electronAPI?.launchGame?.({ 
+                            channelName: selectedChannel, 
+                            installDir: dir, 
+                            mode: 'NORMAL', 
+                            argsString: args 
+                          });
+                          
+                          if (res && !res.ok) {
+                            console.error('Failed to launch', res.error);
+                            alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+                          }
+                        } catch (error) {
+                          console.error('Error launching game for server:', error);
+                          alert('Failed to connect to server');
+                        }
+                      };
+                      launchWithPassword();
+                    }
+                  }
+                }}
+                placeholder="Enter server password"
+                className="input input-bordered w-full bg-base-300/30 border-white/10 focus:border-blue-500/50"
+                autoFocus
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setServerPasswordModalOpen(false);
+                  setPendingServerConnection(null);
+                  setServerPasswordInput('');
+                }}
+                className="btn btn-ghost flex-1"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  const server = pendingServerConnection;
+                  const password = serverPasswordInput;
+                  setServerPasswordModalOpen(false);
+                  setPendingServerConnection(null);
+                  setServerPasswordInput('');
+                  // Launch with password
+                  if (server && password) {
+                    const launchWithPassword = async () => {
+                      try {
+                        const args = [
+                          `+connect [${server.ip}]:${server.port}`,
+                          server.key ? `+sv_netkey ${server.key}` : '',
+                          password ? `+sv_password ${password}` : '',
+                        ].filter(Boolean).join(' ');
+                        
+                        const s: any = await window.electronAPI?.getSettings();
+                        let dir: string;
+                        if (channel?.isCustom && channel.installDir) {
+                          dir = channel.installDir;
+                        } else {
+                          dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+                        }
+                        
+                        const res = await window.electronAPI?.launchGame?.({ 
+                          channelName: selectedChannel, 
+                          installDir: dir, 
+                          mode: 'NORMAL', 
+                          argsString: args 
+                        });
+                        
+                        if (res && !res.ok) {
+                          console.error('Failed to launch', res.error);
+                          alert(`Failed to connect to server: ${res.error || 'Unknown error'}`);
+                        }
+                      } catch (error) {
+                        console.error('Error launching game for server:', error);
+                        alert('Failed to connect to server');
+                      }
+                    };
+                    launchWithPassword();
+                  }
+                }}
+                disabled={!serverPasswordInput.trim()}
+                className="btn btn-primary flex-1"
+              >
+                Connect
+              </button>
+            </div>
+          </div>
+          <div className="modal-backdrop bg-black/50" onClick={() => {
+            setServerPasswordModalOpen(false);
+            setPendingServerConnection(null);
+            setServerPasswordInput('');
+          }} />
+        </div>
+      )}
       </div>
     </>
   );

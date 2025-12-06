@@ -80,6 +80,180 @@ type GameLaunchSectionProps = {
   buildLaunchParameters: () => string;
 };
 
+// Input Field Component (moved outside to prevent re-creation on each render)
+const InputField = ({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = 'text',
+  icon,
+  suffix,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  icon?: React.ReactNode;
+  suffix?: string;
+}) => (
+  <div className="space-y-2">
+    <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
+      {icon && <span className="text-base-content/40">{icon}</span>}
+      {label}
+    </label>
+    <div className="relative">
+      <input
+        type={type}
+        className="input input-bordered w-full bg-base-300/30 border-white/10 focus:border-primary/50 pr-12"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+      />
+      {suffix && (
+        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-base-content/40 font-medium">
+          {suffix}
+        </span>
+      )}
+    </div>
+  </div>
+);
+
+// Select Field Component (moved outside to prevent re-creation on each render)
+const SelectField = ({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  icon,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{value: string, label: string}>;
+  placeholder?: string;
+  icon?: React.ReactNode;
+}) => {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [dropdownPosition, setDropdownPosition] = React.useState({ top: 0, left: 0, width: 0 });
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        buttonRef.current && !buttonRef.current.contains(event.target as Node) &&
+        dropdownRef.current && !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsOpen(false);
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => document.removeEventListener('mousedown', handleClickOutside);
+    }
+  }, [isOpen]);
+
+  React.useEffect(() => {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY + 8,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+    }
+  }, [isOpen]);
+
+  const selectedOption = options.find(opt => opt.value === value);
+  const displayText = selectedOption ? selectedOption.label : (placeholder || 'Select...');
+
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
+        {icon && <span className="text-base-content/40">{icon}</span>}
+        {label}
+      </label>
+      <div className="relative">
+        <button
+          ref={buttonRef}
+          type="button"
+          className="w-full px-4 py-2.5 rounded-lg bg-base-300/30 border border-white/10 hover:border-white/20 focus:border-primary/50 text-left flex items-center justify-between transition-colors"
+          onClick={() => setIsOpen(!isOpen)}
+        >
+          <span className={selectedOption ? 'text-base-content' : 'text-base-content/40'}>
+            {displayText}
+          </span>
+          <svg 
+            className={`w-4 h-4 text-base-content/40 transition-transform ${isOpen ? 'rotate-180' : ''}`}
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+        
+        {isOpen && createPortal(
+          <div 
+            ref={dropdownRef}
+            className="fixed z-[9999] rounded-lg bg-[#1a1f26] border border-white/10 shadow-2xl shadow-black/40 overflow-hidden"
+            style={{
+              top: `${dropdownPosition.top}px`,
+              left: `${dropdownPosition.left}px`,
+              width: `${dropdownPosition.width}px`,
+            }}
+          >
+            {!value && (
+              <button
+                type="button"
+                className="w-full px-4 py-2.5 text-left text-base-content/40 hover:bg-white/5 transition-colors text-sm"
+                onClick={() => {
+                  onChange('');
+                  setIsOpen(false);
+                }}
+              >
+                {placeholder || 'Select...'}
+              </button>
+            )}
+            <div className="max-h-64 overflow-y-auto overlay-scroll">
+              {options.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`w-full px-4 py-2.5 text-left transition-colors text-sm ${
+                    value === opt.value
+                      ? 'bg-primary/20 text-primary-content hover:bg-primary/30'
+                      : 'text-base-content hover:bg-white/5'
+                  }`}
+                  onClick={() => {
+                    onChange(opt.value);
+                    setIsOpen(false);
+                  }}
+                >
+                  <div className="flex items-center justify-between">
+                    <span>{opt.label}</span>
+                    {value === opt.value && (
+                      <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          </div>,
+          document.body
+        )}
+      </div>
+    </div>
+  );
+};
+
 export default function GameLaunchSection(props: GameLaunchSectionProps) {
   const {
     launchMode,
@@ -278,178 +452,6 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
           onChange={(e) => onChange(e.target.checked)} 
         />
       </label>
-    );
-  };
-
-  const InputField = ({
-    label,
-    value,
-    onChange,
-    placeholder,
-    type = 'text',
-    icon,
-    suffix,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    placeholder?: string;
-    type?: string;
-    icon?: React.ReactNode;
-    suffix?: string;
-  }) => (
-    <div className="space-y-2">
-      <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
-        {icon && <span className="text-base-content/40">{icon}</span>}
-        {label}
-      </label>
-      <div className="relative">
-        <input
-          type={type}
-          className="input input-bordered w-full bg-base-300/30 border-white/10 focus:border-primary/50 pr-12"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-        />
-        {suffix && (
-          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs text-base-content/40 font-medium">
-            {suffix}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-
-  const SelectField = ({
-    label,
-    value,
-    onChange,
-    options,
-    placeholder,
-    icon,
-  }: {
-    label: string;
-    value: string;
-    onChange: (v: string) => void;
-    options: Array<{value: string, label: string}>;
-    placeholder?: string;
-    icon?: React.ReactNode;
-  }) => {
-    const [isOpen, setIsOpen] = React.useState(false);
-    const [dropdownPosition, setDropdownPosition] = React.useState({ top: 0, left: 0, width: 0 });
-    const buttonRef = React.useRef<HTMLButtonElement>(null);
-    const dropdownRef = React.useRef<HTMLDivElement>(null);
-
-    React.useEffect(() => {
-      const handleClickOutside = (event: MouseEvent) => {
-        if (
-          buttonRef.current && !buttonRef.current.contains(event.target as Node) &&
-          dropdownRef.current && !dropdownRef.current.contains(event.target as Node)
-        ) {
-          setIsOpen(false);
-        }
-      };
-
-      if (isOpen) {
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-      }
-    }, [isOpen]);
-
-    React.useEffect(() => {
-      if (isOpen && buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + window.scrollY + 8,
-          left: rect.left + window.scrollX,
-          width: rect.width,
-        });
-      }
-    }, [isOpen]);
-
-    const selectedOption = options.find(opt => opt.value === value);
-    const displayText = selectedOption ? selectedOption.label : (placeholder || 'Select...');
-
-    return (
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
-          {icon && <span className="text-base-content/40">{icon}</span>}
-          {label}
-        </label>
-        <div className="relative">
-          <button
-            ref={buttonRef}
-            type="button"
-            className="w-full px-4 py-2.5 rounded-lg bg-base-300/30 border border-white/10 hover:border-white/20 focus:border-primary/50 text-left flex items-center justify-between transition-colors"
-            onClick={() => setIsOpen(!isOpen)}
-          >
-            <span className={selectedOption ? 'text-base-content' : 'text-base-content/40'}>
-              {displayText}
-            </span>
-            <svg 
-              className={`w-4 h-4 text-base-content/40 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              strokeWidth="2"
-            >
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          
-          {isOpen && createPortal(
-            <div 
-              ref={dropdownRef}
-              className="fixed z-[9999] rounded-lg bg-[#1a1f26] border border-white/10 shadow-2xl shadow-black/40 overflow-hidden"
-              style={{
-                top: `${dropdownPosition.top}px`,
-                left: `${dropdownPosition.left}px`,
-                width: `${dropdownPosition.width}px`,
-              }}
-            >
-              {!value && (
-                <button
-                  type="button"
-                  className="w-full px-4 py-2.5 text-left text-base-content/40 hover:bg-white/5 transition-colors text-sm"
-                  onClick={() => {
-                    onChange('');
-                    setIsOpen(false);
-                  }}
-                >
-                  {placeholder || 'Select...'}
-                </button>
-              )}
-              <div className="max-h-64 overflow-y-auto overlay-scroll">
-                {options.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    className={`w-full px-4 py-2.5 text-left transition-colors text-sm ${
-                      value === opt.value
-                        ? 'bg-primary/20 text-primary-content hover:bg-primary/30'
-                        : 'text-base-content hover:bg-white/5'
-                    }`}
-                    onClick={() => {
-                      onChange(opt.value);
-                      setIsOpen(false);
-                    }}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span>{opt.label}</span>
-                      {value === opt.value && (
-                        <svg className="w-4 h-4 text-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <polyline points="20 6 9 17 4 12"/>
-                        </svg>
-                      )}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>,
-            document.body
-          )}
-        </div>
-      </div>
     );
   };
 
