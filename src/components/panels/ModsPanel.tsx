@@ -66,6 +66,7 @@ type ModsPanelProps = {
   onOpenQueue?: () => void;
   queueCount?: number;
   isQueueProcessing?: boolean;
+  modQueue?: Array<{ pack: any; version?: any; addedAt: number }>;
 };
 
 const CATEGORIES = [
@@ -156,7 +157,16 @@ export default function ModsPanel(props: ModsPanelProps) {
     onOpenQueue,
     queueCount,
     isQueueProcessing,
+    modQueue = [],
   } = props;
+
+  // Helper function to check if a mod is in the queue
+  const isModInQueue = (modName: string) => {
+    return modQueue.some(item => {
+      const queuedModName = item.pack?.full_name || item.pack?.name;
+      return queuedModName === modName || item.pack?.name === modName;
+    });
+  };
 
   const [installedSearchQuery, setInstalledSearchQuery] = useState('');
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
@@ -1299,7 +1309,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                             
                             {/* Actions */}
                             <div className="flex items-center gap-2 mt-auto pt-2 border-t border-white/5">
-                              {state === 'not' && !installingMods[key] && (
+                              {state === 'not' && !installingMods[key] && !isModInQueue(key) && (
                                 <button 
                                   className="btn btn-sm btn-success flex-1 gap-1.5 shadow-lg shadow-emerald-500/20"
                                   onClick={() => installFromAll(m)}
@@ -1312,6 +1322,18 @@ export default function ModsPanel(props: ModsPanelProps) {
                                   Install
                                 </button>
                             )}
+                              {state === 'not' && !installingMods[key] && isModInQueue(key) && (
+                                <button 
+                                  className="btn btn-sm flex-1 gap-1.5 bg-blue-500/20 border-blue-500/30 text-blue-400 cursor-default"
+                                  onClick={() => onOpenQueue?.()}
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                  </svg>
+                                  Queued
+                                </button>
+                            )}
                               {state === 'installed' && !installingMods[key] && (
                               <button 
                                   className="btn btn-sm btn-outline btn-error flex-1"
@@ -1320,7 +1342,7 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 Uninstall
                               </button>
                             )}
-                              {state === 'update' && !installingMods[key] && (
+                              {state === 'update' && !installingMods[key] && !isModInQueue(key) && (
                               <>
                                 <button 
                                     className="btn btn-sm btn-warning flex-1 shadow-lg shadow-amber-500/20"
@@ -1340,7 +1362,19 @@ export default function ModsPanel(props: ModsPanelProps) {
                                 </button>
                               </>
                             )}
-                              {!installingMods[key] && (
+                              {state === 'update' && !installingMods[key] && isModInQueue(key) && (
+                                <button 
+                                  className="btn btn-sm flex-1 gap-1.5 bg-blue-500/20 border-blue-500/30 text-blue-400 cursor-default"
+                                  onClick={() => onOpenQueue?.()}
+                                >
+                                  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                  </svg>
+                                  Queued
+                                </button>
+                              )}
+                              {!installingMods[key] && !isModInQueue(key) && (
                             <button 
                                   className="btn btn-sm btn-ghost hover:bg-primary/10 hover:text-primary"
                                   onClick={() => openModDetails(m)}
@@ -1541,7 +1575,21 @@ export default function ModsPanel(props: ModsPanelProps) {
                               </div>
                             )}
                             
-                            {!installingMods[key] && (
+                            {/* Queued indicator */}
+                            {!installingMods[key] && isModInQueue(key) && (
+                              <button 
+                                className="btn btn-sm gap-1.5 bg-blue-500/20 border-blue-500/30 text-blue-400"
+                                onClick={() => onOpenQueue?.()}
+                              >
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <circle cx="12" cy="12" r="10"/>
+                                  <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                Queued
+                              </button>
+                            )}
+                            
+                            {!installingMods[key] && !isModInQueue(key) && (
                               <>
                               {state === 'not' && (
                                 <button 

@@ -3788,6 +3788,7 @@ export default function LauncherUI() {
                   onOpenQueue={() => setModQueueOpen(true)}
                   queueCount={modQueue.length}
                   isQueueProcessing={isProcessingQueue}
+                  modQueue={modQueue}
                 />
               )}
 
