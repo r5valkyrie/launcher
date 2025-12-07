@@ -1,6 +1,6 @@
 {
     "version": "0.9.33",
-    "mandatory_update": true,
+    "mandatory_update": false,
     "release_notes": "Bug fixes and improvements",
     "min_version": "0.9.0",
     "download_url": "https://github.com/r5valkyrie/launcher_releases/releases/latest"
