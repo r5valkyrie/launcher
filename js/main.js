@@ -281,9 +281,80 @@ app.whenReady().then(() => {
     }
   });
 });
+// Fetch manifest from GitHub releases - handles multiple redirects
+async function fetchUpdateManifest(url = 'https://github.com/r5valkyrie/launcher_releases/releases/latest/download/manifest.json', maxRedirects = 5) {
+  return new Promise((resolve, reject) => {
+    if (maxRedirects <= 0) {
+      return reject(new Error('Too many redirects'));
+    }
+    
+    const protocol = url.startsWith('https') ? https : require('http');
+    protocol.get(url, {
+      headers: { 
+        'User-Agent': 'R5Valkyrie-Launcher',
+        'Accept': 'application/json',
+        'Cache-Control': 'no-cache'
+      },
+      timeout: 10000
+    }, (res) => {
+      // Handle redirects recursively
+      if (res.statusCode === 302 || res.statusCode === 301 || res.statusCode === 307 || res.statusCode === 308) {
+        const redirectUrl = res.headers.location;
+        // Recursively follow the redirect
+        fetchUpdateManifest(redirectUrl, maxRedirects - 1)
+          .then(resolve)
+          .catch(reject);
+        return;
+      }
+      
+      if (res.statusCode !== 200) {
+        return reject(new Error(`Failed to fetch manifest: ${res.statusCode}`));
+      }
+      
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        try {
+          const manifest = JSON.parse(data);
+          resolve(manifest);
+        } catch (err) {
+          reject(new Error('Failed to parse manifest: ' + err.message));
+        }
+      });
+    }).on('error', (err) => {
+      reject(err);
+    }).on('timeout', () => {
+      reject(new Error('Request timed out'));
+    });
+  });
+}
+
 // Update IPC
 ipcMain.handle('update:check', async () => {
-  try { const res = await autoUpdater.checkForUpdates(); return { ok: true, result: res?.updateInfo || null }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
+  try {
+    // First fetch the manifest to check update policy
+    let manifest = null;
+    try {
+      manifest = await fetchUpdateManifest();
+    } catch (manifestErr) {
+      // If manifest fetch fails, continue with default behavior
+      console.warn('Failed to fetch update manifest:', manifestErr.message);
+    }
+    
+    const res = await autoUpdater.checkForUpdates();
+    const updateInfo = res?.updateInfo || null;
+    
+    // Return both the update info and the manifest
+    return { 
+      ok: true, 
+      result: updateInfo,
+      manifest: manifest,
+      currentVersion: app.getVersion()
+    };
+  } catch (e) { 
+    return { ok: false, error: String(e?.message || e) }; 
+  }
 });
 ipcMain.handle('update:download', async () => {
   try { await autoUpdater.downloadUpdate(); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }

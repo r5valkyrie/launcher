@@ -10,7 +10,6 @@ import ServerBrowserPanel from './panels/ServerBrowserPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
 import DependencyModal from './modals/DependencyModal';
 import SnowEffect from './ui/SnowEffect';
-import UpdaterModal from './modals/UpdaterModal';
 import ConfirmModal from './modals/ConfirmModal';
 import NewsModal from './modals/NewsModal';
 import FailedDownloadsModal from './modals/FailedDownloadsModal';
@@ -24,6 +23,7 @@ import ModProfilesModal from './modals/ModProfilesModal';
 import ModQueueModal from './modals/ModQueueModal';
 import ServerModProfileModal from './modals/ServerModProfileModal';
 import ServerJoinModPromptModal from './modals/ServerJoinModPromptModal';
+import UpdateModal from './modals/UpdateModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -74,7 +74,7 @@ declare global {
       maximize: () => void;
       close: () => void;
       // Auto update
-      checkForUpdates?: () => Promise<{ ok: boolean; result?: any; error?: string }>;
+      checkForUpdates?: () => Promise<{ ok: boolean; result?: any; manifest?: any; currentVersion?: string; error?: string }>;
       downloadUpdate?: () => Promise<{ ok: boolean; error?: string }>;
       quitAndInstall?: () => Promise<{ ok: boolean; error?: string }>;
       onUpdate?: (channel: string, listener: (payload: any) => void) => void;
@@ -100,6 +100,12 @@ declare global {
       testWritePermissions?: (folderPath: string) => Promise<{ hasWriteAccess: boolean }>;
       // Uninstall
       deleteFolder?: (folderPath: string) => Promise<{ok:boolean; error?: string}>;
+    };
+    electron?: {
+      ipcRenderer?: {
+        on: (channel: string, listener: (...args: any[]) => void) => void;
+        removeListener: (channel: string, listener: (...args: any[]) => void) => void;
+      };
     };
   }
 }
@@ -153,14 +159,6 @@ export default function LauncherUI() {
   const [hasStarted, setHasStarted] = useState<boolean>(false);
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const [receivedAnyBytes, setReceivedAnyBytes] = useState<boolean>(false);
-  // Updater UI state
-  const [updateAvailable, setUpdateAvailable] = useState<any | null>(null);
-  const [updateProgress, setUpdateProgress] = useState<number>(0);
-  const [updateDownloaded, setUpdateDownloaded] = useState<boolean>(false);
-  const [updateError, setUpdateError] = useState<string | null>(null);
-  const [updateBps, setUpdateBps] = useState<number>(0);
-  const [updateTransferred, setUpdateTransferred] = useState<number>(0);
-  const [updateTotal, setUpdateTotal] = useState<number>(0);
   // Install prompt modal state
   const [installPromptOpen, setInstallPromptOpen] = useState<boolean>(false);
   const [installBaseDir, setInstallBaseDir] = useState<string>('');
@@ -216,9 +214,92 @@ export default function LauncherUI() {
     (async () => {
       try {
         const version = await window.electronAPI?.getAppVersion?.();
-        if (version) setAppVersion(version);
+        if (version) {
+          setAppVersion(version);
+          setCurrentVersion(version);
+        }
       } catch {}
     })();
+  }, []);
+
+  // Check for updates on mount and setup update event listeners
+  useEffect(() => {
+    // Setup update event listeners
+    const handleUpdateAvailable = (event: any, info: any) => {
+      console.log('Update available:', info);
+    };
+
+    const handleUpdateNotAvailable = (event: any, info: any) => {
+      console.log('Update not available');
+    };
+
+    const handleDownloadProgress = (event: any, progress: any) => {
+      setUpdateDownloadProgress(progress);
+    };
+
+    const handleUpdateDownloaded = (event: any, info: any) => {
+      console.log('Update downloaded:', info);
+      setIsDownloadingUpdate(false);
+      setIsUpdateDownloaded(true);
+      
+      // Automatically install and restart after download completes
+      setTimeout(async () => {
+        try {
+          await window.electronAPI?.quitAndInstall?.();
+        } catch (error) {
+          console.error('Error installing update:', error);
+          setToastMessage('Failed to install update');
+          setToastType('error');
+          setFinished(true);
+          setTimeout(() => setFinished(false), 5000);
+        }
+      }, 1000); // Small delay to show "Ready to Install" state
+    };
+
+    const handleUpdateError = (event: any, error: any) => {
+      console.error('Update error:', error);
+      setIsDownloadingUpdate(false);
+    };
+
+    // Register electron IPC listeners
+    if (window.electronAPI) {
+      window.electron?.ipcRenderer?.on('update:available', handleUpdateAvailable);
+      window.electron?.ipcRenderer?.on('update:not-available', handleUpdateNotAvailable);
+      window.electron?.ipcRenderer?.on('update:download-progress', handleDownloadProgress);
+      window.electron?.ipcRenderer?.on('update:downloaded', handleUpdateDownloaded);
+      window.electron?.ipcRenderer?.on('update:error', handleUpdateError);
+    }
+
+    // Check for updates
+    (async () => {
+      try {
+        // Wait a bit after launch before checking for updates
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        
+        const result = await window.electronAPI?.checkForUpdates?.();
+        if (result?.ok && result.result) {
+          setUpdateInfo(result.result);
+          setUpdateManifest(result.manifest);
+          setCurrentVersion(result.currentVersion || currentVersion);
+          
+          // Show update modal
+          setUpdateModalOpen(true);
+        }
+      } catch (error) {
+        console.error('Failed to check for updates:', error);
+      }
+    })();
+
+    // Cleanup
+    return () => {
+      if (window.electron?.ipcRenderer) {
+        window.electron.ipcRenderer.removeListener('update:available', handleUpdateAvailable);
+        window.electron.ipcRenderer.removeListener('update:not-available', handleUpdateNotAvailable);
+        window.electron.ipcRenderer.removeListener('update:download-progress', handleDownloadProgress);
+        window.electron.ipcRenderer.removeListener('update:downloaded', handleUpdateDownloaded);
+        window.electron.ipcRenderer.removeListener('update:error', handleUpdateError);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -265,31 +346,6 @@ export default function LauncherUI() {
     })();
   }, []);
 
-  // Check for launcher updates on startup and wire events
-  useEffect(() => {
-    try {
-      window.electronAPI?.onUpdate?.('update:available', (info: any) => setUpdateAvailable(info));
-      window.electronAPI?.onUpdate?.('update:not-available', () => setUpdateAvailable(null));
-      window.electronAPI?.onUpdate?.('update:download-progress', (p: any) => {
-        const pct = typeof p?.percent === 'number' ? p.percent : 0;
-        setUpdateProgress(pct);
-        if (typeof p?.bytesPerSecond === 'number') setUpdateBps(p.bytesPerSecond);
-        if (typeof p?.transferred === 'number') setUpdateTransferred(p.transferred);
-        if (typeof p?.total === 'number') setUpdateTotal(p.total);
-      });
-      window.electronAPI?.onUpdate?.('update:downloaded', () => setUpdateDownloaded(true));
-      window.electronAPI?.onUpdate?.('update:error', (e: any) => { setUpdateError(String(e?.message || 'Update error')); });
-      // Kick off check, non-blocking; guard missing handler
-      try { window.electronAPI?.checkForUpdates?.()?.catch(() => {}); } catch {}
-    } catch {}
-  }, []);
-
-  // Require updates: auto-start download when available
-  useEffect(() => {
-    if (updateAvailable && !updateDownloaded) {
-      window.electronAPI?.downloadUpdate?.()?.catch(() => {});
-    }
-  }, [updateAvailable, updateDownloaded]);
 
   useEffect(() => {
     window.electronAPI?.getSettings()?.then((s: any) => {
@@ -461,6 +517,12 @@ export default function LauncherUI() {
   const [noAsync, setNoAsync] = useState<boolean>(false);
   const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
   const [customCmd, setCustomCmd] = useState<string>('');
+  const [noVid, setNoVid] = useState<boolean>(false);
+  const [showFps, setShowFps] = useState<string>('0');
+  const [showPos, setShowPos] = useState<boolean>(false);
+  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
+  const [matchmakingHostname, setMatchmakingHostname] = useState<string>('playvalkyrie.org');
+  const [drawNotify, setDrawNotify] = useState<boolean>(false);
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
@@ -506,6 +568,15 @@ export default function LauncherUI() {
   const eulaResolveRef = useRef<null | ((ok: boolean) => void)>(null);
   const [playCooldown, setPlayCooldown] = useState<boolean>(false);
   const launchClickGuardRef = useRef<boolean>(false);
+  
+  // Update modal state
+  const [updateModalOpen, setUpdateModalOpen] = useState<boolean>(false);
+  const [updateInfo, setUpdateInfo] = useState<any>(null);
+  const [updateManifest, setUpdateManifest] = useState<any>(null);
+  const [currentVersion, setCurrentVersion] = useState<string>('0.0.0');
+  const [isDownloadingUpdate, setIsDownloadingUpdate] = useState<boolean>(false);
+  const [isUpdateDownloaded, setIsUpdateDownloaded] = useState<boolean>(false);
+  const [updateDownloadProgress, setUpdateDownloadProgress] = useState<any>(null);
   
   // Sidebar refs
   const sidebarRef = useRef<HTMLElement>(null);
@@ -2198,6 +2269,12 @@ export default function LauncherUI() {
       noAsync,
       discordRichPresence,
       customCmd,
+      noVid,
+      showFps,
+      showPos,
+      showDebugInfo,
+      matchmakingHostname,
+      drawNotify,
     });
   }
 
@@ -3392,6 +3469,18 @@ export default function LauncherUI() {
             setDiscordRichPresence={setDiscordRichPresence}
             customCmd={customCmd}
             setCustomCmd={setCustomCmd}
+            noVid={noVid}
+            setNoVid={setNoVid}
+            showFps={showFps}
+            setShowFps={setShowFps}
+            showPos={showPos}
+            setShowPos={setShowPos}
+            showDebugInfo={showDebugInfo}
+            setShowDebugInfo={setShowDebugInfo}
+            matchmakingHostname={matchmakingHostname}
+            setMatchmakingHostname={setMatchmakingHostname}
+            drawNotify={drawNotify}
+            setDrawNotify={setDrawNotify}
             buildLaunchParameters={buildLaunchParametersLocal}
           />
           </PageTransition>
@@ -3744,16 +3833,6 @@ export default function LauncherUI() {
         onBrowse={async () => window.electronAPI?.selectDirectory?.() ?? null}
       />
 
-      <UpdaterModal
-        visible={!!(updateAvailable || updateDownloaded)}
-        updateDownloaded={updateDownloaded}
-        updateProgress={updateProgress}
-        updateBps={updateBps}
-        updateTotal={updateTotal}
-        updateTransferred={updateTransferred}
-        updateError={updateError}
-        onRestartToUpdate={() => window.electronAPI?.quitAndInstall?.()}
-      />
 
       <ConfirmModal
         open={uninstallModalOpen}
@@ -4383,6 +4462,55 @@ export default function LauncherUI() {
             alert('Failed to connect to server');
           }
         }}
+      />
+
+      {/* Update Modal */}
+      <UpdateModal
+        open={updateModalOpen}
+        onClose={() => {
+          // Only allow closing if not mandatory
+          if (!updateManifest?.mandatory_update) {
+            setUpdateModalOpen(false);
+          }
+        }}
+        updateInfo={updateInfo}
+        manifest={updateManifest}
+        currentVersion={currentVersion}
+        onDownload={async () => {
+          try {
+            setIsDownloadingUpdate(true);
+            const result = await window.electronAPI?.downloadUpdate?.();
+            if (!result?.ok) {
+              console.error('Failed to download update:', result?.error);
+              setToastMessage(`Failed to download update: ${result?.error || 'Unknown error'}`);
+              setToastType('error');
+              setFinished(true);
+              setTimeout(() => setFinished(false), 5000);
+              setIsDownloadingUpdate(false);
+            }
+          } catch (error) {
+            console.error('Error downloading update:', error);
+            setToastMessage('Failed to download update');
+            setToastType('error');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 5000);
+            setIsDownloadingUpdate(false);
+          }
+        }}
+        onInstall={async () => {
+          try {
+            await window.electronAPI?.quitAndInstall?.();
+          } catch (error) {
+            console.error('Error installing update:', error);
+            setToastMessage('Failed to install update');
+            setToastType('error');
+            setFinished(true);
+            setTimeout(() => setFinished(false), 5000);
+          }
+        }}
+        downloadProgress={updateDownloadProgress}
+        isDownloading={isDownloadingUpdate}
+        isDownloaded={isUpdateDownloaded}
       />
       </div>
     </>

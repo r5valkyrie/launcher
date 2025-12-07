@@ -35,6 +35,12 @@ type LaunchOptions = {
   noAsync: boolean;
   discordRichPresence: boolean;
   customCmd: string;
+  noVid: boolean;
+  showFps: string;
+  showPos: boolean;
+  showDebugInfo: boolean;
+  matchmakingHostname: string;
+  drawNotify: boolean;
 };
 
 export function buildLaunchParameters(options: LaunchOptions): string {
@@ -71,6 +77,12 @@ export function buildLaunchParameters(options: LaunchOptions): string {
     noAsync,
     discordRichPresence,
     customCmd,
+    noVid,
+    showFps,
+    showPos,
+    showDebugInfo,
+    matchmakingHostname,
+    drawNotify,
   } = options;
 
   const params: string[] = [];
@@ -93,6 +105,14 @@ export function buildLaunchParameters(options: LaunchOptions): string {
   if (enableCheats) params.push('+sv_cheats 1');
   if (offlineMode) params.push('-offline');
   if (!discordRichPresence) params.push('+discord_enable 0');
+  
+  // Additional Launch Options
+  if (noVid) params.push('-novid');
+  if (showFps && showFps !== '0') params.push(`+cl_showfps ${showFps}`);
+  if (showPos) params.push('+cl_showpos 1');
+  if (showDebugInfo) params.push('+pylon_showdebuginfo 1');
+  if (matchmakingHostname && matchmakingHostname !== 'playvalkyrie.org') params.push(`+pylon_matchmaking_hostname "${matchmakingHostname}"`);
+  if (drawNotify) params.push('+con_drawnotify 1');
   
   // Hostname/visibility for SERVER mode, and HOST mode when config is enabled
   if (mode === 'SERVER' || (mode === 'HOST' && hostConfigEnabled)) {

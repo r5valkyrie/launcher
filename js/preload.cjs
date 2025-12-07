@@ -56,4 +56,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteFolder: (folderPath) => ipcRenderer.invoke('fs:delete-folder', { folderPath }),
 });
 
+// Expose limited ipcRenderer for event listeners
+contextBridge.exposeInMainWorld('electron', {
+  ipcRenderer: {
+    on: (channel, listener) => {
+      // Whitelist channels for security
+      const validChannels = [
+        'update:available',
+        'update:not-available',
+        'update:download-progress',
+        'update:downloaded',
+        'update:error'
+      ];
+      if (validChannels.includes(channel)) {
+        ipcRenderer.on(channel, listener);
+      }
+    },
+    removeListener: (channel, listener) => {
+      ipcRenderer.removeListener(channel, listener);
+    }
+  }
+});
 

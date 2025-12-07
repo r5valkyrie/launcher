@@ -81,6 +81,20 @@ type GameLaunchSectionProps = {
   setDiscordRichPresence: (enable: boolean) => void;
   customCmd: string;
   setCustomCmd: (cmd: string) => void;
+  
+  // Additional Launch Options
+  noVid: boolean;
+  setNoVid: (noVid: boolean) => void;
+  showFps: string;
+  setShowFps: (mode: string) => void;
+  showPos: boolean;
+  setShowPos: (show: boolean) => void;
+  showDebugInfo: boolean;
+  setShowDebugInfo: (show: boolean) => void;
+  matchmakingHostname: string;
+  setMatchmakingHostname: (hostname: string) => void;
+  drawNotify: boolean;
+  setDrawNotify: (draw: boolean) => void;
 
   // Helper function
   buildLaunchParameters: () => string;
@@ -324,6 +338,18 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
     setDiscordRichPresence,
     customCmd,
     setCustomCmd,
+    noVid,
+    setNoVid,
+    showFps,
+    setShowFps,
+    showPos,
+    setShowPos,
+    showDebugInfo,
+    setShowDebugInfo,
+    matchmakingHostname,
+    setMatchmakingHostname,
+    drawNotify,
+    setDrawNotify,
     buildLaunchParameters,
   } = props;
 
@@ -681,7 +707,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 />
               </div>
 
-              {/* Network & Gameplay */}
+              {/* Port & Mod Profile */}
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Server Port"
@@ -697,6 +723,51 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                     </svg>
                   }
                 />
+                <InputField
+                  label="Mod Profile (Thunderstore Code)"
+                  value={serverModsProfile}
+                  onChange={setServerModsProfile}
+                  placeholder="e.g., 019af13c-105c-45e4-6aaa-b27d0ff5876d"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                  }
+                />
+              </div>
+
+              {/* Map & Playlist */}
+              <div className="grid grid-cols-2 gap-3">
+                {availableMaps.length > 0 ? (
+                  <SelectField
+                    label="Map"
+                    value={map}
+                    onChange={setMap}
+                    options={availableMaps.map(m => ({ value: m, label: m }))}
+                    placeholder="Select map..."
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    }
+                  />
+                ) : (
+                  <InputField
+                    label="Map"
+                    value={map}
+                    onChange={setMap}
+                    placeholder="e.g., mp_rr_canyonlands_mu1"
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    }
+                  />
+                )}
                 {availablePlaylists.length > 0 ? (
                   <SelectField
                     label="Playlist/Gamemode"
@@ -724,50 +795,6 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                   />
                 )}
               </div>
-
-              {availableMaps.length > 0 ? (
-                <SelectField
-                  label="Map"
-                  value={map}
-                  onChange={setMap}
-                  options={availableMaps.map(m => ({ value: m, label: m }))}
-                  placeholder="Select map..."
-                  icon={
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  }
-                />
-              ) : (
-                <InputField
-                  label="Map"
-                  value={map}
-                  onChange={setMap}
-                  placeholder="e.g., mp_rr_canyonlands_mu1"
-                  icon={
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  }
-                />
-              )}
-              
-              {/* Mod Profile */}
-              <InputField
-                label="Mod Profile (Thunderstore Code)"
-                value={serverModsProfile}
-                onChange={setServerModsProfile}
-                placeholder="e.g., 019af13c-105c-45e4-6aaa-b27d0ff5876d"
-                icon={
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                    <line x1="12" y1="22.08" x2="12" y2="12"/>
-                  </svg>
-                }
-              />
             </div>
           </div>
         )}
@@ -890,7 +917,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 />
               </div>
 
-              {/* Port & Playlist */}
+              {/* Port & Mod Profile */}
               <div className="grid grid-cols-2 gap-3">
                 <InputField
                   label="Host Port"
@@ -906,6 +933,51 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                     </svg>
                   }
                 />
+                <InputField
+                  label="Mod Profile (Thunderstore Code)"
+                  value={serverModsProfile}
+                  onChange={setServerModsProfile}
+                  placeholder="e.g., 019af13c-105c-45e4-6aaa-b27d0ff5876d"
+                  icon={
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                      <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                      <line x1="12" y1="22.08" x2="12" y2="12"/>
+                    </svg>
+                  }
+                />
+              </div>
+
+              {/* Map & Playlist */}
+              <div className="grid grid-cols-2 gap-3">
+                {availableMaps.length > 0 ? (
+                  <SelectField
+                    label="Map"
+                    value={map}
+                    onChange={setMap}
+                    options={availableMaps.map(m => ({ value: m, label: m }))}
+                    placeholder="Select map..."
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    }
+                  />
+                ) : (
+                  <InputField
+                    label="Map"
+                    value={map}
+                    onChange={setMap}
+                    placeholder="e.g., mp_rr_canyonlands_mu1"
+                    icon={
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                      </svg>
+                    }
+                  />
+                )}
                 {availablePlaylists.length > 0 ? (
                   <SelectField
                     label="Playlist/Gamemode"
@@ -933,51 +1005,6 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                   />
                 )}
               </div>
-
-              {/* Map Selection */}
-              {availableMaps.length > 0 ? (
-                <SelectField
-                  label="Map"
-                  value={map}
-                  onChange={setMap}
-                  options={availableMaps.map(m => ({ value: m, label: m }))}
-                  placeholder="Select map..."
-                  icon={
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  }
-                />
-              ) : (
-                <InputField
-                  label="Map"
-                  value={map}
-                  onChange={setMap}
-                  placeholder="e.g., mp_rr_canyonlands_mu1"
-                  icon={
-                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
-                      <circle cx="12" cy="10" r="3"/>
-                    </svg>
-                  }
-                />
-              )}
-              
-              {/* Mod Profile */}
-              <InputField
-                label="Mod Profile (Thunderstore Code)"
-                value={serverModsProfile}
-                onChange={setServerModsProfile}
-                placeholder="e.g., 019af13c-105c-45e4-6aaa-b27d0ff5876d"
-                icon={
-                  <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
-                    <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
-                    <line x1="12" y1="22.08" x2="12" y2="12"/>
-                  </svg>
-                }
-              />
             </div>}
           </div>
         )}
@@ -1063,6 +1090,55 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               ))}
             </div>
           </div>
+          
+          {/* Display Options */}
+          <div className="space-y-3 mt-5">
+            <ToggleCard
+              checked={noVid}
+              onChange={setNoVid}
+              label="Skip Intro Video"
+              description="Faster startup"
+              accentColor="purple"
+              tooltip="Skips the intro video for faster game launch (-novid)."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polygon points="5 3 19 12 5 21 5 3"/>
+                  <line x1="2" y1="3" x2="2" y2="21" strokeWidth="3"/>
+                </svg>
+              }
+            />
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-base-content/70 flex items-center gap-2">
+                <svg className="w-4 h-4 text-base-content/40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                  <line x1="8" y1="21" x2="16" y2="21"/>
+                  <line x1="12" y1="17" x2="12" y2="21"/>
+                </svg>
+                FPS Counter Display
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { value: '0', label: 'Off', desc: 'Hidden' },
+                  { value: '1', label: 'Detailed', desc: 'Full info' },
+                  { value: '2', label: 'FPS Only', desc: 'Minimal' }
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => setShowFps(opt.value)}
+                    className={`p-3 rounded-lg border-2 transition-all ${
+                      showFps === opt.value
+                        ? 'border-purple-500 bg-purple-500/10'
+                        : 'border-white/10 bg-base-300/20 hover:border-white/20'
+                    }`}
+                  >
+                    <div className="text-sm font-semibold">{opt.label}</div>
+                    <div className="text-[10px] text-base-content/40 mt-0.5">{opt.desc}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* Performance Settings */}
@@ -1141,7 +1217,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
             gradient="from-cyan-500 to-teal-600"
           />
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-3">
             <ToggleCard
               checked={encryptPackets}
               onChange={setEncryptPackets}
@@ -1196,6 +1272,39 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 </svg>
               }
             />
+            <ToggleCard
+              checked={showDebugInfo}
+              onChange={setShowDebugInfo}
+              label="Matchmaking Debug"
+              description="Show server browser info"
+              accentColor="cyan"
+              tooltip="Displays Pylon matchmaking debug overlay showing server browser and connection information (+pylon_showdebuginfo 1)."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+              }
+            />
+          </div>
+          
+          <div className="p-4 rounded-xl bg-base-300/20 border border-white/5 space-y-3 mt-4">
+            <InputField
+              label="Matchmaking Hostname"
+              value={matchmakingHostname}
+              onChange={setMatchmakingHostname}
+              placeholder="playvalkyrie.org"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="2" y1="12" x2="22" y2="12"/>
+                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                </svg>
+              }
+            />
+            <p className="text-xs text-base-content/50 leading-relaxed">
+              <span className="font-semibold">Matchmaking Hostname:</span> Server address for matchmaking and server browser. Default is playvalkyrie.org.
+            </p>
           </div>
         </div>
 
@@ -1243,6 +1352,34 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 </svg>
               }
             />
+            <ToggleCard
+              checked={showPos}
+              onChange={setShowPos}
+              label="Show Position"
+              description="Display coordinates"
+              accentColor="purple"
+              tooltip="Shows your position coordinates in-game (+cl_showpos 1)."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                  <circle cx="12" cy="10" r="3"/>
+                </svg>
+              }
+            />
+            <ToggleCard
+              checked={drawNotify}
+              onChange={setDrawNotify}
+              label="Console Overlay"
+              description="Show DevMsg output"
+              accentColor="purple"
+              tooltip="Shows DevMsg RUI console overlay (+con_drawnotify 1)."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              }
+            />
           </div>
 
           <div className="p-4 rounded-xl bg-base-300/20 border border-white/5 space-y-3">
@@ -1273,7 +1410,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
           gradient="from-rose-500 to-red-600"
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-5">
+        <div className="space-y-3 mb-5">
           <ToggleCard
             checked={enableDeveloper}
             onChange={setEnableDeveloper}
