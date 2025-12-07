@@ -278,12 +278,20 @@ export default function LauncherUI() {
         
         const result = await window.electronAPI?.checkForUpdates?.();
         if (result?.ok && result.result) {
-          setUpdateInfo(result.result);
-          setUpdateManifest(result.manifest);
-          setCurrentVersion(result.currentVersion || currentVersion);
+          const newVersion = result.result.version || result.manifest?.version;
+          const current = result.currentVersion || currentVersion;
           
-          // Show update modal
-          setUpdateModalOpen(true);
+          // Only show update modal if there's actually a new version
+          if (newVersion && compareVersions(newVersion, current) > 0) {
+            setUpdateInfo(result.result);
+            setUpdateManifest(result.manifest);
+            setCurrentVersion(current);
+            
+            // Show update modal
+            setUpdateModalOpen(true);
+          } else {
+            console.log(`Already on latest version ${current}`);
+          }
         }
       } catch (error) {
         console.error('Failed to check for updates:', error);
