@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.9.33",
+  "version": "0.9.34",
   "main": "electron/main.js",
   "icon": "build/icon.png",
   "scripts": {
