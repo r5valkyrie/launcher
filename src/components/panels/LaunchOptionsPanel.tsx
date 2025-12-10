@@ -384,14 +384,25 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
     }
   };
 
+  const getModeDisplayName = (mode: LaunchMode) => {
+    switch (mode) {
+      case 'CLIENT':
+        return 'Join Only';
+      case 'HOST':
+        return 'Join & Host';
+      case 'SERVER':
+        return 'Dedicated Server';
+    }
+  };
+
   const getModeDescription = (mode: LaunchMode) => {
     switch (mode) {
       case 'CLIENT':
-        return 'Join and play on community servers or with friends';
+        return 'No lobby, no hosting — can only connect to existing servers';
       case 'HOST':
-        return 'Play while hosting - you and friends on your machine';
+        return 'The full game — lobby, hosting, solo play, and joining servers';
       case 'SERVER':
-        return 'Run a dedicated server without playing yourself';
+        return 'Run a headless server without playing yourself';
     }
   };
 
@@ -399,24 +410,24 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
     switch (mode) {
       case 'CLIENT':
         return { 
-          bestFor: 'Most Players', 
-          badge: 'Recommended',
-          badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-          info: 'Standard mode for joining any game'
+          bestFor: 'Multiplayer Only', 
+          badge: 'Limited',
+          badgeColor: 'bg-slate-500/20 text-slate-400 border-slate-500/30',
+          info: 'No lobby access, cannot host games'
         };
       case 'HOST':
         return { 
-          bestFor: 'Playing with Friends', 
-          badge: 'Casual',
-          badgeColor: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-          info: 'Good for small groups & LAN parties'
+          bestFor: 'Most Players', 
+          badge: 'Recommended',
+          badgeColor: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
+          info: 'Full access to all game features'
         };
       case 'SERVER':
         return { 
-          bestFor: 'Advanced Users', 
+          bestFor: 'Server Admins', 
           badge: 'Advanced',
           badgeColor: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-          info: 'Best performance for 24/7 servers'
+          info: 'For running 24/7 community servers'
         };
     }
   };
@@ -530,17 +541,17 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         />
 
         {/* Helpful guide */}
-        <div className="mb-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+        <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
           <div className="flex items-start gap-2">
-            <svg className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <circle cx="12" cy="12" r="10"/>
               <line x1="12" y1="16" x2="12" y2="12"/>
               <line x1="12" y1="8" x2="12.01" y2="8"/>
             </svg>
-            <p className="text-xs text-blue-400/90 leading-relaxed">
-              <span className="font-semibold">Not sure which to pick?</span> Choose <span className="font-semibold">Client</span> to join online matches. 
-              Choose <span className="font-semibold">Host</span> if you want to play with friends on your PC. 
-              Choose <span className="font-semibold">Server</span> only if setting up a dedicated 24/7 server.
+            <p className="text-xs text-emerald-400/90 leading-relaxed">
+              <span className="font-semibold">Not sure which to pick?</span> Choose <span className="font-semibold">Join & Host</span> — it's the full game with lobby, hosting, solo play, and multiplayer.
+              <span className="font-semibold"> Join Only</span> is limited (no lobby or hosting).
+              <span className="font-semibold"> Dedicated Server</span> runs a headless 24/7 server.
             </p>
           </div>
         </div>
@@ -583,7 +594,7 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 </div>
 
                 {/* Title */}
-                <h5 className="font-semibold text-lg mb-1">{mode}</h5>
+                <h5 className="font-semibold text-lg mb-1">{getModeDisplayName(mode)}</h5>
                 
                 {/* Description */}
                 <p className="text-xs text-base-content/60 mb-3 leading-relaxed">{getModeDescription(mode)}</p>
