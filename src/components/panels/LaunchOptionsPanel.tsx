@@ -594,10 +594,11 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
                 </div>
 
                 {/* Title */}
-                <h5 className="font-semibold text-lg mb-1">{getModeDisplayName(mode)}</h5>
+                <h5 className="font-semibold text-lg">{getModeDisplayName(mode)}</h5>
+                <span className="text-xs text-base-content/40">{mode}</span>
                 
                 {/* Description */}
-                <p className="text-xs text-base-content/60 mb-3 leading-relaxed">{getModeDescription(mode)}</p>
+                <p className="text-xs text-base-content/60 mt-2 mb-3 leading-relaxed">{getModeDescription(mode)}</p>
                 
                 {/* Divider */}
                 <div className="border-t border-white/10 my-3"></div>
