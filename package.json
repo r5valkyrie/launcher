@@ -51,7 +51,7 @@
   "build": {
     "appId": "org.playvalkyrie.r5vlauncher",
     "productName": "R5Valkyrie Launcher",
-    "artifactName": "${productName} Setup ${version}.${ext}",
+    "artifactName": "${productName}-${version}.${ext}",
     "icon": "build/icon.ico",
     "directories": {
       "output": "release",
