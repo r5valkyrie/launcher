@@ -41,6 +41,8 @@ type LaunchOptions = {
   showDebugInfo: boolean;
   matchmakingHostname: string;
   drawNotify: boolean;
+  linuxWinePfx: string;
+  selectedProtonVersion: string;
 };
 
 export function buildLaunchParameters(options: LaunchOptions): string {

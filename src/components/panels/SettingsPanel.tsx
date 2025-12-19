@@ -416,23 +416,29 @@ export default function SettingsPanel(props: SettingsPanelProps) {
             <div className="flex gap-2">
               <input
                 type="text"
-                className="input input-bordered flex-1 font-mono text-sm bg-base-300/30 border-white/10 focus:border-primary/50"
+                className="input input-bordered flex-1 font-mono text-sm bg-base-300/30 border-white/10 focus:border-primary/50 overflow-x-auto"
                 value={installDir}
                 onChange={(e) => setInstallDir(e.target.value)}
                 onBlur={async (e) => {
                   await setSetting('installDir', e.target.value);
                 }}
-                placeholder="%LOCALAPPDATA%\Programs\R5VLibrary (default)"
+                placeholder={typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux') 
+                  ? '~/Games/R5VLibrary (default)' 
+                  : '%LOCALAPPDATA%\\Programs\\R5VLibrary (default)'}
               />
               <button
                 className="btn btn-ghost border border-white/10 hover:border-cyan-500/30 hover:bg-cyan-500/10 gap-2"
                 onClick={async () => {
                   const dir = await window.electronAPI?.selectDirectory?.();
+                  console.log('Selected directory:', dir);
                   if (dir) {
                     setInstallDir(dir);
-                    await setSetting('installDir', dir);
+                    console.log('Setting install dir to:', dir);
+                    const result = await setSetting('installDir', dir);
+                    console.log('setSetting result:', result);
                     if (confirm('Custom base directory set! Reload launcher to detect channels in the new location?')) {
-                      window.location.reload();
+                      console.log('Reloading...');
+                      setTimeout(() => window.location.reload(), 100);
                     }
                   }
                 }}
@@ -446,9 +452,22 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 <button
                   className="btn btn-ghost border border-white/10 hover:border-red-500/30 hover:bg-red-500/10"
                   onClick={async () => {
-                    setInstallDir('');
-                    await setSetting('installDir', '');
-                    window.location.reload();
+                    if (confirm('Reset to default install location? Launcher will reload.')) {
+                      setInstallDir('');
+                      await setSetting('installDir', '');
+                      // Also clear channel-specific installDirs
+                      const currentSettings = await window.electronAPI?.getSettings?.();
+                      if (currentSettings?.channels) {
+                        const updatedChannels = { ...currentSettings.channels };
+                        Object.keys(updatedChannels).forEach(ch => {
+                          if (updatedChannels[ch]) {
+                            updatedChannels[ch].installDir = undefined;
+                          }
+                        });
+                        await setSetting('channels', updatedChannels);
+                      }
+                      setTimeout(() => window.location.reload(), 100);
+                    }
                   }}
                 >
                   Reset
@@ -615,9 +634,13 @@ export default function SettingsPanel(props: SettingsPanelProps) {
         <div className="space-y-4">
           {enabledChannels.map((c) => {
             const ch = channelsSettings?.[c.name];
-            const dir = c.isCustom ? c.installDir : ch?.installDir;
+            // For custom channels, use the stored installDir; for official channels, compute from base + channel name
+            const storedDir = c.isCustom ? c.installDir : ch?.installDir;
+            // If no stored dir for official channel, compute it from base installDir
+            const dir = storedDir || (!c.isCustom && installDir ? `${installDir}/${c.name}` : undefined);
             const ver = ch?.gameVersion;
-            const isInstalled = !!dir;
+            // Consider installed if there's a stored version OR a custom installDir
+            const isInstalled = !!ver || !!storedDir;
             const hdTexturesInstalled = !!ch?.hdTexturesInstalled || !!ch?.includeOptional;
             const isCustom = !!c.isCustom;
             

@@ -69,7 +69,8 @@ declare global {
       resumeDownload?: () => Promise<boolean>;
       cancelDownload: () => Promise<boolean>;
       selectFile?: (filters?: Array<{name:string; extensions:string[]}>) => Promise<string|null>;
-      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string }) => Promise<{ok:boolean; error?:string}>;
+      launchGame?: (payload: { channelName: string; installDir: string; mode: string; argsString: string; linuxWinePfx?: string; selectedProtonVersion?: string; linuxCommandWrapper?: string; enableEsync?: boolean; enableFsync?: boolean }) => Promise<{ok:boolean; error?:string}>;
+      listProtonVersions?: () => Promise<{ok:boolean; versions?: Array<{name: string; path: string}>; error?: string}>;
       minimize: () => void;
       maximize: () => void;
       close: () => void;
@@ -115,7 +116,8 @@ const CONFIG_URL = 'https://playvalkyrie.org/api/client/launcherConfig';
 export default function LauncherUI() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
   const [selectedChannel, setSelectedChannel] = useState<string>('');
-  const [installDir, setInstallDir] = useState<string>('');
+  const [installDir, setInstallDir] = useState<string>('');  // Current channel's full install path
+  const [baseInstallDir, setBaseInstallDir] = useState<string>('');  // Base library directory (for Settings)
   const [busy, setBusy] = useState(false);
   const [overall, setOverall] = useState<{index:number,total:number,path:string, completed?: number}|null>(null);
   const [fileProgress, setFileProgress] = useState<{path:string,received:number,total:number}|null>(null);
@@ -222,6 +224,27 @@ export default function LauncherUI() {
     })();
   }, []);
 
+  // Load Proton versions on Linux
+  useEffect(() => {
+    (async () => {
+      // Only fetch Proton versions on Linux
+      if (typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux')) {
+        try {
+          const result = await window.electronAPI?.listProtonVersions?.();
+          if (result?.ok && result.versions) {
+            setAvailableProtonVersions(result.versions);
+            // If no version selected yet, default to the first one (use path, not name)
+            if (!selectedProtonVersion && result.versions.length > 0) {
+              setSelectedProtonVersion(result.versions[0].path);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch Proton versions:', error);
+        }
+      }
+    })();
+  }, []);
+
   // Check for updates on mount and setup update event listeners
   useEffect(() => {
     // Setup update event listeners
@@ -270,9 +293,15 @@ export default function LauncherUI() {
       window.electron?.ipcRenderer?.on('update:error', handleUpdateError);
     }
 
-    // Check for updates
+    // Check for updates (skip on Linux - not supported)
     (async () => {
       try {
+        // Skip auto-update on Linux
+        if (typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux')) {
+          console.log('Auto-update is not supported on Linux');
+          return;
+        }
+        
         // Wait a bit after launch before checking for updates
         await new Promise(resolve => setTimeout(resolve, 3000));
         
@@ -356,12 +385,15 @@ export default function LauncherUI() {
 
 
   useEffect(() => {
-    window.electronAPI?.getSettings()?.then((s: any) => {
+    window.electronAPI?.getSettings()?.then(async (s: any) => {
       if (s?.installDir) {
-        setInstallDir(s.installDir);
+        setBaseInstallDir(s.installDir);  // Load custom base directory for Settings panel
       } else {
-        window.electronAPI?.getDefaultInstallDir(selectedChannel || undefined).then((d) => { if (d) setInstallDir(d); });
+        // Get default base directory (without channel name) for display in Settings
+        const defaultBase = await window.electronAPI?.getDefaultInstallDir?.('');
+        if (defaultBase) setBaseInstallDir(defaultBase);
       }
+      // Don't auto-set default install dir here - let it be empty if not set
       if (s?.concurrency) setConcurrency(Number(s.concurrency));
       if (s?.partConcurrency) setPartConcurrency(Number(s.partConcurrency));
       if (typeof s?.downloadSpeedLimit === 'number') {
@@ -523,7 +555,9 @@ export default function LauncherUI() {
   const [enableCheats, setEnableCheats] = useState<boolean>(false);
   const [offlineMode, setOfflineMode] = useState<boolean>(false);
   const [noAsync, setNoAsync] = useState<boolean>(false);
-  const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(true);
+  // Discord status is not supported on Linux
+  const isLinux = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux');
+  const [discordRichPresence, setDiscordRichPresence] = useState<boolean>(!isLinux);
   const [customCmd, setCustomCmd] = useState<string>('');
   const [noVid, setNoVid] = useState<boolean>(false);
   const [showFps, setShowFps] = useState<string>('0');
@@ -531,6 +565,13 @@ export default function LauncherUI() {
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
   const [matchmakingHostname, setMatchmakingHostname] = useState<string>('playvalkyrie.org');
   const [drawNotify, setDrawNotify] = useState<boolean>(false);
+  // Linux-specific launch options
+  const [linuxWinePfx, setLinuxWinePfx] = useState<string>('');
+  const [selectedProtonVersion, setSelectedProtonVersion] = useState<string>('');
+  const [linuxCommandWrapper, setLinuxCommandWrapper] = useState<string>('');  // e.g., "gamemoderun mangohud %command%"
+  const [availableProtonVersions, setAvailableProtonVersions] = useState<Array<{name: string; path: string}>>([]);
+  const [enableEsync, setEnableEsync] = useState<boolean>(true);
+  const [enableFsync, setEnableFsync] = useState<boolean>(true);
   const launchSaveTimer = useRef<any>(null);
   const [modDetailsOpen, setModDetailsOpen] = useState<boolean>(false);
   const [modDetailsPack, setModDetailsPack] = useState<any | null>(null);
@@ -877,8 +918,9 @@ export default function LauncherUI() {
   }
 
   async function confirmInstallWithDir() {
-    const base = (installBaseDir || '').replace(/\\+$/,'');
-    const finalPath = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    const base = (installBaseDir || '').replace(/\\+$/,'').replace(/\/+$/,'');
+    const pathSep = window.navigator.userAgent.toLowerCase().includes('win') ? '\\' : '/';
+    const finalPath = base ? `${base}${pathSep}${selectedChannel}` : `${selectedChannel}`;
     try {
       const root = await window.electronAPI?.getLauncherInstallRoot?.();
       if (root) {
@@ -1855,12 +1897,21 @@ export default function LauncherUI() {
           effectiveInstallDir = currentChannel.installDir;
         }
         
+        // If no channel-specific installDir, get the default path with channel name appended
+        if (!effectiveInstallDir && selectedChannel) {
+          effectiveInstallDir = await window.electronAPI?.getDefaultInstallDir(selectedChannel);
+        }
+        
+        console.log('Checking install status for:', effectiveInstallDir);
+        
         if (effectiveInstallDir) {
           setInstallDir(effectiveInstallDir);
           const installStatus = await window.electronAPI?.isInstalledInDir(effectiveInstallDir);
+          console.log('Install status result:', installStatus);
           // Handle both old boolean return type and new object return type for backwards compatibility
           const installed = typeof installStatus === 'object' ? installStatus.isInstalled : Boolean(installStatus);
           const hasPartials = typeof installStatus === 'object' ? installStatus.needsRepair : false;
+          console.log('Setting isInstalled to:', installed);
           setIsInstalled(installed);
           setNeedsRepair(hasPartials);
         } else {
@@ -1897,12 +1948,31 @@ export default function LauncherUI() {
           setEnableCheats(Boolean(lo.enableCheats));
           setOfflineMode(Boolean(lo.offlineMode));
           setNoAsync(Boolean(lo.noAsync));
-          setDiscordRichPresence(lo.discordRichPresence !== false); // Default to true
+          // Discord status is not supported on Linux, always disable it
+          setDiscordRichPresence(isLinux ? false : (lo.discordRichPresence !== false));
           setCustomCmd(String(lo.customCmd || ''));
+          // Linux options
+          setLinuxWinePfx(String(lo.linuxWinePfx || ''));
+          // Handle proton version - migrate from name to path if needed
+          const savedProtonVersion = String(lo.selectedProtonVersion || '');
+          // If it's not empty and doesn't start with '/', it's an old name-based value - try to convert
+          if (savedProtonVersion && !savedProtonVersion.startsWith('/') && savedProtonVersion !== 'Default (Latest UMU-Proton)') {
+            // Try to find the path for this name from available versions
+            const match = availableProtonVersions.find(v => v.name === savedProtonVersion);
+            setSelectedProtonVersion(match?.path || '');
+          } else if (savedProtonVersion === 'Default (Latest UMU-Proton)') {
+            // Old default name, convert to empty path
+            setSelectedProtonVersion('');
+          } else {
+            setSelectedProtonVersion(savedProtonVersion);
+          }
+          setLinuxCommandWrapper(String(lo.linuxCommandWrapper || ''));
+          setEnableEsync(lo.enableEsync !== false);  // Default to true
+          setEnableFsync(lo.enableFsync !== false);  // Default to true
         }
       } catch {}
     })();
-  }, [selectedChannel]);
+  }, [selectedChannel, channel]);
 
   useEffect(() => {
     const loadNews = async () => {
@@ -2283,6 +2353,8 @@ export default function LauncherUI() {
       showDebugInfo,
       matchmakingHostname,
       drawNotify,
+      linuxWinePfx,
+      selectedProtonVersion,
     });
   }
 
@@ -2394,7 +2466,7 @@ export default function LauncherUI() {
   }
 
   async function persistLaunchOptions() {
-    const lo = { mode: launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd };
+    const lo = { mode: launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion, linuxCommandWrapper, enableEsync, enableFsync };
     const s: any = await window.electronAPI?.getSettings();
     const next = { ...(s || {}) } as any;
     next.launchOptions = { ...(next.launchOptions || {}), [selectedChannel]: lo };
@@ -2409,7 +2481,7 @@ export default function LauncherUI() {
     }, 500);
     return () => { if (launchSaveTimer.current) clearTimeout(launchSaveTimer.current); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedChannel, launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd]);
+  }, [selectedChannel, launchMode, hostConfigEnabled, hostname, hostdesc, visibility, serverPassword, hostport, map, playlist, windowed, borderless, maxFps, resW, resH, reservedCores, workerThreads, encryptPackets, randomNetkey, queuedPackets, noTimeout, showConsole, colorConsole, playlistFile, mapIndex, playlistIndex, enableDeveloper, enableCheats, offlineMode, noAsync, discordRichPresence, customCmd, linuxWinePfx, selectedProtonVersion, linuxCommandWrapper, enableEsync, enableFsync]);
 
   // Parse playlist file when channel or install directory changes
   useEffect(() => {
@@ -2422,8 +2494,13 @@ export default function LauncherUI() {
       
       if (channel?.isCustom && channel.installDir) {
         dir = channel.installDir;
+      } else if (s?.channels?.[selectedChannel]?.installDir) {
+        dir = s.channels[selectedChannel].installDir;
+      } else if (selectedChannel) {
+        // Get default install dir with channel name appended
+        dir = await window.electronAPI?.getDefaultInstallDir(selectedChannel) || '';
       } else {
-        dir = s?.channels?.[selectedChannel]?.installDir || installDir;
+        dir = '';
       }
       
       if (dir) {
@@ -3316,7 +3393,17 @@ export default function LauncherUI() {
             
             const lo = s?.launchOptions?.[selectedChannel] || {};
             const args = buildLaunchParametersLocal();
-            const res = await window.electronAPI?.launchGame?.({ channelName: selectedChannel, installDir: dir, mode: lo?.mode || launchMode, argsString: args });
+            const res = await window.electronAPI?.launchGame?.({ 
+              channelName: selectedChannel, 
+              installDir: dir, 
+              mode: lo?.mode || launchMode, 
+              argsString: args,
+              linuxWinePfx: linuxWinePfx || undefined,
+              selectedProtonVersion: selectedProtonVersion || undefined,
+              linuxCommandWrapper: linuxCommandWrapper || undefined,
+              enableEsync,
+              enableFsync
+            });
             if (res && !res.ok) {
               console.error('Failed to launch', res.error);
             }
@@ -3379,8 +3466,8 @@ export default function LauncherUI() {
             setPartConcurrency={setPartConcurrency}
             downloadSpeedLimit={downloadSpeedLimit}
             setDownloadSpeedLimit={setDownloadSpeedLimit}
-            installDir={installDir}
-            setInstallDir={setInstallDir}
+            installDir={baseInstallDir}
+            setInstallDir={setBaseInstallDir}
             bannerVideoEnabled={bannerVideoEnabled}
             setBannerVideoEnabled={setBannerVideoEnabled}
             modsShowDeprecated={modsShowDeprecated}
@@ -3489,6 +3576,17 @@ export default function LauncherUI() {
             setMatchmakingHostname={setMatchmakingHostname}
             drawNotify={drawNotify}
             setDrawNotify={setDrawNotify}
+            linuxWinePfx={linuxWinePfx}
+            setLinuxWinePfx={setLinuxWinePfx}
+            selectedProtonVersion={selectedProtonVersion}
+            setSelectedProtonVersion={setSelectedProtonVersion}
+            availableProtonVersions={availableProtonVersions}
+            linuxCommandWrapper={linuxCommandWrapper}
+            setLinuxCommandWrapper={setLinuxCommandWrapper}
+            enableEsync={enableEsync}
+            setEnableEsync={setEnableEsync}
+            enableFsync={enableFsync}
+            setEnableFsync={setEnableFsync}
             buildLaunchParameters={buildLaunchParametersLocal}
           />
           </PageTransition>

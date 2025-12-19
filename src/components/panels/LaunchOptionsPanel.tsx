@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 type LaunchMode = 'CLIENT' | 'HOST' | 'SERVER';
@@ -95,6 +95,19 @@ type GameLaunchSectionProps = {
   setMatchmakingHostname: (hostname: string) => void;
   drawNotify: boolean;
   setDrawNotify: (draw: boolean) => void;
+
+  // Linux options
+  linuxWinePfx: string;
+  setLinuxWinePfx: (pfx: string) => void;
+  selectedProtonVersion: string;
+  setSelectedProtonVersion: (version: string) => void;
+  availableProtonVersions: Array<{name: string; path: string}>;
+  linuxCommandWrapper: string;
+  setLinuxCommandWrapper: (wrapper: string) => void;
+  enableEsync: boolean;
+  setEnableEsync: (enabled: boolean) => void;
+  enableFsync: boolean;
+  setEnableFsync: (enabled: boolean) => void;
 
   // Helper function
   buildLaunchParameters: () => string;
@@ -275,6 +288,13 @@ const SelectField = ({
 };
 
 export default function GameLaunchSection(props: GameLaunchSectionProps) {
+  const [isLinux, setIsLinux] = useState(false);
+  
+  useEffect(() => {
+    // Check if running on Linux (client-side only)
+    setIsLinux(typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux'));
+  }, []);
+  
   const {
     launchMode,
     setLaunchMode,
@@ -350,6 +370,17 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
     setMatchmakingHostname,
     drawNotify,
     setDrawNotify,
+    linuxWinePfx,
+    setLinuxWinePfx,
+    selectedProtonVersion,
+    setSelectedProtonVersion,
+    availableProtonVersions,
+    linuxCommandWrapper,
+    setLinuxCommandWrapper,
+    enableEsync,
+    setEnableEsync,
+    enableFsync,
+    setEnableFsync,
     buildLaunchParameters,
   } = props;
 
@@ -1465,19 +1496,22 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               </svg>
             }
           />
-          <ToggleCard
-            checked={discordRichPresence}
-            onChange={setDiscordRichPresence}
-            label="Discord Status"
-            description="Show activity"
-            accentColor="emerald"
-            tooltip="Displays what you're playing in Discord as your status/activity."
-            icon={
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            }
-          />
+          {/* Discord status is not supported on Linux */}
+          {typeof navigator !== 'undefined' && !navigator.platform.toLowerCase().includes('linux') && (
+            <ToggleCard
+              checked={discordRichPresence}
+              onChange={setDiscordRichPresence}
+              label="Discord Status"
+              description="Show activity"
+              accentColor="emerald"
+              tooltip="Displays what you're playing in Discord as your status/activity."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                </svg>
+              }
+            />
+          )}
         </div>
 
         <div className="p-5 rounded-xl bg-base-300/20 border border-white/5">
@@ -1507,6 +1541,109 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
         </div>
       </div>
 
+      {/* Linux Options - Only visible on Linux */}
+      {isLinux && (
+        <div className="glass rounded-xl p-6 min-w-0">
+          <SectionHeader
+            icon={
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/>
+                <line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            }
+            title="Linux / Wine / Proton"
+            description="Configure Wine prefix and Proton version"
+            gradient="from-orange-500 to-amber-600"
+          />
+
+          <div className="space-y-3">
+            <InputField
+              label="Wine Prefix Path"
+              value={linuxWinePfx}
+              onChange={setLinuxWinePfx}
+              placeholder="/home/user/.wine or leave empty for default"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              }
+            />
+            
+            <SelectField
+              label="Proton Version"
+              value={selectedProtonVersion}
+              onChange={setSelectedProtonVersion}
+              options={availableProtonVersions.length === 0 
+                ? [{ value: '', label: 'No Proton versions found' }]
+                : availableProtonVersions.map((version) => ({
+                    value: version.path,
+                    label: version.name
+                  }))
+              }
+              placeholder="Select Proton version..."
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3"/>
+                  <path d="M12 1v6m0 6v6M5.6 5.6l4.2 4.2m4.2 4.2l4.2 4.2M1 12h6m6 0h6M5.6 18.4l4.2-4.2m4.2-4.2l4.2-4.2"/>
+                </svg>
+              }
+            />
+            <p className="text-xs text-base-content/50 leading-relaxed -mt-1 ml-1">
+              Select which Proton/Wine version to use for running the game. Default uses the latest UMU-Proton.
+            </p>
+            
+            {/* Esync/Fsync Toggles */}
+            <div className="grid grid-cols-2 gap-4">
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-base-300/30 border border-white/5 cursor-pointer hover:bg-base-300/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={enableEsync}
+                  onChange={(e) => setEnableEsync(e.target.checked)}
+                  className="checkbox checkbox-sm checkbox-warning"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-base-content/90">Esync</span>
+                  <span className="text-xs text-base-content/50">Eventfd-based sync</span>
+                </div>
+              </label>
+              <label className="flex items-center gap-3 p-3 rounded-xl bg-base-300/30 border border-white/5 cursor-pointer hover:bg-base-300/50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={enableFsync}
+                  onChange={(e) => setEnableFsync(e.target.checked)}
+                  className="checkbox checkbox-sm checkbox-warning"
+                />
+                <div className="flex flex-col">
+                  <span className="text-sm font-medium text-base-content/90">Fsync</span>
+                  <span className="text-xs text-base-content/50">Futex-based sync (faster)</span>
+                </div>
+              </label>
+            </div>
+            <p className="text-xs text-base-content/50 leading-relaxed -mt-1 ml-1">
+              Wine synchronization primitives. Fsync is faster but requires kernel 5.16+. Both can be enabled; Wine will use Fsync if available.
+            </p>
+            
+            <InputField
+              label="Launch Prefix"
+              value={linuxCommandWrapper}
+              onChange={setLinuxCommandWrapper}
+              placeholder="DXVK_HUD=fps gamemoderun mangohud"
+              icon={
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="4 17 10 11 4 5"/>
+                  <line x1="12" y1="19" x2="20" y2="19"/>
+                </svg>
+              }
+            />
+            <p className="text-xs text-base-content/50 leading-relaxed -mt-2 ml-1">
+              Commands and environment variables to prepend to the launch command. Examples: <code className="px-1 py-0.5 bg-base-300/50 rounded text-orange-400">gamemoderun</code>, <code className="px-1 py-0.5 bg-base-300/50 rounded text-orange-400">mangohud</code>, <code className="px-1 py-0.5 bg-base-300/50 rounded text-orange-400">DXVK_HUD=fps,frametimes</code>
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Command Preview */}
       <div className="glass rounded-xl p-6 min-w-0">
         <SectionHeader
@@ -1530,7 +1667,21 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
               <span>Command Preview</span>
             </div>
             <button
-              onClick={() => navigator.clipboard.writeText(buildLaunchParameters())}
+              onClick={() => {
+                const isLinuxPlatform = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux');
+                const gameArgs = buildLaunchParameters();
+                let fullCommand = gameArgs;
+                if (isLinuxPlatform) {
+                  const envVars = [
+                    enableEsync && 'WINEESYNC=1',
+                    enableFsync && 'WINEFSYNC=1'
+                  ].filter(Boolean).join(' ');
+                  const umuCmd = `umu-run r5apex.exe ${gameArgs}`;
+                  const prefixPart = [envVars, linuxCommandWrapper].filter(Boolean).join(' ');
+                  fullCommand = prefixPart ? `${prefixPart} ${umuCmd}` : umuCmd;
+                }
+                navigator.clipboard.writeText(fullCommand);
+              }}
               className="btn btn-ghost btn-xs gap-1.5 text-base-content/50 hover:text-base-content flex-shrink-0"
             >
               <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -1541,9 +1692,24 @@ export default function GameLaunchSection(props: GameLaunchSectionProps) {
             </button>
           </div>
           <div className="overflow-x-auto overlay-scroll">
-            <code className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed block whitespace-pre-wrap">
-              {buildLaunchParameters()}
-            </code>
+            {typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux') ? (
+              <code className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed block whitespace-pre-wrap">
+                {(() => {
+                  const gameArgs = buildLaunchParameters();
+                  const envVars = [
+                    enableEsync && 'WINEESYNC=1',
+                    enableFsync && 'WINEFSYNC=1'
+                  ].filter(Boolean).join(' ');
+                  const umuCmd = `umu-run r5apex.exe ${gameArgs}`;
+                  const prefixPart = [envVars, linuxCommandWrapper].filter(Boolean).join(' ');
+                  return prefixPart ? `${prefixPart} ${umuCmd}` : umuCmd;
+                })()}
+              </code>
+            ) : (
+              <code className="text-xs font-mono text-emerald-400/80 break-all leading-relaxed block whitespace-pre-wrap">
+                {buildLaunchParameters()}
+              </code>
+            )}
           </div>
         </div>
       </div>

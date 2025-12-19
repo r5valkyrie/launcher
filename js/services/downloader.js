@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 import { pipeline } from 'node:stream';
 import { promisify } from 'node:util';
 import https from 'node:https';
+import { spawn } from 'node:child_process';
+import os from 'node:os';
 
 const streamPipeline = promisify(pipeline);
 function normalizeRelative(p) {

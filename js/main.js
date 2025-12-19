@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import os from 'node:os';
+import extract from 'extract-zip';
 // Preload is CommonJS to avoid ESM named export issues
 import { fetchChecksums, downloadAll, createCancelToken, cancelToken, setGlobalDownloadSpeed } from './services/downloader.js';
 import { getSetting, setSetting, getAllSettings } from './services/store.js';
@@ -255,26 +256,28 @@ app.whenReady().then(() => {
   try { extractDeeplinks(process.argv).forEach((link) => deeplinkQueue.push(link)); } catch {}
   // Flush queued deeplinks when renderer is ready
   try { mainWindow?.webContents?.once('did-finish-load', flushDeeplinks); } catch {}
-  // Auto-updater wiring
-  try {
-    autoUpdater.autoDownload = false;
-    try { autoUpdater.logger = log; log.transports.file.level = 'info'; } catch {}
-    autoUpdater.on('error', (err) => {
-      try { mainWindow?.webContents.send('update:error', { message: String(err?.stack || err?.message || err) }); } catch {}
-    });
-    autoUpdater.on('update-available', (info) => {
-      try { mainWindow?.webContents.send('update:available', info); } catch {}
-    });
-    autoUpdater.on('update-not-available', (info) => {
-      try { mainWindow?.webContents.send('update:not-available', info); } catch {}
-    });
-    autoUpdater.on('download-progress', (p) => {
-      try { mainWindow?.webContents.send('update:download-progress', p); } catch {}
-    });
-    autoUpdater.on('update-downloaded', (info) => {
-      try { mainWindow?.webContents.send('update:downloaded', info); } catch {}
-    });
-  } catch {}
+  // Auto-updater wiring (disabled on Linux - no auto-update support)
+  if (process.platform !== 'linux') {
+    try {
+      autoUpdater.autoDownload = false;
+      try { autoUpdater.logger = log; log.transports.file.level = 'info'; } catch {}
+      autoUpdater.on('error', (err) => {
+        try { mainWindow?.webContents.send('update:error', { message: String(err?.stack || err?.message || err) }); } catch {}
+      });
+      autoUpdater.on('update-available', (info) => {
+        try { mainWindow?.webContents.send('update:available', info); } catch {}
+      });
+      autoUpdater.on('update-not-available', (info) => {
+        try { mainWindow?.webContents.send('update:not-available', info); } catch {}
+      });
+      autoUpdater.on('download-progress', (p) => {
+        try { mainWindow?.webContents.send('update:download-progress', p); } catch {}
+      });
+      autoUpdater.on('update-downloaded', (info) => {
+        try { mainWindow?.webContents.send('update:downloaded', info); } catch {}
+      });
+    } catch {}
+  }
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -332,6 +335,11 @@ async function fetchUpdateManifest(url = 'https://github.com/r5valkyrie/launcher
 
 // Update IPC
 ipcMain.handle('update:check', async () => {
+  // Auto-update not supported on Linux
+  if (process.platform === 'linux') {
+    return { ok: false, error: 'Auto-update is not supported on Linux. Please download updates manually from GitHub.' };
+  }
+  
   try {
     // First fetch the manifest to check update policy
     let manifest = null;
@@ -357,9 +365,15 @@ ipcMain.handle('update:check', async () => {
   }
 });
 ipcMain.handle('update:download', async () => {
+  if (process.platform === 'linux') {
+    return { ok: false, error: 'Auto-update is not supported on Linux.' };
+  }
   try { await autoUpdater.downloadUpdate(); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 ipcMain.handle('update:quitAndInstall', async () => {
+  if (process.platform === 'linux') {
+    return { ok: false, error: 'Auto-update is not supported on Linux.' };
+  }
   try { setImmediate(() => autoUpdater.quitAndInstall(false, true)); return { ok: true }; } catch (e) { return { ok: false, error: String(e?.message || e) }; }
 });
 
@@ -693,16 +707,15 @@ ipcMain.handle('mods:install', async (e, { installDir, name, downloadUrl }) => {
       req.on('error', (err) => { try { fs.unlinkSync(tempZip); } catch {} reject(err); });
     });
     await downloadWithRedirects(downloadUrl);
-    // Extract using PowerShell Expand-Archive (Windows)
+    // Extract ZIP (cross-platform)
     try { e?.sender?.send('mods:progress', { key: name, phase: 'extracting' }); } catch {}
     const dest = path.join(modsDir, name);
     try { fs.rmSync(dest, { recursive: true, force: true }); } catch {}
     fs.mkdirSync(dest, { recursive: true });
-    await new Promise((resolve, reject) => {
-      const ps = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Expand-Archive -LiteralPath "${tempZip}" -DestinationPath "${dest}" -Force`], { stdio: 'ignore' });
-      ps.on('exit', (code) => code === 0 ? resolve() : reject(new Error(`Expand-Archive failed ${code}`)));
-      ps.on('error', reject);
-    });
+
+    // Extract using extract-zip (cross-platform)
+    await extract(tempZip, { dir: dest });
+
     try { fs.unlinkSync(tempZip); } catch {}
     // Determine mod ID from mod.vdf
     let modId = null;
@@ -897,7 +910,10 @@ ipcMain.handle('select-directory', async () => {
 });
 
 ipcMain.handle('settings:get', () => getAllSettings());
-ipcMain.handle('settings:set', (_e, { key, value }) => setSetting(key, value));
+ipcMain.handle('settings:set', (_e, { key, value }) => {
+  setSetting(key, value);
+  return true;
+});
 
 ipcMain.handle('download:checksums', async (_e, { baseUrl }) => {
   return fetchChecksums(baseUrl);
@@ -960,9 +976,16 @@ ipcMain.handle('default-install-dir', (_e, { channelName }) => {
   if (customBase && typeof customBase === 'string' && customBase.trim()) {
     base = customBase;
   } else {
-    // Default to %LOCALAPPDATA%\Programs\R5VLibrary\<channel>
-    const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-    base = path.join(localAppData, 'Programs', 'R5VLibrary');
+    // Platform-specific default paths
+    if (process.platform === "win32") {
+      const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+      base = path.join(localAppData, 'Programs', 'R5VLibrary');
+    } else if (process.platform === "linux") {
+      const gamesDir = path.join(app.getPath('home'), 'Games');
+      base = path.join(gamesDir, 'R5VLibrary');
+    } else {
+      base = path.join(app.getPath('home'), 'R5VLibrary');
+    }
   }
   
   return channelName ? path.join(base, channelName) : base;
@@ -998,12 +1021,21 @@ ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channe
     if (customBase && typeof customBase === 'string' && customBase.trim()) {
       libraryBase = customBase;
     } else {
-      const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
-      libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
+      // Use platform-specific default paths
+      if (process.platform === "win32") {
+        const localAppData = process.env['LOCALAPPDATA'] || path.join(app.getPath('home'), 'AppData', 'Local');
+        libraryBase = path.join(localAppData, 'Programs', 'R5VLibrary');
+      } else if (process.platform === "linux") {
+        libraryBase = path.join(app.getPath('home'), 'Games', 'R5VLibrary');
+      } else {
+        libraryBase = path.join(app.getPath('home'), 'R5VLibrary');
+      }
     }
     
     try {
       await fs.promises.access(libraryBase);
+      
+      // Scan subdirectories for channels
       const entries = await fs.promises.readdir(libraryBase, { withFileTypes: true });
       
       for (const entry of entries) {
@@ -1019,9 +1051,11 @@ ipcMain.handle('scan-custom-channels', async (_e, { officialChannelNames, channe
         }
         
         if (await hasGameExecutables(channelPath)) {
+          // Only store installDir if it's in a custom location (not the default)
+          const shouldStoreInstallDir = customBase && typeof customBase === 'string' && customBase.trim();
           customChannels.push({
             name: channelName,
-            installDir: channelPath,
+            ...(shouldStoreInstallDir && { installDir: channelPath }),
             isCustom: true
           });
           scannedPaths.add(normalizedPath);
@@ -1370,9 +1404,95 @@ ipcMain.handle('select-file', async (_e, { filters }) => {
   return res.filePaths[0];
 });
 
-ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsString }) => {
+ipcMain.handle('game:listProtonVersions', async () => {
+  if (process.platform !== 'linux') {
+    return { ok: true, versions: [] };
+  }
+
+  try {
+    const versions = [];
+    const homeDir = app.getPath('home');
+
+    // Common Proton installation paths
+    const searchPaths = [
+      path.join(homeDir, '.local', 'share', 'Steam', 'steamapps', 'common'),
+    ];
+
+    const extraCompatibilityTools = [
+      path.join(homeDir, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+    ];
+
+    for (const searchPath of searchPaths) {
+      try {
+        if (!fs.existsSync(searchPath)) continue;
+
+        const entries = fs.readdirSync(searchPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+
+          const dirName = entry.name;
+          const fullPath = path.join(searchPath, dirName);
+
+          // Check if it's a Proton directory (has proton or contains "Proton" in name)
+          if (dirName.toLowerCase().includes('proton')) {
+            // Verify it has the proton executable
+            const protonExe = path.join(fullPath, 'files', 'bin', 'wineserver');
+            const legacyProtonExe = path.join(fullPath, 'dist', 'bin', 'wineserver');
+            if (fs.existsSync(protonExe) || fs.existsSync(legacyProtonExe)) {
+              versions.push({
+                name: dirName,
+                path: fullPath,
+              });
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`Failed to scan ${searchPath}:`, err);
+      }
+    }
+
+    for (const searchPath of extraCompatibilityTools) {
+      try {
+        if (!fs.existsSync(searchPath)) continue;
+
+        const entries = fs.readdirSync(searchPath, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+
+          const dirName = entry.name;
+          const fullPath = path.join(searchPath, dirName);
+
+          versions.push({
+            name: dirName,
+            path: fullPath,
+          });
+        }
+      } catch (err) {
+        console.warn(`Failed to scan ${searchPath}:`, err);
+      }
+    }
+
+    // Sort versions: GE-Proton first, then by name (newest first)
+    versions.sort((a, b) => {
+      return b.name.localeCompare(a.name);
+    });
+
+    versions.unshift({
+      name: 'Default (Latest UMU-Proton)',
+      path: ''
+    });
+
+    return { ok: true, versions };
+  } catch (err) {
+    return { ok: false, error: String(err?.message || err), versions: [] };
+  }
+});
+
+ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsString, linuxWinePfx, selectedProtonVersion, linuxCommandWrapper, enableEsync, enableFsync }) => {
   try {
     if (!installDir) throw new Error('Missing installDir');
+    
+    // Use the installDir as-is since it might legitimately have backslashes in the directory name on Linux
     const exeName = String(mode).toUpperCase() === 'SERVER' ? 'r5apex_ds.exe' : 'r5apex.exe';
     const exePath = path.join(installDir, exeName);
     await fs.promises.access(exePath).catch(() => { throw new Error(`Executable not found: ${exePath}`); });
@@ -1382,10 +1502,113 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
       return tokens.map((t) => t.replace(/^\"|\"$/g, ''));
     };
     const args = parseArgs(argsString);
-    const child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
-    child.unref();
+
+    let child;
+
+    if (process.platform === "win32") {
+      child = spawn(exePath, args, { cwd: installDir, detached: true, stdio: 'ignore', env: { ...process.env } });
+      child.unref();
+    } else if (process.platform === "linux") {
+      // grab wine prefix
+      const prefix = linuxWinePfx ? linuxWinePfx : path.join(app.getPath('home'), 'Games', 'R5VLibrary', 'wineprefix');
+      // place exe in args
+      args.unshift(exePath);
+      // copy needed files
+      let srcDir = path.join(app.getPath('home'), '.local', 'share', 'Steam');
+      let destDir = path.join(prefix, 'drive_c', 'Program Files (x86)', 'Steam');
+      // make sure destination exists
+      fs.mkdirSync(destDir, { recursive: true });
+      const steamFiles = [
+        'GameOverlayRenderer64.dll',
+        'steamclient64.dll',
+        'steamclient.dll'
+      ];
+      steamFiles.forEach(file => {
+        const srcPath = path.join(srcDir, file);
+        const destPath = path.join(destDir, file);
+        try {
+          fs.copyFileSync(srcPath, destPath);
+        } catch (e) {
+          console.warn(`Failed to copy ${file}:`, e.message);
+        }
+      });
+      // Get path to bundled umu-run
+      const umuPath = app.isPackaged 
+        ? path.join(process.resourcesPath, 'bin', 'linux', 'umu-run')
+        : path.join(__dirname, '..', 'bin', 'linux', 'umu-run');
+      
+      // Check if umu-run exists
+      if (!fs.existsSync(umuPath)) {
+        throw new Error(`UMU launcher not found at: ${umuPath}`);
+      }
+      
+      // Make sure umu-run is executable
+      try {
+        fs.chmodSync(umuPath, 0o755);
+      } catch (e) {
+        console.warn('Could not set executable permission on umu-run:', e.message);
+      }
+      const env = { 
+        ...process.env, 
+        WINEPREFIX: prefix,
+        GAMEID: 'umu-r5valkyrie'
+      };
+      
+      // Only set PROTONPATH if a specific version was selected
+      if (selectedProtonVersion && selectedProtonVersion !== '') {
+        env.PROTONPATH = selectedProtonVersion;
+      }
+      
+      // Set Esync/Fsync environment variables
+      if (enableEsync) {
+        env.WINEESYNC = '1';
+      }
+      if (enableFsync) {
+        env.WINEFSYNC = '1';
+      }
+      
+      // Handle launch prefix (commands to prepend, like gamemoderun, mangohud, etc.)
+      if (linuxCommandWrapper && linuxCommandWrapper.trim()) {
+        // Parse prefix commands (e.g., "gamemoderun mangohud")
+        const prefixArgs = linuxCommandWrapper.trim().split(/\s+/).filter(s => s);
+        
+        if (prefixArgs.length > 0) {
+          // The first part is the actual command to run
+          const wrapperCmd = prefixArgs[0];
+          const wrapperArgs = [...prefixArgs.slice(1), umuPath, ...args];
+          
+          console.log('Launching with prefix:', wrapperCmd, wrapperArgs);
+          
+          child = spawn(wrapperCmd, wrapperArgs, { 
+            cwd: installDir, 
+            detached: true, 
+            stdio: 'ignore',
+            env 
+          });
+        } else {
+          // No prefix, just use umu-run directly
+          child = spawn(umuPath, args, { 
+            cwd: installDir, 
+            detached: true, 
+            stdio: 'ignore',
+            env 
+          });
+        }
+      } else {
+        // No launch prefix, launch normally
+        child = spawn(umuPath, args, { 
+          cwd: installDir, 
+          detached: true, 
+          stdio: 'ignore',
+          env 
+        });
+      }
+      
+      child.unref();
+    }
     return { ok: true };
   } catch (err) {
+    console.error('Game launch error:', err);
     return { ok: false, error: String(err?.message || err) };
   }
 });

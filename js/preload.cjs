@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelDownload: () => ipcRenderer.invoke('download:cancel'),
   selectFile: (filters) => ipcRenderer.invoke('select-file', { filters }),
   launchGame: (payload) => ipcRenderer.invoke('game:launch', payload),
+  listProtonVersions: () => ipcRenderer.invoke('game:listProtonVersions'),
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('update:check'),
   downloadUpdate: () => ipcRenderer.invoke('update:download'),

@@ -15,7 +15,12 @@
     "release:dry": "npm run build:web && dotenv -e .env -- electron-builder --win nsis --publish never",
     "release:patch": "npm version patch && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
     "release:minor": "npm version minor && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
-    "release:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release"
+    "release:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
+    "release:linux": "npm run build:web && node scripts/downloadUmu.cjs && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --linux AppImage --publish always --config.publish.provider=github --config.publish.owner=r5valkyrie --config.publish.repo=launcher_linux_releases",
+    "release:linux:dry": "npm run build:web && node scripts/downloadUmu.cjs && node scripts/bundleElectron.cjs && dotenv -e .env -- electron-builder --linux AppImage --publish never",
+    "release:linux:patch": "npm version patch && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release:linux",
+    "release:linux:minor": "npm version minor && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release:linux",
+    "release:linux:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release:linux"
   },
   "dependencies": {
     "@types/animejs": "^3.1.13",
@@ -23,6 +28,7 @@
     "bytenode": "^1.4.0",
     "electron-log": "^5.2.2",
     "electron-updater": "^6.3.9",
+    "extract-zip": "^2.0.1",
     "pako": "^2.1.0"
   },
   "devDependencies": {
@@ -83,10 +89,28 @@
     "compression": "maximum",
     "afterPack": "scripts/afterPack.cjs",
     "win": {
+      "artifactName": "${productName} Setup ${version}.${ext}",
       "target": [
         "nsis"
       ],
       "icon": "build/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "tar.gz"
+      ],
+      "category": "Game",
+      "icon": "build/icon.png",
+      "extraFiles": [
+        {
+          "from": "bin/linux",
+          "to": "",
+          "filter": [
+            "**/*"
+          ]
+        }
+      ]
     },
     "protocols": [
       {

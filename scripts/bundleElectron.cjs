@@ -22,7 +22,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
     minify: true,
     sourcemap: false,
     logLevel: 'silent',
-    external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
+    external: ['electron', 'electron-updater', 'electron-log', 'extract-zip', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'tty', 'node:tty', 'os', 'node:os', 'util', 'node:util', 'stream', 'node:stream', 'crypto', 'node:crypto', 'zlib', 'node:zlib', 'url', 'node:url'],
   });
   // Avoid obfuscating main to keep Node/Electron semantics intact
 
@@ -58,7 +58,7 @@ function ensureDir(dir) { fs.mkdirSync(dir, { recursive: true }); }
       minify: true,
       sourcemap: false,
       logLevel: 'silent',
-      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process'],
+      external: ['electron', 'fs', 'path', 'node:fs', 'node:path', 'https', 'node:https', 'child_process', 'node:child_process', 'tty', 'node:tty', 'os', 'node:os', 'util', 'node:util', 'stream', 'node:stream', 'crypto', 'node:crypto', 'zlib', 'node:zlib', 'url', 'node:url'],
     });
     // Avoid obfuscating services to preserve ESM exports
   }
