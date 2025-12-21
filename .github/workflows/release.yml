@@ -240,10 +240,14 @@ jobs:
           echo "appimage_name=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
       
       - name: Send Discord Notification
-        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
         run: |
+          if [ -z "$DISCORD_WEBHOOK_URL" ]; then
+            echo "DISCORD_WEBHOOK_URL not set, skipping notification"
+            exit 0
+          fi
+          
           VERSION="${GITHUB_REF#refs/tags/v}"
           REPO_URL="https://github.com/${{ github.repository }}"
           RELEASE_URL="$REPO_URL/releases/tag/${{ github.ref_name }}"
@@ -259,27 +263,27 @@ jobs:
           cat << EOF > payload.json
           {
             "embeds": [{
-              "title": "🚀 R5Valkyrie Launcher v${VERSION} Released!",
+              "title": "R5Valkyrie Launcher v${VERSION} Released!",
               "description": "A new version of R5Valkyrie Launcher is now available for download.",
               "color": 5814522,
               "fields": [
                 {
-                  "name": "🪟 Windows",
+                  "name": "Windows",
                   "value": "[Download](${WINDOWS_URL}) • ${{ steps.file_sizes.outputs.windows_size }}",
                   "inline": true
                 },
                 {
-                  "name": "🐧 Debian/Ubuntu",
+                  "name": "Debian/Ubuntu",
                   "value": "[Download](${DEBIAN_URL}) • ${{ steps.file_sizes.outputs.debian_size }}",
                   "inline": true
                 },
                 {
-                  "name": "⚡ Arch Linux",
+                  "name": "Arch Linux",
                   "value": "[Download](${ARCH_URL}) • ${{ steps.file_sizes.outputs.arch_size }}",
                   "inline": true
                 },
                 {
-                  "name": "📦 Portable (AppImage)",
+                  "name": "Portable (AppImage)",
                   "value": "[Download](${APPIMAGE_URL}) • ${{ steps.file_sizes.outputs.appimage_size }}",
                   "inline": true
                 }
