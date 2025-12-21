@@ -104,7 +104,7 @@ fs.copyFileSync(path.join(tmpDir, `${pkgName}.desktop`), path.join(srcDir, `${pk
 console.log('Building pacman package...');
 
 try {
-  execSync('makepkg -f', { 
+  execSync('makepkg -f --nodeps', { 
     cwd: tmpDir, 
     stdio: 'inherit',
     env: { ...process.env, PKGDEST: releaseDir, SRCPKGDEST: tmpDir }
