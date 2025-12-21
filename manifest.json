@@ -1,5 +1,5 @@
 {
-    "version": "0.9.53",
+    "version": "0.9.54",
     "mandatory_update": false,
     "release_notes": "Added linux support\nImproved update mechanism\nFixed various bugs",
     "min_version": "0.9.0",
