@@ -114,7 +114,7 @@ try {
   const files = fs.readdirSync(releaseDir);
   const pkgFile = files.find(f => f.startsWith(pkgName) && f.endsWith('.pkg.tar.zst'));
   if (pkgFile) {
-    const newName = `R5Valkyrie_Launcher-${version}.pkg.tar.zst`;
+    const newName = `R5Valkyrie Launcher-${version}-Arch.pkg.tar.zst`;
     const newPath = path.join(releaseDir, newName);
     fs.renameSync(path.join(releaseDir, pkgFile), newPath);
     console.log(`\nSuccess! Created: ${newName}`);
