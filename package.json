@@ -2,6 +2,7 @@
   "name": "r5vlauncher",
   "type": "module",
   "version": "0.9.37",
+  "author": "R5Valkyrie",
   "main": "electron/main.js",
   "icon": "build/icon.png",
   "scripts": {
@@ -87,6 +88,7 @@
     "asar": true,
     "compression": "maximum",
     "afterPack": "scripts/afterPack.cjs",
+    "afterAllArtifactBuild": "scripts/renameArtifacts.cjs",
     "win": {
       "artifactName": "${productName} Setup ${version}.${ext}",
       "target": [
@@ -96,23 +98,15 @@
     },
     "linux": {
       "target": [
-        {
-          "target": "AppImage",
-          "arch": ["x64"]
-        },
-        {
-          "target": "deb",
-          "arch": ["x64"]
-        },
-        {
-          "target": "tar.gz",
-          "arch": ["x64"]
-        }
+        "AppImage",
+        "deb",
+        "tar.gz"
       ],
       "category": "Game",
       "icon": "build/icon.png",
       "maintainer": "R5Valkyrie",
       "vendor": "R5Valkyrie",
+      "executableName": "r5vlauncher",
       "extraFiles": [
         {
           "from": "bin/linux",
