@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.9.40",
+  "version": "0.9.41",
   "author": "R5Valkyrie",
   "main": "electron/main.js",
   "icon": "build/icon.png",
