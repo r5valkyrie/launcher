@@ -9,6 +9,7 @@
     "dev": "node scripts/bundleElectron.cjs && concurrently \"astro dev\" \"wait-on http://localhost:4321 && cross-env VITE_DEV_SERVER_URL=http://localhost:4321 electron .\"",
     "build:web": "astro build",
     "build": "npm run build:web && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder && node scripts/renameArtifacts.cjs",
+    "build:pacman": "node scripts/buildPacman.cjs",
     "version:patch": "node scripts/bumpVersion.cjs patch",
     "version:minor": "node scripts/bumpVersion.cjs minor",
     "version:major": "node scripts/bumpVersion.cjs major"
@@ -89,8 +90,7 @@
     "linux": {
       "target": [
         "AppImage",
-        "deb",
-        "tar.gz"
+        "deb"
       ],
       "category": "Game",
       "icon": "build/icon.png",
