@@ -192,6 +192,30 @@ When a version tag is pushed (e.g., `v0.9.41`), GitHub Actions automatically bui
 
 Build artifacts are placed in the `release/` directory.
 
+### Discord Release Notifications
+
+GitHub Actions automatically sends a Discord webhook notification when a release completes, with download links for all platform packages.
+
+**Setup:**
+
+1. Create a Discord webhook in your server:
+   - Server Settings → Integrations → Webhooks → New Webhook
+   - Copy the webhook URL
+
+2. Add it as a repository secret:
+   - Go to your GitHub repository
+   - Settings → Secrets and variables → Actions
+   - New repository secret
+   - Name: `DISCORD_WEBHOOK_URL`
+   - Value: Your webhook URL
+
+3. Push a version tag to trigger a release:
+   ```bash
+   npm run version:patch
+   ``
+
+The notification is sent after all builds complete and the GitHub release is published.
+
 ## Configuration
 
 The launcher fetches configuration from a remote endpoint at startup. Default:

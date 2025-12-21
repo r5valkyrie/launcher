@@ -196,6 +196,7 @@ jobs:
         run: ls -R artifacts
       
       - name: Create Release
+        id: create_release
         uses: softprops/action-gh-release@v1
         with:
           files: |
@@ -210,3 +211,92 @@ jobs:
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get file sizes
+        id: file_sizes
+        run: |
+          WINDOWS_FILE=$(find artifacts/windows-build -name "*.exe" -type f | head -n 1)
+          DEBIAN_FILE=$(find artifacts/debian-build -name "*.deb" -type f | head -n 1)
+          ARCH_FILE=$(find artifacts/arch-build -name "*.pkg.tar.zst" -type f | head -n 1)
+          APPIMAGE_FILE=$(find artifacts/appimage-build -name "*.AppImage" -type f | head -n 1)
+          
+          WINDOWS_SIZE=$(du -h "$WINDOWS_FILE" | cut -f1)
+          DEBIAN_SIZE=$(du -h "$DEBIAN_FILE" | cut -f1)
+          ARCH_SIZE=$(du -h "$ARCH_FILE" | cut -f1)
+          APPIMAGE_SIZE=$(du -h "$APPIMAGE_FILE" | cut -f1)
+          
+          WINDOWS_NAME=$(basename "$WINDOWS_FILE")
+          DEBIAN_NAME=$(basename "$DEBIAN_FILE")
+          ARCH_NAME=$(basename "$ARCH_FILE")
+          APPIMAGE_NAME=$(basename "$APPIMAGE_FILE")
+          
+          echo "windows_size=$WINDOWS_SIZE" >> $GITHUB_OUTPUT
+          echo "debian_size=$DEBIAN_SIZE" >> $GITHUB_OUTPUT
+          echo "arch_size=$ARCH_SIZE" >> $GITHUB_OUTPUT
+          echo "appimage_size=$APPIMAGE_SIZE" >> $GITHUB_OUTPUT
+          echo "windows_name=$WINDOWS_NAME" >> $GITHUB_OUTPUT
+          echo "debian_name=$DEBIAN_NAME" >> $GITHUB_OUTPUT
+          echo "arch_name=$ARCH_NAME" >> $GITHUB_OUTPUT
+          echo "appimage_name=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Send Discord Notification
+        if: ${{ secrets.DISCORD_WEBHOOK_URL != '' }}
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          RELEASE_URL="$REPO_URL/releases/tag/${{ github.ref_name }}"
+          DOWNLOAD_URL="$REPO_URL/releases/download/${{ github.ref_name }}"
+          
+          # URL encode filenames
+          WINDOWS_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.windows_name }}" | sed 's/ /%20/g')"
+          DEBIAN_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.debian_name }}" | sed 's/ /%20/g')"
+          ARCH_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.arch_name }}" | sed 's/ /%20/g')"
+          APPIMAGE_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.appimage_name }}" | sed 's/ /%20/g')"
+          
+          # Create Discord webhook payload
+          cat << EOF > payload.json
+          {
+            "embeds": [{
+              "title": "🚀 R5Valkyrie Launcher v${VERSION} Released!",
+              "description": "A new version of R5Valkyrie Launcher is now available for download.",
+              "color": 5814522,
+              "fields": [
+                {
+                  "name": "🪟 Windows",
+                  "value": "[Download](${WINDOWS_URL}) • ${{ steps.file_sizes.outputs.windows_size }}",
+                  "inline": true
+                },
+                {
+                  "name": "🐧 Debian/Ubuntu",
+                  "value": "[Download](${DEBIAN_URL}) • ${{ steps.file_sizes.outputs.debian_size }}",
+                  "inline": true
+                },
+                {
+                  "name": "⚡ Arch Linux",
+                  "value": "[Download](${ARCH_URL}) • ${{ steps.file_sizes.outputs.arch_size }}",
+                  "inline": true
+                },
+                {
+                  "name": "📦 Portable (AppImage)",
+                  "value": "[Download](${APPIMAGE_URL}) • ${{ steps.file_sizes.outputs.appimage_size }}",
+                  "inline": true
+                }
+              ],
+              "footer": {
+                "text": "R5Valkyrie",
+                "icon_url": "https://raw.githubusercontent.com/${{ github.repository }}/main/build/icon.png"
+              },
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)",
+              "thumbnail": {
+                "url": "https://raw.githubusercontent.com/${{ github.repository }}/main/build/icon.png"
+              },
+              "url": "${RELEASE_URL}"
+            }]
+          }
+          EOF
+          
+          curl -H "Content-Type: application/json" \
+               -d @payload.json \
+               "$DISCORD_WEBHOOK_URL"
