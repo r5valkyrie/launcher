@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.9.40",
+  "version": "0.9.41",
   "author": "R5Valkyrie",
   "main": "electron/main.js",
   "icon": "build/icon.png",
@@ -18,9 +18,9 @@
     "release:minor": "npm version minor && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
     "release:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
     "release:linux": "npm run build:web && node scripts/downloadUmu.cjs && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --linux AppImage deb --publish always --config.publish.provider=github --config.publish.owner=r5valkyrie --config.publish.repo=launcher_linux_releases && node scripts/buildPacman.cjs",
-    "version:patch": "npm version patch && node scripts/syncVersion.cjs && git add manifest.json && git commit --amend --no-edit && git push --follow-tags",
-    "version:minor": "npm version minor && node scripts/syncVersion.cjs && git add manifest.json && git commit --amend --no-edit && git push --follow-tags",
-    "version:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit --amend --no-edit && git push --follow-tags"
+    "version:patch": "npm version patch --no-git-tag-version && node scripts/syncVersion.cjs && git add package.json manifest.json && git commit -m \"chore: bump version to $(node -p \"require('./package.json').version\")\" && git tag v$(node -p \"require('./package.json').version\") && git push --follow-tags",
+    "version:minor": "npm version minor --no-git-tag-version && node scripts/syncVersion.cjs && git add package.json manifest.json && git commit -m \"chore: bump version to $(node -p \"require('./package.json').version\")\" && git tag v$(node -p \"require('./package.json').version\") && git push --follow-tags",
+    "version:major": "npm version major --no-git-tag-version && node scripts/syncVersion.cjs && git add package.json manifest.json && git commit -m \"chore: bump version to $(node -p \"require('./package.json').version\")\" && git tag v$(node -p \"require('./package.json').version\") && git push --follow-tags"
   },
   "dependencies": {
     "@types/animejs": "^3.1.13",

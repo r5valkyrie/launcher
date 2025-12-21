@@ -1,5 +1,5 @@
 {
-    "version": "0.9.40",
+    "version": "0.9.41",
     "mandatory_update": false,
     "release_notes": "Improved session mode labels for clarity - 'Join & Host' vs 'Join Only'",
     "min_version": "0.9.0",
