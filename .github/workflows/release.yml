@@ -56,6 +56,10 @@ jobs:
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
         run: npx electron-builder --linux AppImage tar.gz --publish never
       
+      - name: Rename Linux artifacts
+        if: matrix.platform == 'linux'
+        run: node scripts/renameArtifacts.cjs
+      
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
