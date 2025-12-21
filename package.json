@@ -1,7 +1,7 @@
 {
   "name": "r5vlauncher",
   "type": "module",
-  "version": "0.9.44",
+  "version": "0.9.45",
   "author": "R5Valkyrie",
   "main": "electron/main.js",
   "icon": "build/icon.png",
@@ -65,7 +65,7 @@
       {
         "provider": "github",
         "owner": "r5valkyrie",
-        "repo": "launcher_releases"
+        "repo": "launcher"
       }
     ],
     "files": [
