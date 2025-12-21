@@ -123,9 +123,11 @@ jobs:
       - name: Build Pacman package in Arch container
         run: |
           docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c "
-            pacman -Sy --noconfirm base-devel nodejs npm &&
-            npm ci &&
-            npm run build:pacman -- --no-upload
+            pacman -Sy --noconfirm base-devel nodejs npm sudo &&
+            useradd -m builder &&
+            echo 'builder ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers &&
+            chown -R builder:builder /workspace &&
+            su - builder -c 'cd /workspace && npm ci && npm run build:pacman -- --no-upload'
           "
       
       - name: Upload Pacman artifact
