@@ -10,17 +10,8 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      matrix:
-        os: [windows-latest, ubuntu-latest]
-        include:
-          - os: windows-latest
-            platform: windows
-          - os: ubuntu-latest
-            platform: linux
-    
-    runs-on: ${{ matrix.os }}
+  build-windows:
+    runs-on: windows-latest
     
     steps:
       - name: Checkout code
@@ -38,33 +29,16 @@ jobs:
       - name: Build web assets
         run: npm run build:web
       
-      - name: Download UMU (Linux only)
-        if: matrix.platform == 'linux'
-        run: node scripts/downloadUmu.cjs
-      
       - name: Bundle Electron
         run: node scripts/bundleElectron.cjs
       
       - name: Build Windows
-        if: matrix.platform == 'windows'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
         run: npx electron-builder --win nsis --publish never
       
-      - name: Build Linux
-        if: matrix.platform == 'linux'
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: false
-          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
-        run: npx electron-builder --linux AppImage deb --publish never
-      
-      - name: Rename Linux artifacts
-        if: matrix.platform == 'linux'
-        run: node scripts/renameArtifacts.cjs
-      
       - name: Upload Windows artifacts
-        if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: windows-build
@@ -72,24 +46,95 @@ jobs:
             release/*.exe
             release/latest.yml
       
-      - name: Upload Linux artifacts
-        if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-build
-          path: |
-            release/*.AppImage
-            release/*.deb
-            release/latest-linux.yml
-      
       - name: Upload manifest
-        if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
           name: manifest
           path: manifest.json
 
-  build-pacman:
+  build-appimage:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build:web
+      
+      - name: Download UMU
+        run: node scripts/downloadUmu.cjs
+      
+      - name: Bundle Electron
+        run: node scripts/bundleElectron.cjs
+      
+      - name: Build AppImage
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
+        run: npx electron-builder --linux AppImage --publish never
+      
+      - name: Rename artifacts
+        run: node scripts/renameArtifacts.cjs
+      
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: appimage-build
+          path: |
+            release/*.AppImage
+            release/latest-linux.yml
+
+  build-debian:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build:web
+      
+      - name: Download UMU
+        run: node scripts/downloadUmu.cjs
+      
+      - name: Bundle Electron
+        run: node scripts/bundleElectron.cjs
+      
+      - name: Build Deb
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
+        run: npx electron-builder --linux deb --publish never
+      
+      - name: Rename artifacts
+        run: node scripts/renameArtifacts.cjs
+      
+      - name: Upload Deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-build
+          path: release/*.deb
+
+  build-arch:
     runs-on: ubuntu-latest
     
     steps:
@@ -133,11 +178,11 @@ jobs:
       - name: Upload Pacman artifact
         uses: actions/upload-artifact@v4
         with:
-          name: pacman-build
+          name: arch-build
           path: release/*.pkg.tar.zst
 
   release:
-    needs: [build, build-pacman]
+    needs: [build-windows, build-appimage, build-debian, build-arch]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     
@@ -155,8 +200,9 @@ jobs:
         with:
           files: |
             artifacts/windows-build/*
-            artifacts/linux-build/*
-            artifacts/pacman-build/*
+            artifacts/appimage-build/*
+            artifacts/debian-build/*
+            artifacts/arch-build/*
             artifacts/manifest/manifest.json
           draft: false
           prerelease: false

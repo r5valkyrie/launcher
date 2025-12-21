@@ -33,12 +33,12 @@ try {
     
     // Rename AppImage to portable
     if (file.endsWith('.AppImage')) {
-      newName = `${productName}-${version}-portable.AppImage`;
+      newName = `${productName}-${version}-Portable.AppImage`;
     }
     // Rename deb
     else if (file.endsWith('.deb')) {
       // Deb files have format like r5vlauncher_0.9.42_amd64.deb
-      newName = `${productName}-${version}-deb.deb`;
+      newName = `${productName}-${version}-Debian.deb`;
     }
     // Rename tar.gz to arch
     else if (file.endsWith('.tar.gz')) {
