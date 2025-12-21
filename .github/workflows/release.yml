@@ -57,7 +57,7 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
-        run: npx electron-builder --linux AppImage tar.gz --publish never
+        run: npx electron-builder --linux AppImage deb tar.gz --publish never
       
       - name: Rename Linux artifacts
         if: matrix.platform == 'linux'
@@ -79,6 +79,7 @@ jobs:
           name: linux-build
           path: |
             release/*.AppImage
+            release/*.deb
             release/*.tar.gz
             release/latest-linux.yml
       

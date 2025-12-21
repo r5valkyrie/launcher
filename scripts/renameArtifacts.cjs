@@ -37,6 +37,7 @@ try {
     }
     // Rename deb
     else if (file.endsWith('.deb')) {
+      // Deb files have format like r5vlauncher_0.9.42_amd64.deb
       newName = `${productName}-${version}-deb.deb`;
     }
     // Rename tar.gz to arch
