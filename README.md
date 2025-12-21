@@ -32,9 +32,68 @@ A modern game launcher for R5 Valkyrie built with Electron, Astro, and React.
 
 - Node.js 18+
 - npm 9+
-- Windows 10/11 (primary target platform)
+- **Windows**: Windows 10/11
+- **Linux**: Ubuntu 20.04+, Debian 11+, Arch Linux, or any modern distribution
+  - Wine/Proton for running the Windows game executable
+  - UMU launcher (bundled automatically)
 
 ## Installation
+
+### Windows
+
+Download the latest installer from [Releases](https://github.com/r5valkyrie/launcher/releases/latest):
+- `R5Valkyrie Launcher Setup [version].exe` - Standard Windows installer
+
+### Linux
+
+Download the package for your distribution from [Releases](https://github.com/r5valkyrie/launcher/releases/latest):
+
+#### AppImage (Portable - All Distributions)
+```bash
+# Download the AppImage
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-portable.AppImage
+
+# Make it executable
+chmod +x R5Valkyrie.Launcher-[version]-portable.AppImage
+
+# Run it
+./R5Valkyrie.Launcher-[version]-portable.AppImage
+```
+
+#### Debian/Ubuntu (.deb)
+```bash
+# Download and install
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-deb.deb
+sudo dpkg -i R5Valkyrie.Launcher-[version]-deb.deb
+
+# Install dependencies if needed
+sudo apt-get install -f
+```
+
+#### Arch Linux (.pkg.tar.zst)
+```bash
+# Download the package
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].pkg.tar.zst
+
+# Install with pacman
+sudo pacman -U R5Valkyrie.Launcher-[version].pkg.tar.zst
+```
+
+#### Manual Installation (.tar.gz)
+For other distributions or manual installation:
+```bash
+# Download and extract
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-arch.tar.gz
+tar -xzf R5Valkyrie.Launcher-[version]-arch.tar.gz
+
+# Move to /opt or your preferred location
+sudo mv R5Valkyrie\ Launcher /opt/r5vlauncher
+
+# Run it
+/opt/r5vlauncher/r5vlauncher
+```
+
+### Development Setup
 
 ```bash
 # Clone the repository
@@ -59,23 +118,44 @@ The development server runs Astro on `http://localhost:4321` and launches Electr
 
 ## Building
 
+### Build Commands
+
 ```bash
 # Build for production (creates installer in ./release)
 npm run build
 
-# Build without publishing
-npm run release:dry
-
 # Build and publish to GitHub Releases
-npm run release
+npm run release           # Windows only
+npm run release:linux     # Linux only (legacy)
 
-# Version bump shortcuts
-npm run release:patch   # 0.9.18 -> 0.9.19
-npm run release:minor   # 0.9.18 -> 0.10.0
-npm run release:major   # 0.9.18 -> 1.0.0
+# Version bump and auto-release (Windows + Linux)
+npm run version:patch   # 0.9.40 -> 0.9.41
+npm run version:minor   # 0.9.40 -> 0.10.0
+npm run version:major   # 0.9.40 -> 1.0.0
+```
+
+### Platform-Specific Builds
+
+**Windows**: Creates NSIS installer (`.exe`)
+```bash
+npm run build  # or npm run release
+```
+
+**Linux**: Creates multiple package formats
+```bash
+npm run build  # Creates AppImage, .deb, and .tar.gz
 ```
 
 Build output is placed in the `release/` directory.
+
+### Automated Releases
+
+The project uses GitHub Actions to automatically build both Windows and Linux binaries when you push a version tag:
+
+1. Bump version: `npm run version:patch` (or `minor`/`major`)
+2. This automatically creates a tag, pushes it, and triggers the workflow
+3. Both Windows and Linux builds are created and uploaded to a GitHub release
+4. The `manifest.json` is included for auto-update checking
 
 ## Configuration
 
