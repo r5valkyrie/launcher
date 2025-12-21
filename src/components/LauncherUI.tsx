@@ -293,15 +293,9 @@ export default function LauncherUI() {
       window.electron?.ipcRenderer?.on('update:error', handleUpdateError);
     }
 
-    // Check for updates (skip on Linux - not supported)
+    // Check for updates
     (async () => {
       try {
-        // Skip auto-update on Linux
-        if (typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux')) {
-          console.log('Auto-update is not supported on Linux');
-          return;
-        }
-        
         // Wait a bit after launch before checking for updates
         await new Promise(resolve => setTimeout(resolve, 3000));
         

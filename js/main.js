@@ -285,7 +285,7 @@ app.whenReady().then(() => {
   });
 });
 // Fetch manifest from GitHub releases - handles multiple redirects
-async function fetchUpdateManifest(url = 'https://github.com/r5valkyrie/launcher_releases/releases/latest/download/manifest.json', maxRedirects = 5) {
+async function fetchUpdateManifest(url = 'https://github.com/r5valkyrie/launcher/releases/latest/download/manifest.json', maxRedirects = 5) {
   return new Promise((resolve, reject) => {
     if (maxRedirects <= 0) {
       return reject(new Error('Too many redirects'));
@@ -335,9 +335,34 @@ async function fetchUpdateManifest(url = 'https://github.com/r5valkyrie/launcher
 
 // Update IPC
 ipcMain.handle('update:check', async () => {
-  // Auto-update not supported on Linux
+  // On Linux, manually check for updates via manifest
   if (process.platform === 'linux') {
-    return { ok: false, error: 'Auto-update is not supported on Linux. Please download updates manually from GitHub.' };
+    try {
+      const manifest = await fetchUpdateManifest();
+      const currentVersion = app.getVersion();
+      const latestVersion = manifest?.version;
+      
+      if (!latestVersion) {
+        return { ok: false, error: 'Failed to fetch latest version info' };
+      }
+      
+      // Simple version comparison
+      const hasUpdate = latestVersion !== currentVersion;
+      
+      return {
+        ok: true,
+        result: hasUpdate ? {
+          version: latestVersion,
+          releaseDate: manifest?.releaseDate,
+          releaseNotes: manifest?.releaseNotes
+        } : null,
+        manifest: manifest,
+        currentVersion: currentVersion,
+        isLinux: true
+      };
+    } catch (e) {
+      return { ok: false, error: String(e?.message || e) };
+    }
   }
   
   try {
@@ -1420,6 +1445,8 @@ ipcMain.handle('game:listProtonVersions', async () => {
 
     const extraCompatibilityTools = [
       path.join(homeDir, '.local', 'share', 'Steam', 'compatibilitytools.d'),
+      // System-wide compatibility tools (e.g., CachyOS Proton)
+      '/usr/share/steam/compatibilitytools.d',
     ];
 
     for (const searchPath of searchPaths) {
@@ -1534,7 +1561,7 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
       });
       // Get path to bundled umu-run
       const umuPath = app.isPackaged 
-        ? path.join(process.resourcesPath, 'bin', 'linux', 'umu-run')
+        ? path.join(process.resourcesPath, 'umu-run')
         : path.join(__dirname, '..', 'bin', 'linux', 'umu-run');
       
       // Check if umu-run exists

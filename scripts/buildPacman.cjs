@@ -2,6 +2,10 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+// Parse command line arguments
+const args = process.argv.slice(2);
+const skipUpload = args.includes('--no-upload') || args.includes('-n');
+
 // Load .env file
 const envPath = path.join(__dirname, '..', '.env');
 if (fs.existsSync(envPath)) {
@@ -71,7 +75,7 @@ package() {
 const desktopFile = `[Desktop Entry]
 Name=R5Valkyrie Launcher
 Comment=R5Valkyrie Game Launcher
-Exec=/opt/R5Valkyrie\\ Launcher/r5vlauncher %U
+Exec="/opt/R5Valkyrie Launcher/r5vlauncher" %U
 Terminal=false
 Type=Application
 Icon=${pkgName}
@@ -115,8 +119,10 @@ try {
     fs.renameSync(path.join(releaseDir, pkgFile), newPath);
     console.log(`\nSuccess! Created: ${newName}`);
     
-    // Upload to GitHub if GH_TOKEN is set
-    if (process.env.GH_TOKEN) {
+    // Upload to GitHub if GH_TOKEN is set and --no-upload not specified
+    if (skipUpload) {
+      console.log('\nSkipping upload (--no-upload specified).');
+    } else if (process.env.GH_TOKEN) {
       console.log('\nUploading to GitHub...');
       try {
         const token = process.env.GH_TOKEN;

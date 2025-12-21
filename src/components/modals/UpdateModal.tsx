@@ -45,6 +45,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
   const isMandatory = manifest?.mandatory_update ?? false;
   const newVersion = updateInfo?.version || manifest?.version || 'Unknown';
   const releaseNotes = manifest?.release_notes || updateInfo?.releaseNotes || 'No release notes available.';
+  const isLinux = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux');
 
   const formatBytes = (bytes: number) => {
     if (bytes === 0) return '0 B';
@@ -119,7 +120,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
         </div>
 
         {/* Download Progress */}
-        {isDownloading && downloadProgress && (
+        {!isLinux && isDownloading && downloadProgress && (
           <div className="mb-6">
             <div className="flex items-center justify-between text-sm mb-2">
               <span className="text-base-content/70">Downloading update... (will auto-install when complete)</span>
@@ -144,6 +145,20 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
           </div>
         )}
 
+        {/* Linux Manual Update Info */}
+        {isLinux && (
+          <div className="mb-6">
+            <div className="alert bg-blue-500/10 border-blue-500/20 text-sm">
+              <svg className="w-4 h-4 text-blue-400 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+              <span>Auto-update is not available on Linux. Please download the latest version manually.</span>
+            </div>
+          </div>
+        )}
+
         {/* Actions */}
         <div className="flex gap-3">
           {!isMandatory && !isDownloading && !isDownloaded && (
@@ -155,7 +170,7 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
             </button>
           )}
           
-          {!isDownloaded && !isDownloading && (
+          {!isLinux && !isDownloaded && !isDownloading && (
             <button 
               className="btn btn-primary flex-1 gap-2"
               onClick={onDownload}
@@ -166,6 +181,22 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
               Update & Restart
+            </button>
+          )}
+
+          {isLinux && (
+            <button 
+              className="btn btn-primary flex-1 gap-2"
+              onClick={() => {
+                window.electronAPI?.openExternal?.('https://github.com/r5valkyrie/launcher/releases/latest');
+              }}
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+              Download from GitHub
             </button>
           )}
 
