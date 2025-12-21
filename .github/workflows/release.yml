@@ -42,12 +42,6 @@ jobs:
         if: matrix.platform == 'linux'
         run: node scripts/downloadUmu.cjs
       
-      - name: Install makepkg (Linux only)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y pacman-package-manager fakeroot binutils
-      
       - name: Bundle Electron
         run: node scripts/bundleElectron.cjs
       
@@ -69,10 +63,6 @@ jobs:
         if: matrix.platform == 'linux'
         run: node scripts/renameArtifacts.cjs
       
-      - name: Build Pacman package
-        if: matrix.platform == 'linux'
-        run: npm run build:pacman
-      
       - name: Upload Windows artifacts
         if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
@@ -90,7 +80,6 @@ jobs:
           path: |
             release/*.AppImage
             release/*.deb
-            release/*.pkg.tar.zst
             release/latest-linux.yml
       
       - name: Upload manifest
@@ -100,8 +89,53 @@ jobs:
           name: manifest
           path: manifest.json
 
+  build-pacman:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build:web
+      
+      - name: Download UMU
+        run: node scripts/downloadUmu.cjs
+      
+      - name: Bundle Electron
+        run: node scripts/bundleElectron.cjs
+      
+      - name: Build Linux unpacked
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
+        run: npx electron-builder --linux dir --publish never
+      
+      - name: Build Pacman package in Arch container
+        run: |
+          docker run --rm -v $PWD:/workspace -w /workspace archlinux:latest bash -c "
+            pacman -Sy --noconfirm base-devel nodejs npm &&
+            npm ci &&
+            npm run build:pacman -- --no-upload
+          "
+      
+      - name: Upload Pacman artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pacman-build
+          path: release/*.pkg.tar.zst
+
   release:
-    needs: build
+    needs: [build, build-pacman]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     
@@ -120,6 +154,7 @@ jobs:
           files: |
             artifacts/windows-build/*
             artifacts/linux-build/*
+            artifacts/pacman-build/*
             artifacts/manifest/manifest.json
           draft: false
           prerelease: false
