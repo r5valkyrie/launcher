@@ -44,7 +44,8 @@ const UpdateModal: React.FC<UpdateModalProps> = ({
 
   const isMandatory = manifest?.mandatory_update ?? false;
   const newVersion = updateInfo?.version || manifest?.version || 'Unknown';
-  const releaseNotes = manifest?.release_notes || updateInfo?.releaseNotes || 'No release notes available.';
+  // Prioritize manifest release notes, ignore GitHub auto-generated HTML
+  const releaseNotes = manifest?.release_notes || 'No release notes available.';
   const isLinux = typeof navigator !== 'undefined' && navigator.platform.toLowerCase().includes('linux');
 
   const formatBytes = (bytes: number) => {

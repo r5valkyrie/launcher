@@ -300,9 +300,11 @@ export default function LauncherUI() {
         await new Promise(resolve => setTimeout(resolve, 3000));
         
         const result = await window.electronAPI?.checkForUpdates?.();
+        console.log('Update check result:', result);
         if (result?.ok && result.result) {
           const newVersion = result.result.version || result.manifest?.version;
           const current = result.currentVersion || currentVersion;
+          console.log('Version comparison:', { newVersion, current, comparison: compareVersions(newVersion, current) });
           
           // Only show update modal if there's actually a new version
           if (newVersion && compareVersions(newVersion, current) > 0) {
@@ -315,6 +317,8 @@ export default function LauncherUI() {
           } else {
             console.log(`Already on latest version ${current}`);
           }
+        } else if (result?.ok && !result.result) {
+          console.log('No update available. Result:', result);
         }
       } catch (error) {
         console.error('Failed to check for updates:', error);

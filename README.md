@@ -338,7 +338,7 @@ Updates are published to: [r5valkyrie/launcher_releases](https://github.com/r5va
 Each release must include:
 - `latest.yml` - Update metadata
 - `R5Valkyrie Launcher Setup X.X.X.exe` - Installer
-- `R5Valkyrie Launcher Setup X.X.X.exe.blockmap` - Delta update data
+- `manifest.json`
 
 ### Environment Variables
 
