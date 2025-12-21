@@ -6,18 +6,9 @@
   "main": "electron/main.js",
   "icon": "build/icon.png",
   "scripts": {
-    "web": "astro dev",
     "dev": "node scripts/bundleElectron.cjs && concurrently \"astro dev\" \"wait-on http://localhost:4321 && cross-env VITE_DEV_SERVER_URL=http://localhost:4321 electron .\"",
     "build:web": "astro build",
     "build": "npm run build:web && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true electron-builder && node scripts/renameArtifacts.cjs",
-    "preview": "astro preview",
-    "astro": "astro",
-    "release": "npm run build:web && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --win nsis --publish always",
-    "release:dry": "npm run build:web && dotenv -e .env -- electron-builder --win nsis --publish never",
-    "release:patch": "npm version patch && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
-    "release:minor": "npm version minor && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
-    "release:major": "npm version major && node scripts/syncVersion.cjs && git add manifest.json && git commit -m \"Sync manifest version\" && git push && npm run release",
-    "release:linux": "npm run build:web && node scripts/downloadUmu.cjs && node scripts/bundleElectron.cjs && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false ELECTRON_BUILDER_DISABLE_CODE_SIGNING=true dotenv -e .env -- electron-builder --linux AppImage deb --publish always --config.publish.provider=github --config.publish.owner=r5valkyrie --config.publish.repo=launcher_linux_releases && node scripts/buildPacman.cjs",
     "version:patch": "node scripts/bumpVersion.cjs patch",
     "version:minor": "node scripts/bumpVersion.cjs minor",
     "version:major": "node scripts/bumpVersion.cjs major"
