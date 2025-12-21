@@ -70,7 +70,7 @@ jobs:
           name: windows-build
           path: |
             release/*.exe
-            release/*.yml
+            release/latest.yml
       
       - name: Upload Linux artifacts
         if: matrix.platform == 'linux'
@@ -80,7 +80,7 @@ jobs:
           path: |
             release/*.AppImage
             release/*.tar.gz
-            release/*.yml
+            release/latest-linux.yml
       
       - name: Upload manifest
         if: matrix.platform == 'windows'
