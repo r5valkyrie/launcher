@@ -107,7 +107,12 @@ export default function InstallPromptModal(props: InstallPromptModalProps) {
                 <span>Final install path</span>
               </div>
               <div className="font-mono text-sm break-all text-base-content/80">
-                {(installBaseDir||'').replace(/\\+$/,'')}{installBaseDir ? `\\${selectedChannel}` : selectedChannel}
+                {(() => {
+                  const base = (installBaseDir||'').replace(/[\\\/ ]+$/,'');
+                  if (!base) return selectedChannel;
+                  const pathSep = window.navigator.userAgent.toLowerCase().includes('win') ? '\\' : '/';
+                  return `${base}${pathSep}${selectedChannel}`;
+                })()}
               </div>
             </div>
 

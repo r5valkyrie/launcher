@@ -51,20 +51,20 @@ Download the package for your distribution from [Releases](https://github.com/r5
 #### AppImage (Portable - All Distributions)
 ```bash
 # Download the AppImage
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-portable.AppImage
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Portable.AppImage
 
 # Make it executable
-chmod +x R5Valkyrie.Launcher-[version]-portable.AppImage
+chmod +x R5Valkyrie.Launcher-[version]-Portable.AppImage
 
 # Run it
-./R5Valkyrie.Launcher-[version]-portable.AppImage
+./R5Valkyrie.Launcher-[version]-Portable.AppImage
 ```
 
 #### Debian/Ubuntu (.deb)
 ```bash
 # Download and install
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-deb.deb
-sudo dpkg -i R5Valkyrie.Launcher-[version]-deb.deb
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Debian.deb
+sudo dpkg -i R5Valkyrie.Launcher-[version]-Debian.deb
 
 # Install dependencies if needed
 sudo apt-get install -f
@@ -104,45 +104,93 @@ The development server runs Astro on `http://localhost:4321` and launches Electr
 
 ## Building
 
-### Build Commands
+### Local Development Builds
 
 ```bash
-# Build for production (creates installer in ./release)
+# Build web assets only
+npm run build:web
+
+# Build for production (creates packages in ./release)
 npm run build
 
-# Build and publish to GitHub Releases
-npm run release           # Windows only
-npm run release:linux     # Linux only (legacy)
-
-# Version bump and auto-release (Windows + Linux)
-npm run version:patch   # 0.9.40 -> 0.9.41
-npm run version:minor   # 0.9.40 -> 0.10.0
-npm run version:major   # 0.9.40 -> 1.0.0
+# Platform-specific local builds
+npm run build           # Creates AppImage and Debian package (Linux)
+npm run build           # Creates NSIS installer (Windows)
+npm run build:pacman    # Creates Arch package (requires Arch Linux or Docker)
 ```
 
-### Platform-Specific Builds
+### Version Management & Releases
 
-**Windows**: Creates NSIS installer (`.exe`)
+The recommended workflow for releases is to use the version bump commands, which automatically handle tagging and triggering CI/CD:
+
 ```bash
-npm run build  # or npm run release
+# Bump version, create tag, push, and trigger automated builds
+npm run version:patch   # 0.9.40 -> 0.9.41 (bug fixes)
+npm run version:minor   # 0.9.40 -> 0.10.0 (new features)
+npm run version:major   # 0.9.40 -> 1.0.0 (breaking changes)
 ```
 
-**Linux**: Creates multiple package formats
+**What happens when you run a version command:**
+1. Updates version in `package.json` and `manifest.json`
+2. Commits the version bump
+3. Creates a git tag (e.g., `v0.9.41`)
+4. Pushes commits and tags to GitHub
+5. Triggers the GitHub Actions workflow to build all platforms
+
+### Manual Release (Advanced)
+
+If you need to publish manually:
+
 ```bash
-npm run build          # Creates AppImage and .deb
-npm run build:pacman   # Creates Arch Linux .pkg.tar.zst
+# Windows only (requires GH_TOKEN in .env)
+npm run release
+
+# Note: Linux packages are built via CI/CD only
 ```
 
-Build output is placed in the `release/` directory.
+### Automated CI/CD Pipeline
 
-### Automated Releases
+When a version tag is pushed (e.g., `v0.9.41`), GitHub Actions automatically builds all platform packages in parallel:
 
-The project uses GitHub Actions to automatically build both Windows and Linux binaries when you push a version tag:
+**Four Parallel Build Jobs:**
 
-1. Bump version: `npm run version:patch` (or `minor`/`major`)
-2. This automatically creates a tag, pushes it, and triggers the workflow
-3. Both Windows and Linux builds are created and uploaded to a GitHub release
-4. The `manifest.json` is included for auto-update checking
+1. **build-windows** (`windows-latest`)
+   - Bundles Electron app
+   - Creates NSIS installer
+   - Output: `R5Valkyrie Launcher Setup X.X.X.exe`
+   - Includes: `latest.yml`, `manifest.json`
+
+2. **build-appimage** (`ubuntu-latest`)
+   - Downloads UMU launcher
+   - Bundles Electron app
+   - Creates portable AppImage
+   - Output: `R5Valkyrie Launcher-X.X.X-Portable.AppImage`
+   - Includes: `latest-linux.yml`
+
+3. **build-debian** (`ubuntu-latest`)
+   - Downloads UMU launcher
+   - Bundles Electron app
+   - Creates Debian package
+   - Output: `R5Valkyrie Launcher-X.X.X-Debian.deb`
+
+4. **build-arch** (`ubuntu-latest` + Arch Docker)
+   - Downloads UMU launcher
+   - Bundles Electron app
+   - Builds in Arch Linux container with `makepkg`
+   - Output: `R5Valkyrie Launcher-X.X.X-Arch.pkg.tar.zst`
+
+**Release Job:**
+- Waits for all four builds to complete
+- Downloads all artifacts
+- Creates a single GitHub release in `r5valkyrie/launcher`
+- Includes all platform packages in one release:
+  - Windows installer
+  - Linux AppImage (portable)
+  - Debian package
+  - Arch package
+  - Manifest file
+
+Build artifacts are placed in the `release/` directory.
 
 ## Configuration
 
@@ -195,32 +243,94 @@ The launcher fetches configuration from a remote endpoint at startup. Default:
 
 ## Architecture
 
+The launcher follows a modern web-first architecture using Astro, React, and Electron:
+
 ```
-src/
+src/                                    # Frontend source (Astro + React)
 ├── components/
-│   ├── LauncherUI.tsx      # Main application component
-│   ├── common/             # Shared utilities
-│   │   ├── animations.ts   # UI animations (anime.js)
-│   │   ├── launchUtils.ts  # Game launch parameter building
-│   │   ├── modUtils.ts     # Mod management helpers
-│   │   └── utils.ts        # General utilities
-│   ├── modals/             # Modal dialogs
-│   ├── panels/             # Tab panels (Settings, Mods, Launch Options, News)
-│   └── ui/                 # Reusable UI components
+│   ├── LauncherUI.tsx                  # Main application container
+│   ├── common/                         # Shared utilities
+│   │   ├── animations.ts               # UI animations (anime.js)
+│   │   ├── launchUtils.ts              # Game launch parameter building
+│   │   ├── modUtils.ts                 # Mod management helpers
+│   │   └── utils.ts                    # General utilities
+│   ├── modals/                         # Modal dialogs
+│   │   ├── ConfirmModal.tsx            # Generic confirmation dialog
+│   │   ├── DependencyModal.tsx         # Mod dependency conflicts
+│   │   ├── EulaModal.tsx               # EULA acceptance
+│   │   ├── FailedDownloadsModal.tsx    # Download error display
+│   │   ├── InstallPromptModal.tsx      # Installation confirmation
+│   │   ├── ModDetailsModal.tsx         # Mod information viewer
+│   │   ├── ModProfilesModal.tsx        # Mod profile management
+│   │   ├── ModQueueModal.tsx           # Download queue manager
+│   │   ├── NewsModal.tsx               # Patch notes viewer
+│   │   ├── PermissionPromptModal.tsx   # File access permissions
+│   │   ├── ServerJoinModPromptModal.tsx # Server-required mods
+│   │   ├── ServerModProfileModal.tsx   # Server mod profiles
+│   │   ├── ToastNotification.tsx       # Toast notification system
+│   │   ├── UpdateModal.tsx             # Game update prompt
+│   │   └── UpdaterModal.tsx            # Launcher update progress
+│   ├── panels/                         # Main content panels
+│   │   ├── LaunchOptionsPanel.tsx      # Game launch configuration
+│   │   ├── ModsPanel.tsx               # Mod browser and manager
+│   │   ├── NewsPanel.tsx               # News and announcements
+│   │   ├── ServerBrowserPanel.tsx      # Multiplayer server list
+│   │   └── SettingsPanel.tsx           # Launcher settings
+│   └── ui/                             # Reusable UI components
+│       ├── HeroBanner.tsx              # Background video player
+│       ├── ListItemWrapper.tsx         # List item container
+│       ├── PageTransition.tsx          # Page transition effects
+│       └── SnowEffect.tsx              # Particle effect overlay
 ├── pages/
-│   └── index.astro         # Entry point
+│   └── index.astro                     # Application entry point
 └── styles/
-    └── global.css          # Global styles (Tailwind + DaisyUI)
+    └── global.css                      # Global styles (Tailwind + DaisyUI)
 
-js/                         # Electron source (pre-bundle)
-├── main.js                 # Main process
-├── preload.cjs             # Context bridge
+js/                                     # Electron source (pre-bundle)
+├── main.js                             # Main process (window management)
+├── preload.cjs                         # Context bridge (IPC)
 └── services/
-    ├── downloader.js       # Download manager
-    └── store.js            # Settings persistence
+    ├── downloader.js                   # Download manager (multipart, verification)
+    └── store.js                        # Settings persistence (electron-store)
 
-electron/                   # Bundled Electron code (output)
+electron/                               # Bundled Electron code (build output)
+
+scripts/                                # Build and automation scripts
+├── afterPack.cjs                       # Post-build processing
+├── buildPacman.cjs                     # Arch Linux package builder
+├── bundleElectron.cjs                  # Electron bundler
+├── downloadUmu.cjs                     # UMU launcher downloader (Linux)
+├── installer.nsh                       # NSIS installer customization
+├── renameArtifacts.cjs                 # Artifact renaming
+└── syncVersion.cjs                     # Version synchronization
+
+bin/                                    # Bundled binaries (Linux only)
+└── linux/
+    ├── umu-run                         # UMU launcher executable
+    └── umu_run.py                      # UMU launcher script
 ```
+
+### Technology Stack
+
+**Frontend:**
+- **Astro** - Static site generation and build tooling
+- **React** - UI component framework
+- **TypeScript** - Type-safe JavaScript
+- **Tailwind CSS** - Utility-first CSS framework
+- **DaisyUI** - Component library for Tailwind
+- **Anime.js** - Animation library
+
+**Backend (Electron):**
+- **Electron** - Desktop application framework
+- **Node.js** - JavaScript runtime
+- **electron-builder** - Application packaging
+- **electron-updater** - Auto-update system
+- **electron-store** - Settings persistence
+
+**Build Tools:**
+- **npm scripts** - Task automation
+- **GitHub Actions** - CI/CD pipeline
+- **Docker** - Arch Linux containerized builds
 
 ## Download System
 
@@ -308,24 +418,24 @@ Large files can be split into parts for parallel downloading:
 Settings panel provides presets:
 - **Speed**: Higher concurrency (12 files, 8 parts)
 - **Stability**: Lower concurrency (4 files, 3 parts)
-- **Default**: Balanced (8 files, 6 parts)
-
-Custom speed limits can be set in bytes per second.
-
-## Auto-Updates
-
-The launcher uses `electron-updater` with GitHub as the update provider.
-
-### Release Repository
-
-Updates are published to: [r5valkyrie/launcher_releases](https://github.com/r5valkyrie/launcher_releases)
+- **Default**: Balanced (
+- **Windows**: [r5valkyrie/launcher_releases](https://github.com/r5valkyrie/launcher_releases)
+- **Linux**: [r5valkyrie/launcher_linux_releases](https://github.com/r5valkyrie/launcher_linux_releases)
 
 ### Required Release Assets
 
 Each release must include:
+
+**Windows Release**:
 - `latest.yml` - Update metadata
-- `R5Valkyrie Launcher Setup X.X.X.exe` - Installer
-- `manifest.json`
+- `R5Valkyrie Launcher Setup X.X.X.exe` - NSIS installer
+- `manifest.json` - Version manifest
+
+**Linux Release**:
+- `latest-linux.yml` - Update metadata
+- `R5Valkyrie Launcher-X.X.X-Portable.AppImage` - Portable AppImage
+- `R5Valkyrie Launcher-X.X.X-Debian.deb` - Debian package
+- `R5Valkyrie Launcher-X.X.X-Arch.pkg.tar.zst` - Arch Linux package
 
 ### Environment Variables
 
@@ -362,10 +472,23 @@ User settings are stored in:
 
 ## Default Paths
 
-- **Launcher installation**: `%LOCALAPPDATA%/Programs/r5vlauncher`
-- **Game installation**: `%LOCALAPPDATA%/Programs/R5VLibrary/<channel>`
-- **Settings**: `%APPDATA%/r5vlauncher/settings.json`
-- **Video cache**: `%APPDATA%/r5vlauncher/video_cache/`
+### Windows
+
+- **Launcher installation**: `%LOCALAPPDATA%\Programs\r5vlauncher`
+- **Game installation**: `%LOCALAPPDATA%\Programs\R5VLibrary\<channel>`
+- **Settings**: `%APPDATA%\r5vlauncher\settings.json`
+- **Video cache**: `%APPDATA%\r5vlauncher\video_cache\`
+
+### Linux
+
+- **Launcher installation**: 
+  - AppImage: Wherever you place the `.AppImage` file
+  - Debian: `/opt/R5Valkyrie Launcher`
+  - Arch: `/opt/R5Valkyrie Launcher`
+- **Game installation**: `~/.local/share/R5VLibrary/<channel>`
+- **Settings**: `~/.config/r5vlauncher/settings.json`
+- **Video cache**: `~/.config/r5vlauncher/video_cache/`
+- **UMU launcher**: Bundled within the application directory
 
 ## License
 

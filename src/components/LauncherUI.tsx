@@ -857,7 +857,8 @@ export default function LauncherUI() {
     try {
       const defaultDir = (await window.electronAPI?.getDefaultInstallDir(selectedChannel)) || installDir;
     const base = deriveBaseFromDir(defaultDir || installDir, selectedChannel) || defaultDir || '';
-    const targetInstallDir = base ? `${base}\\${selectedChannel}` : `${selectedChannel}`;
+    const pathSep = window.navigator.userAgent.toLowerCase().includes('win') ? '\\' : '/';
+    const targetInstallDir = base ? `${base}${pathSep}${selectedChannel}` : `${selectedChannel}`;
     
     // Check if r5apex.exe already exists in the target directory
     // If it does, repair instead of showing install prompt

@@ -36,8 +36,9 @@ export function compareVersions(a?: string|null, b?: string|null): number {
 
 export function deriveBaseFromDir(dir: string, channelName: string): string {
   if (!dir) return '';
-  const norm = dir.replace(/\\+$/,'');
-  if (norm.endsWith(`\\${channelName}`)) {
+  const norm = dir.replace(/[\\/]+$/,'');
+  // Check for both backslash (Windows) and forward slash (Linux/Mac)
+  if (norm.endsWith(`\\${channelName}`) || norm.endsWith(`/${channelName}`)) {
     return norm.slice(0, -channelName.length - 1);
   }
   return norm;
