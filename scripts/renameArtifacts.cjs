@@ -19,7 +19,7 @@ try {
   const files = fs.readdirSync(releaseDir);
   const packageJson = require('../package.json');
   const version = packageJson.version;
-  const productName = packageJson.build.productName;
+  const productName = packageJson.build.productName.replace(/\s+/g, '.');
   
   for (const file of files) {
     const filePath = path.join(releaseDir, file);

@@ -253,11 +253,11 @@ jobs:
           RELEASE_URL="$REPO_URL/releases/tag/${{ github.ref_name }}"
           DOWNLOAD_URL="$REPO_URL/releases/download/${{ github.ref_name }}"
           
-          # URL encode filenames
-          WINDOWS_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.windows_name }}" | sed 's/ /%20/g')"
-          DEBIAN_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.debian_name }}" | sed 's/ /%20/g')"
-          ARCH_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.arch_name }}" | sed 's/ /%20/g')"
-          APPIMAGE_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.appimage_name }}" | sed 's/ /%20/g')"
+          # URL encode filenames (replace spaces with dots, then URL encode)
+          WINDOWS_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.windows_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
+          DEBIAN_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.debian_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
+          ARCH_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.arch_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
+          APPIMAGE_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.appimage_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
           
           # Create Discord webhook payload
           cat << EOF > payload.json
