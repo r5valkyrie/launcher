@@ -633,7 +633,7 @@ jobs:
       
       - name: Create/Update README
         run: |
-          cat > repo-branch/README.md << 'EOF'
+          cat > repo-branch/README.md << 'EOFREADME'
           # R5Valkyrie Launcher - Package Repository
 
           Official package repository for R5Valkyrie Launcher.
@@ -678,7 +678,7 @@ jobs:
 
           ---
           Last updated: $(date)
-          EOF
+          EOFREADME
       
       - name: Commit and push to repo branch
         run: |
