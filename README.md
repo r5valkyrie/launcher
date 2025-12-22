@@ -51,32 +51,78 @@ Download the package for your distribution from [Releases](https://github.com/r5
 #### AppImage (Portable - All Distributions)
 ```bash
 # Download the AppImage
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Portable.AppImage
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].AppImage
 
 # Make it executable
-chmod +x R5Valkyrie.Launcher-[version]-Portable.AppImage
+chmod +x R5Valkyrie.Launcher-[version].AppImage
 
 # Run it
-./R5Valkyrie.Launcher-[version]-Portable.AppImage
+./R5Valkyrie.Launcher-[version].AppImage
 ```
 
 #### Debian/Ubuntu (.deb)
 ```bash
 # Download and install
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Debian.deb
-sudo dpkg -i R5Valkyrie.Launcher-[version]-Debian.deb
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].deb
+sudo dpkg -i R5Valkyrie.Launcher-[version].deb
 
 # Install dependencies if needed
 sudo apt-get install -f
 ```
 
+#### Fedora/RHEL/openSUSE (.rpm)
+```bash
+# Download the package
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].rpm
+
+# Install with dnf (Fedora/RHEL)
+sudo dnf install R5Valkyrie.Launcher-[version].rpm
+
+# Or with zypper (openSUSE)
+sudo zypper install R5Valkyrie.Launcher-[version].rpm
+```
+
+#### Arch Linux (AUR)
+```bash
+# Install from AUR using your preferred AUR helper
+yay -S r5valkyrie-launcher-bin
+# or
+paru -S r5valkyrie-launcher-bin
+
+# Or manually
+git clone https://aur.archlinux.org/r5valkyrie-launcher-bin.git
+cd r5valkyrie-launcher-bin
+makepkg -si
+```
+
 #### Arch Linux (.pkg.tar.zst)
 ```bash
 # Download the package
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie\ Launcher-[version]-Arch.pkg.tar.zst
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Arch.pkg.tar.zst
 
 # Install with pacman
-sudo pacman -U R5Valkyrie\ Launcher-[version]-Arch.pkg.tar.zst
+sudo pacman -U R5Valkyrie.Launcher-[version]-Arch.pkg.tar.zst
+```
+
+#### Generic Linux (tar.gz)
+```bash
+# Download and extract
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].tar.gz
+tar -xzf R5Valkyrie.Launcher-[version].tar.gz
+cd r5valkyrie-launcher
+
+# Run the launcher
+./r5vlauncher
+```
+
+#### Verification
+All releases include a `SHA256SUMS` file for package verification:
+```bash
+# Download checksums
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/SHA256SUMS
+
+# Verify your download
+sha256sum -c SHA256SUMS --ignore-missing
 ```
 
 ### Development Setup
