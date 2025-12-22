@@ -26,6 +26,8 @@ type SettingsPanelProps = {
   toggleEmojiMode: (enabled: boolean) => void;
   snowEffectEnabled: boolean;
   setSnowEffectEnabled: (enabled: boolean) => void;
+  newYearEffectEnabled: boolean;
+  setNewYearEffectEnabled: (enabled: boolean) => void;
   repairChannel: (name: string) => void;
   fixChannelPermissions: (name: string) => void;
   onUninstallClick: (name: string) => void;
@@ -63,6 +65,8 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     toggleEmojiMode,
     snowEffectEnabled,
     setSnowEffectEnabled,
+    newYearEffectEnabled,
+    setNewYearEffectEnabled,
     repairChannel,
     fixChannelPermissions,
     onUninstallClick,
@@ -538,11 +542,36 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                 onChange={async (v) => {
                   setSnowEffectEnabled(v);
                   await setSetting('snowEffectEnabled', v);
+                  // Disable New Year effect when enabling Christmas
+                  if (v && newYearEffectEnabled) {
+                    setNewYearEffectEnabled(false);
+                    await setSetting('newYearEffectEnabled', false);
+                  }
                 }}
                 label="Holiday Theme"
                 description="Festive snow, lights & decorations"
                 accentColor="red"
                 icon={<span className="text-base">🎄</span>}
+              />
+            )}
+
+            {/* New Year Theme - Only show Jan 1-3 */}
+            {new Date().getMonth() === 0 && new Date().getDate() <= 3 && (
+              <ToggleCard
+                checked={newYearEffectEnabled}
+                onChange={async (v) => {
+                  setNewYearEffectEnabled(v);
+                  await setSetting('newYearEffectEnabled', v);
+                  // Disable Christmas effect when enabling New Year
+                  if (v && snowEffectEnabled) {
+                    setSnowEffectEnabled(false);
+                    await setSetting('snowEffectEnabled', false);
+                  }
+                }}
+                label="New Year Theme"
+                description="Fireworks, confetti & celebrations"
+                accentColor="yellow"
+                icon={<span className="text-base">🎉</span>}
               />
             )}
 

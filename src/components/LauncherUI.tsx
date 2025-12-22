@@ -10,6 +10,7 @@ import ServerBrowserPanel from './panels/ServerBrowserPanel';
 import ModDetailsModal from './modals/ModDetailsModal';
 import DependencyModal from './modals/DependencyModal';
 import SnowEffect from './ui/SnowEffect';
+import NewYearEffect from './ui/NewYearEffect';
 import ConfirmModal from './modals/ConfirmModal';
 import NewsModal from './modals/NewsModal';
 import FailedDownloadsModal from './modals/FailedDownloadsModal';
@@ -145,6 +146,7 @@ export default function LauncherUI() {
   const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [snowEffectEnabled, setSnowEffectEnabled] = useState<boolean>(true);
+  const [newYearEffectEnabled, setNewYearEffectEnabled] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'servers'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
@@ -402,6 +404,7 @@ export default function LauncherUI() {
       }
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.snowEffectEnabled === 'boolean') setSnowEffectEnabled(Boolean(s.snowEffectEnabled));
+      if (typeof s?.newYearEffectEnabled === 'boolean') setNewYearEffectEnabled(Boolean(s.newYearEffectEnabled));
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
       if (Array.isArray(s?.modProfiles)) setModProfiles(s.modProfiles);
@@ -3271,9 +3274,25 @@ export default function LauncherUI() {
     await window.electronAPI?.setSetting('emojiMode', enabled);
   };
 
+  // Determine which effect should be shown (only one at a time)
+  const now = new Date();
+  const month = now.getMonth();
+  const date = now.getDate();
+  
+  // Christmas: December (month 11)
+  const isChristmasTime = month === 11;
+  
+  // New Year: January 1-3 (month 0, dates 1-3)
+  const isNewYearTime = month === 0 && date <= 3;
+  
+  // Only enable one effect at a time, New Year takes priority if both periods overlap
+  const showSnowEffect = snowEffectEnabled && isChristmasTime && !isNewYearTime;
+  const showNewYearEffect = newYearEffectEnabled && isNewYearTime;
+
   return (
     <>
-      <SnowEffect enabled={snowEffectEnabled} />
+      <SnowEffect enabled={showSnowEffect} />
+      <NewYearEffect enabled={showNewYearEffect} />
       <div className={`h-full grid grid-cols-[88px_1fr] relative launcher-main ${emojiMode ? 'emoji-letters-mode' : ''}`}>
         {/* Sidebar - Enhanced */}
         <aside 
@@ -3505,6 +3524,8 @@ export default function LauncherUI() {
             toggleEmojiMode={toggleEmojiMode}
             snowEffectEnabled={snowEffectEnabled}
             setSnowEffectEnabled={setSnowEffectEnabled}
+            newYearEffectEnabled={newYearEffectEnabled}
+            setNewYearEffectEnabled={setNewYearEffectEnabled}
             repairChannel={repairChannel}
             fixChannelPermissions={fixChannelPermissions}
             onUninstallClick={handleUninstallClick}
