@@ -29,7 +29,6 @@ type SettingsPanelProps = {
   newYearEffectEnabled: boolean;
   setNewYearEffectEnabled: (enabled: boolean) => void;
   repairChannel: (name: string) => void;
-  fixChannelPermissions: (name: string) => void;
   onUninstallClick: (name: string) => void;
   setSetting: (key: string, value: any) => Promise<any> | void;
   openExternal: (url: string) => void;
@@ -68,7 +67,6 @@ export default function SettingsPanel(props: SettingsPanelProps) {
     newYearEffectEnabled,
     setNewYearEffectEnabled,
     repairChannel,
-    fixChannelPermissions,
     onUninstallClick,
     setSetting,
     openFolder,
@@ -749,18 +747,6 @@ export default function SettingsPanel(props: SettingsPanelProps) {
                           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
                         </svg>
                         Repair
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 
-                        disabled={!dir || busy} 
-                        onClick={() => fixChannelPermissions(c.name)}
-                        title="Fix folder read/write permissions"
-                      >
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-                          <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                        </svg>
-                        Permissions
                       </button>
                       <button 
                         className="btn btn-sm btn-ghost border border-white/10 hover:border-blue-500/30 hover:bg-blue-500/10 gap-2" 

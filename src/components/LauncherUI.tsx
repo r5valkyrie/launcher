@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import HeroBanner from './ui/HeroBanner';
 import InstallPromptModal from './modals/InstallPromptModal';
-import PermissionPromptModal from './modals/PermissionPromptModal';
 import EulaModal from './modals/EulaModal';
 import SettingsPanel from './panels/SettingsPanel';
 import ModsPanel from './panels/ModsPanel';
@@ -98,9 +97,6 @@ declare global {
       watchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
       unwatchMods?: (installDir: string) => Promise<{ok:boolean; error?: string}>;
       onModsChanged?: (listener: (payload: any) => void) => void;
-      // Permissions
-      fixFolderPermissions?: (payload: { selectedChannel: string }) => Promise<{ok:boolean; error?: string; details?: string[]; warnings?: string[]}>;
-      testWritePermissions?: (folderPath: string) => Promise<{ hasWriteAccess: boolean }>;
       // Uninstall
       deleteFolder?: (folderPath: string) => Promise<{ok:boolean; error?: string}>;
     };
@@ -180,9 +176,6 @@ export default function LauncherUI() {
   // Failed downloads modal state
   const [failedDownloadsModalOpen, setFailedDownloadsModalOpen] = useState<boolean>(false);
   const [failedDownloads, setFailedDownloads] = useState<Array<{ path: string; error?: string }>>([]);
-  // Permission prompt modal state
-  const [permissionPromptOpen, setPermissionPromptOpen] = useState<boolean>(false);
-  const [isFixingPermissions, setIsFixingPermissions] = useState<boolean>(false);
   // Auto-hide toast when finished
   useEffect(() => {
     if (!finished) return;
@@ -963,36 +956,7 @@ export default function LauncherUI() {
     await startInstall(finalPath);
   }
 
-  async function confirmPermissionsAndInstall() {
-    if (!window.electronAPI?.fixFolderPermissions) {
-      alert('Permission fix functionality not available. Please restart the launcher.');
-      return;
-    }
-    
-    setIsFixingPermissions(true);
-    try {
-      // Fix folder permissions using admin privileges
-      const result = await window.electronAPI.fixFolderPermissions({ selectedChannel: selectedChannel });
-      
-      if (!result?.ok) {
-        const errorDetails = result?.details ? `\n\nDetails:\n${result.details.join('\n')}` : '';
-        const errorMessage = `Failed to set folder permissions: ${result?.error || 'Unknown error'}${errorDetails}`;
-        alert(errorMessage);
-        setIsFixingPermissions(false);
-        return;
-      }
-      
-    } catch (error) {
-      const errorMessage = `Failed to set folder permissions: ${String(error)}`;
-      alert(errorMessage);
-      setIsFixingPermissions(false);
-      return;
-    }
-    
-    setIsFixingPermissions(false);
-    setPermissionPromptOpen(false);
-    await startInstall();
-  }
+
 
   async function startInstall(overrideInstallDir?: string) {
     // Custom channels cannot be installed
@@ -2565,25 +2529,6 @@ export default function LauncherUI() {
     }
   }, [isInstalled, installedVersion, remoteVersion, channel, needsRepair]);
 
-  async function fixChannelPermissions(ch: string) {
-    setBusy(true);
-    try {
-      const result = await window.electronAPI?.fixFolderPermissions?.({ selectedChannel: ch });
-      if (result?.ok) {
-        if (result.warnings && result.warnings.length > 0) {
-          alert(`Permissions fixed with warnings:\n${result.warnings.join('\n')}`);
-        } else {
-          alert('Permissions fixed successfully!');
-        }
-      } else {
-        alert(`Failed to fix permissions: ${result?.error || 'Unknown error'}`);
-      }
-    } catch (error: any) {
-      alert(`Failed to fix permissions: ${error?.message || 'Unknown error'}`);
-    } finally {
-      setBusy(false);
-    }
-  }
 
   // News modal handler
   const openNewsPost = (post: any) => {
@@ -3527,7 +3472,6 @@ export default function LauncherUI() {
             newYearEffectEnabled={newYearEffectEnabled}
             setNewYearEffectEnabled={setNewYearEffectEnabled}
             repairChannel={repairChannel}
-            fixChannelPermissions={fixChannelPermissions}
             onUninstallClick={handleUninstallClick}
             setSetting={(k, v) => window.electronAPI?.setSetting?.(k, v) as any}
             openExternal={(url) => { window.electronAPI?.openExternal?.(url); }}
@@ -4244,14 +4188,6 @@ export default function LauncherUI() {
         content={eulaContent}
         onDecline={() => { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(false); }}
         onAccept={async () => { try { const ver = eulaKeyRef.current || 'latest'; const s:any = await window.electronAPI?.getSettings?.(); const next = { ...(s||{}) }; next.eulaAcceptedVersion = ver; await window.electronAPI?.setSetting?.('eulaAcceptedVersion', ver); } catch {} finally { setEulaOpen(false); const r=eulaResolveRef.current; eulaResolveRef.current=null; if(r) r(true); } }}
-      />
-
-      <PermissionPromptModal
-        open={permissionPromptOpen}
-        onCancel={() => setPermissionPromptOpen(false)}
-        onConfirm={confirmPermissionsAndInstall}
-        isFixingPermissions={isFixingPermissions}
-        installDir={(channelsSettings?.[selectedChannel]?.installDir) || installDir}
       />
 
       {/* Server Password Modal */}

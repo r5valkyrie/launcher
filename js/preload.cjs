@@ -51,8 +51,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Thunderstore Profile API
   thunderstoreUploadProfile: (payload) => ipcRenderer.invoke('thunderstore:uploadProfile', { payload }),
   thunderstoreDownloadProfile: (code) => ipcRenderer.invoke('thunderstore:downloadProfile', { code }),
-  // Permissions
-  fixFolderPermissions: (payload) => ipcRenderer.invoke('fix-folder-permissions', payload),
   // Uninstall
   deleteFolder: (folderPath) => ipcRenderer.invoke('fs:delete-folder', { folderPath }),
 });

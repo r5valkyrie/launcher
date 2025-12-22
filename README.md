@@ -339,7 +339,6 @@ src/                                    # Frontend source (Astro + React)
 │   │   ├── ModProfilesModal.tsx        # Mod profile management
 │   │   ├── ModQueueModal.tsx           # Download queue manager
 │   │   ├── NewsModal.tsx               # Patch notes viewer
-│   │   ├── PermissionPromptModal.tsx   # File access permissions
 │   │   ├── ServerJoinModPromptModal.tsx # Server-required mods
 │   │   ├── ServerModProfileModal.tsx   # Server mod profiles
 │   │   ├── ToastNotification.tsx       # Toast notification system
