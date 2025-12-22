@@ -420,52 +420,47 @@ jobs:
           {
             "embeds": [{
               "title": "R5Valkyrie Launcher v${VERSION} Released!",
-              "description": "A new version of R5Valkyrie Launcher is now available.\\n\\n**What's Changed:**\\n${{ steps.changelog.outputs.changelog }}\\n\\n**[View Full Release Notes](${RELEASE_URL})**",
+              "description": "A new version of R5Valkyrie Launcher is now available.\\n\\n**What's Changed:**\\n${{ steps.changelog.outputs.changelog }}\\n\\n**[📦 Download All Packages](${RELEASE_URL})**",
               "color": 5814522,
               "fields": [
                 {
                   "name": "Windows",
-                  "value": "[Download](${WINDOWS_URL}) • \`${{ steps.file_sizes.outputs.windows_size }}\`",
+                  "value": "Download installer from [release page](${RELEASE_URL})",
                   "inline": false
                 },
                 {
                   "name": "Debian/Ubuntu",
-                  "value": "[Download](${DEBIAN_URL}) • \`${{ steps.file_sizes.outputs.debian_size }}\`",
+                  "value": "\`\`\`bash\\necho 'deb [trusted=yes] https://r5valkyrie.github.io/launcher/deb/ ./' | sudo tee /etc/apt/sources.list.d/r5valkyrie.list\\nsudo apt update && sudo apt install r5vlauncher\`\`\`",
                   "inline": false
                 },
                 {
                   "name": "Fedora/RHEL/openSUSE",
-                  "value": "[Download](${RPM_URL}) • \`${{ steps.file_sizes.outputs.rpm_size }}\`",
+                  "value": "\`\`\`bash\\nsudo tee /etc/yum.repos.d/r5valkyrie.repo << 'REPO'\\n[r5valkyrie]\\nname=R5Valkyrie\\nbaseurl=https://r5valkyrie.github.io/launcher/rpm/\\nenabled=1\\ngpgcheck=0\\nREPO\\nsudo dnf install r5vlauncher\`\`\`",
+                  "inline": false
+                },
+                {
+                  "name": "NixOS / Nix",
+                  "value": "\`\`\`bash\\nnix run github:r5valkyrie/launcher\\n# or\\nnix profile install github:r5valkyrie/launcher\`\`\`",
                   "inline": false
                 },
                 {
                   "name": "Arch Linux (AUR)",
-                  "value": "\`yay -S r5valkyrie-launcher-bin\` or \`paru -S r5valkyrie-launcher-bin\`",
+                  "value": "\`\`\`bash\\nyay -S r5valkyrie-launcher-bin\\n# or\\nparu -S r5valkyrie-launcher-bin\`\`\`",
                   "inline": false
                 },
                 {
-                  "name": "Arch Linux (Package)",
-                  "value": "[Download](${ARCH_URL}) • \`${{ steps.file_sizes.outputs.arch_size }}\`",
+                  "name": "AppImage (Portable)",
+                  "value": "Download from [release page](${RELEASE_URL}), make executable, and run:\\n\`\`\`bash\\nchmod +x R5Valkyrie-Launcher-*.AppImage\\n./R5Valkyrie-Launcher-*.AppImage\`\`\`",
                   "inline": false
                 },
                 {
-                  "name": "Portable (AppImage)",
-                  "value": "[Download](${APPIMAGE_URL}) • \`${{ steps.file_sizes.outputs.appimage_size }}\`",
+                  "name": "Manual Downloads",
+                  "value": "DEB, RPM, Arch Package (.pkg.tar.zst), and tar.gz available on [release page](${RELEASE_URL})",
                   "inline": false
                 },
                 {
-                  "name": "Archive (tar.gz)",
-                  "value": "[Download](${TARBALL_URL}) • \`${{ steps.file_sizes.outputs.tarball_size }}\`",
-                  "inline": false
-                },
-                {
-                  "name": "Verification",
-                  "value": "[SHA256SUMS](${DOWNLOAD_URL}/SHA256SUMS)",
-                  "inline": false
-                },
-                {
-                  "name": "Installation Guide",
-                  "value": "[View Instructions](${REPO_URL}#installation)",
+                  "name": "More Installation Info",
+                  "value": "[View detailed instructions](https://r5valkyrie.github.io/launcher/)",
                   "inline": false
                 }
               ],
@@ -664,7 +659,7 @@ jobs:
             
             # Then add to environment.systemPackages:
             environment.systemPackages = [
-              inputs.r5vlauncher.packages.${pkgs.system}.default
+              inputs.r5vlauncher.packages.\${pkgs.system}.default
             ];
           }
           ```
@@ -702,25 +697,30 @@ jobs:
           sudo zypper install r5vlauncher  # openSUSE
           ```
 
-          ## Manual Downloads
+          ## Arch Linux
 
-          MANUAL_DOWNLOADS_PLACEHOLDER
+          ### AUR (Recommended)
+          ```bash
+          yay -S r5valkyrie-launcher-bin
+          # or
+          paru -S r5valkyrie-launcher-bin
+          ```
+
+          ### Manual Package Installation
+          Download the .pkg.tar.zst package from the [latest release](https://github.com/${{ github.repository }}/releases/latest) and install:
+          ```bash
+          sudo pacman -U R5Valkyrie.Launcher-*.pkg.tar.zst
+          ```
+
+          ## All Package Downloads
+
+          [View all available packages on the latest release page](https://github.com/${{ github.repository }}/releases/latest)
 
           ---
           LAST_UPDATED_PLACEHOLDER
           EOFREADME
           
-          # Build manual downloads section
-          MANUAL_DOWNLOADS=""
-          if [ -n "$DEB_FILE" ]; then
-            MANUAL_DOWNLOADS="${MANUAL_DOWNLOADS}- [DEB Package](deb/${DEB_FILE})"$'\n'
-          fi
-          if [ -n "$RPM_FILE" ]; then
-            MANUAL_DOWNLOADS="${MANUAL_DOWNLOADS}- [RPM Package](rpm/${RPM_FILE})"
-          fi
-          
           # Replace placeholders
-          sed -i "s|MANUAL_DOWNLOADS_PLACEHOLDER|${MANUAL_DOWNLOADS}|" repo-branch/README.md
           sed -i "s|LAST_UPDATED_PLACEHOLDER|Last updated: ${CURRENT_DATE}|" repo-branch/README.md
       
       - name: Commit and push to repo branch
