@@ -41,7 +41,7 @@ try {
   
   // Git operations
   run('git add package.json package-lock.json manifest.json flake.nix');
-  run(`git commit -m "chore: bump version to ${version}"`);
+  run(`git commit -m "chore: release v${version}"`);
   run(`git tag -a v${version} -m "Release v${version}"`);
   run('git push --follow-tags');
   
