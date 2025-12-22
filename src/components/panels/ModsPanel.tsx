@@ -196,9 +196,16 @@ export default function ModsPanel(props: ModsPanelProps) {
         setCategoryDropdownOpen(false);
       }
     };
+    const handleScroll = () => {
+      setCategoryDropdownOpen(false);
+    };
     if (categoryDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', handleScroll, true);
+      };
     }
   }, [categoryDropdownOpen]);
 

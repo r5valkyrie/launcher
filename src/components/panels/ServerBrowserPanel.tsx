@@ -188,10 +188,17 @@ const ServerBrowserPanel: React.FC<ServerBrowserPanelProps> = ({
           setIsOpen(false);
         }
       };
+      const handleScroll = () => {
+        setIsOpen(false);
+      };
 
       if (isOpen) {
         document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        window.addEventListener('scroll', handleScroll, true);
+        return () => {
+          document.removeEventListener('mousedown', handleClickOutside);
+          window.removeEventListener('scroll', handleScroll, true);
+        };
       }
     }, [isOpen]);
 

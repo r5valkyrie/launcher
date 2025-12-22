@@ -174,9 +174,16 @@ export default function HeroBanner(props: HeroBannerProps) {
         setChannelDropdownOpen(false);
       }
     };
+    const handleScroll = () => {
+      setChannelDropdownOpen(false);
+    };
     if (channelDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', handleScroll, true);
+      };
     }
   }, [channelDropdownOpen]);
 
