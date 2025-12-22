@@ -284,7 +284,6 @@ jobs:
       - name: Generate full changelog
         id: full_changelog
         run: |
-          git fetch --tags
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           
           if [ -z "$PREV_TAG" ]; then
@@ -371,7 +370,6 @@ jobs:
       - name: Generate changelog from commits
         id: changelog
         run: |
-          git fetch --tags
           PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
           
           if [ -z "$PREV_TAG" ]; then
