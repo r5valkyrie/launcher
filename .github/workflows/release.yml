@@ -276,6 +276,29 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -R artifacts
       
+      - name: Checkout code for changelog
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Generate full changelog
+        id: full_changelog
+        run: |
+          git fetch --tags
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            echo "## What's Changed" > changelog.md
+            echo "" >> changelog.md
+            echo "Initial release" >> changelog.md
+          else
+            echo "## What's Changed" > changelog.md
+            echo "" >> changelog.md
+            git log --pretty=format:"- %s" ${PREV_TAG}..HEAD >> changelog.md
+          fi
+          
+          cat changelog.md
+      
       - name: Create Release
         id: create_release
         uses: softprops/action-gh-release@v1
@@ -288,10 +311,10 @@ jobs:
             artifacts/tarball-build/*
             artifacts/arch-build/*
             artifacts/manifest/manifest.json
+          body_path: changelog.md
           draft: false
           prerelease: false
           make_latest: true
-          generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
@@ -345,6 +368,29 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
+      - name: Generate changelog from commits
+        id: changelog
+        run: |
+          git fetch --tags
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG_DISCORD="Initial release"
+            CHANGELOG_FULL="Initial release"
+          else
+            # Full changelog for GitHub release notes
+            CHANGELOG_FULL=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+            # Limited changelog for Discord (10 commits, 800 chars)
+            CHANGELOG_DISCORD=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD | head -n 10)
+          fi
+          
+          # Escape for JSON and limit length for Discord
+          CHANGELOG_DISCORD=$(echo "$CHANGELOG_DISCORD" | head -c 800 | jq -Rs .)
+          echo "changelog=$CHANGELOG_DISCORD" >> $GITHUB_OUTPUT
+          
+          # Save full changelog to file for GitHub release
+          echo "$CHANGELOG_FULL" > ../changelog.txt
+      
       - name: Send Discord Notification
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
@@ -372,7 +418,7 @@ jobs:
           {
             "embeds": [{
               "title": "R5Valkyrie Launcher v${VERSION} Released!",
-              "description": "A new version of R5Valkyrie Launcher is now available.\n\n**[View Release Notes](${RELEASE_URL})**",
+              "description": "A new version of R5Valkyrie Launcher is now available.\n\n**What's Changed:**\n${{ fromJSON(steps.changelog.outputs.changelog) }}\n\n**[View Full Release Notes](${RELEASE_URL})**",
               "color": 5814522,
               "fields": [
                 {
@@ -392,7 +438,7 @@ jobs:
                 },
                 {
                   "name": "Arch Linux (AUR)",
-                  "value": "\`yay -S r5valkyrie-launcher-bin\`",
+                  "value": "\`yay -S r5valkyrie-launcher-bin\` or \`paru -S r5valkyrie-launcher-bin\`",
                   "inline": false
                 },
                 {
