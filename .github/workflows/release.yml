@@ -631,10 +631,6 @@ jobs:
           VERSION="${GITHUB_REF#refs/tags/v}"
           CURRENT_DATE=$(date)
           
-          # Get actual filenames
-          DEB_FILE=$(ls repo-branch/deb/*.deb 2>/dev/null | xargs -n 1 basename | head -n 1)
-          RPM_FILE=$(ls repo-branch/rpm/*.rpm 2>/dev/null | xargs -n 1 basename | head -n 1)
-          
           cat > repo-branch/README.md << 'EOFREADME'
           # R5Valkyrie Launcher - Package Repository
 
