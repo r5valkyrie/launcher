@@ -1,5 +1,9 @@
 #!/usr/bin/env node
 
+// Downloads UMU launcher for bundling with AppImage, deb, and rpm packages.
+// Note: Arch Linux (.pkg.tar.zst) packages do NOT bundle UMU - it's a package dependency.
+// The launcher automatically detects system-installed UMU at /usr/bin/umu-run first.
+
 const os = require('os');
 const fs = require('fs');
 const path = require('path');

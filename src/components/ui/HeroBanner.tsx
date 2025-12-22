@@ -393,7 +393,7 @@ export default function HeroBanner(props: HeroBannerProps) {
                 <img 
                   ref={logoRef} 
                   src="r5v_tempLogo.png" 
-                  alt="R5 Valkyrie" 
+                  alt="R5Valkyrie" 
                   className="h-16 w-auto drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)]" 
                 />
                 <div className="text-sm text-white/70 mt-1.5 hero-text drop-shadow-md font-medium tracking-wide">

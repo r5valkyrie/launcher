@@ -254,6 +254,7 @@ jobs:
             chown -R builder:builder /workspace &&
             su - builder -c 'cd /workspace && npm ci && npm run build:pacman -- --no-upload'
           "
+        # Note: UMU is not bundled for Arch builds - it's a package dependency
       
       - name: Upload Pacman artifact
         uses: actions/upload-artifact@v4

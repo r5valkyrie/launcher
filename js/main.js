@@ -1559,14 +1559,41 @@ ipcMain.handle('game:launch', async (_e, { channelName, installDir, mode, argsSt
           console.warn(`Failed to copy ${file}:`, e.message);
         }
       });
-      // Get path to bundled umu-run
-      const umuPath = app.isPackaged 
-        ? path.join(process.resourcesPath, 'umu-run')
-        : path.join(__dirname, '..', 'bin', 'linux', 'umu-run');
+      
+      // Check for UMU in multiple locations
+      // Priority: system-installed > bundled
+      const umuLocations = [
+        '/usr/bin/umu-run',                    // System-wide (AUR package)
+        '/usr/share/umu/umu-run',              // Alternative system location
+        app.isPackaged 
+          ? path.join(process.resourcesPath, 'umu-run')
+          : path.join(__dirname, '..', 'bin', 'linux', 'umu-run')  // Bundled
+      ];
+      
+      let umuPath = null;
+      for (const location of umuLocations) {
+        if (fs.existsSync(location)) {
+          umuPath = location;
+          break;
+        }
+      }
       
       // Check if umu-run exists
-      if (!fs.existsSync(umuPath)) {
-        throw new Error(`UMU launcher not found at: ${umuPath}`);
+      if (!umuPath) {
+        // Send IPC to show styled modal in renderer
+        try {
+          mainWindow?.webContents.send('error:umu-not-found', {
+            title: 'UMU Launcher Required',
+            message: 'The UMU launcher is required to run the game on Linux.',
+            instructions: {
+              arch: 'yay -S umu-launcher',
+              other: 'Download from GitHub releases'
+            },
+            url: 'https://github.com/Open-Wine-Components/umu-launcher/releases'
+          });
+        } catch {}
+        
+        return { ok: false, error: 'UMU launcher not found. Please install umu-launcher.' };
       }
       
       // Make sure umu-run is executable

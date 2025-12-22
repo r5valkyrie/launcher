@@ -1,6 +1,6 @@
-# R5 Valkyrie Launcher
+# R5Valkyrie Launcher
 
-A modern game launcher for R5 Valkyrie built with Electron, Astro, and React.
+A modern game launcher for R5Valkyrie built with Electron, Astro, and React.
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ A modern game launcher for R5 Valkyrie built with Electron, Astro, and React.
 - **Windows**: Windows 10/11
 - **Linux**: Ubuntu 20.04+, Debian 11+, Arch Linux, or any modern distribution
   - Wine/Proton for running the Windows game executable
-  - UMU launcher (bundled automatically)
+  - UMU launcher (bundled in AppImage/deb/rpm, AUR package dependency)
 
 ## Installation
 
@@ -100,8 +100,13 @@ makepkg -si
 # Download the package
 wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-Arch.pkg.tar.zst
 
-# Install with pacman
+# Install with pacman (will automatically install umu-launcher dependency)
 sudo pacman -U R5Valkyrie.Launcher-[version]-Arch.pkg.tar.zst
+```
+
+**Note:** The Arch package depends on `umu-launcher` from the AUR, which will be installed automatically if you use an AUR helper, or you can install it manually first:
+```bash
+yay -S umu-launcher  # or paru, or any AUR helper
 ```
 
 #### Generic Linux (tar.gz)

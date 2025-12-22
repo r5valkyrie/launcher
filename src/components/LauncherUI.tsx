@@ -24,6 +24,7 @@ import ModQueueModal from './modals/ModQueueModal';
 import ServerModProfileModal from './modals/ServerModProfileModal';
 import ServerJoinModPromptModal from './modals/ServerJoinModPromptModal';
 import UpdateModal from './modals/UpdateModal';
+import UmuNotFoundModal from './modals/UmuNotFoundModal';
 import { buildLaunchParameters } from './common/launchUtils';
 import { animations } from './common/animations';
 
@@ -624,6 +625,11 @@ export default function LauncherUI() {
   const [isDownloadingUpdate, setIsDownloadingUpdate] = useState<boolean>(false);
   const [isUpdateDownloaded, setIsUpdateDownloaded] = useState<boolean>(false);
   const [updateDownloadProgress, setUpdateDownloadProgress] = useState<any>(null);
+  
+  // UMU not found modal state
+  const [umuNotFoundModalOpen, setUmuNotFoundModalOpen] = useState<boolean>(false);
+  const [umuNotFoundInstructions, setUmuNotFoundInstructions] = useState<{arch?: string; other?: string}>({});
+  const [umuNotFoundUrl, setUmuNotFoundUrl] = useState<string>('');
   
   // Sidebar refs
   const sidebarRef = useRef<HTMLElement>(null);
@@ -1275,6 +1281,21 @@ export default function LauncherUI() {
         setModProgress((prev) => ({ ...prev, [String(p.key)]: { received: Number(p.received||0), total: Number(p.total||0), phase: String(p.phase||'downloading') } }));
       };
       window.electronAPI.onModsProgress(handler);
+    } catch {}
+  }, []);
+
+  // Listen for UMU not found error
+  useEffect(() => {
+    try {
+      if (!window.electronAPI || !window.electronAPI.onProgress) return;
+      const handler = (payload: any) => {
+        if (payload) {
+          setUmuNotFoundInstructions(payload.instructions || {});
+          setUmuNotFoundUrl(payload.url || '');
+          setUmuNotFoundModalOpen(true);
+        }
+      };
+      window.electronAPI.onProgress('error:umu-not-found', handler);
     } catch {}
   }, []);
 
@@ -3268,7 +3289,7 @@ export default function LauncherUI() {
             
             <img
               src="logo.png"
-              alt="R5 Valkyrie"
+              alt="R5Valkyrie"
               className="relative w-11 h-11 object-contain transition-all duration-500 group-hover:scale-110 group-hover:drop-shadow-[0_0_12px_rgba(59,130,246,0.6)]"
             />
           </div>
@@ -4617,6 +4638,14 @@ export default function LauncherUI() {
         downloadProgress={updateDownloadProgress}
         isDownloading={isDownloadingUpdate}
         isDownloaded={isUpdateDownloaded}
+      />
+
+      {/* UMU Not Found Modal */}
+      <UmuNotFoundModal
+        open={umuNotFoundModalOpen}
+        onClose={() => setUmuNotFoundModalOpen(false)}
+        instructions={umuNotFoundInstructions}
+        url={umuNotFoundUrl}
       />
       </div>
     </>

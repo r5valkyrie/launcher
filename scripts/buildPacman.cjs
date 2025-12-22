@@ -2,10 +2,6 @@ const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
-// Parse command line arguments
-const args = process.argv.slice(2);
-const skipUpload = args.includes('--no-upload') || args.includes('-n');
-
 // Load .env file
 const envPath = path.join(__dirname, '..', '.env');
 if (fs.existsSync(envPath)) {
@@ -46,7 +42,7 @@ pkgdesc="R5Valkyrie Game Launcher"
 arch=('x86_64')
 url="https://playvalkyrie.org"
 license=('custom')
-depends=('gtk3' 'libnotify' 'nss' 'libxss' 'libxtst' 'xdg-utils' 'at-spi2-core' 'util-linux-libs' 'libsecret')
+depends=('gtk3' 'libnotify' 'nss' 'libxss' 'libxtst' 'xdg-utils' 'at-spi2-core' 'util-linux-libs' 'libsecret' 'umu-launcher')
 options=('!strip' '!emptydirs')
 source=()
 
@@ -118,64 +114,6 @@ try {
     const newPath = path.join(releaseDir, newName);
     fs.renameSync(path.join(releaseDir, pkgFile), newPath);
     console.log(`\nSuccess! Created: ${newName}`);
-    
-    // Upload to GitHub if GH_TOKEN is set and --no-upload not specified
-    if (skipUpload) {
-      console.log('\nSkipping upload (--no-upload specified).');
-    } else if (process.env.GH_TOKEN) {
-      console.log('\nUploading to GitHub...');
-      try {
-        const token = process.env.GH_TOKEN;
-        const repo = 'r5valkyrie/launcher_linux_releases';
-        const tag = `v${version}`;
-        const fileName = newName;
-        
-        // Get release ID (works for drafts too)
-        const releaseData = execSync(
-          `curl -s -H "Authorization: token ${token}" "https://api.github.com/repos/${repo}/releases"`,
-          { encoding: 'utf8' }
-        );
-        const releases = JSON.parse(releaseData);
-        const release = releases.find(r => r.tag_name === tag || r.name === tag || r.name?.includes(version));
-        
-        if (!release) {
-          console.log('Release not found for version', version);
-          console.log('Available releases:', releases.map(r => r.tag_name).join(', ') || 'none');
-          return;
-        }
-        
-        console.log(`Found release: ${release.name} (${release.draft ? 'draft' : 'published'})`);
-        
-        // Check if asset already exists and delete it
-        const existingAsset = release.assets?.find(a => a.name === fileName);
-        if (existingAsset) {
-          console.log('Deleting existing asset...');
-          execSync(
-            `curl -s -X DELETE -H "Authorization: token ${token}" "https://api.github.com/repos/${repo}/releases/assets/${existingAsset.id}"`,
-            { encoding: 'utf8' }
-          );
-        }
-        
-        // Upload the file
-        const uploadUrl = release.upload_url.replace('{?name,label}', '');
-        console.log('Uploading...');
-        const uploadResult = execSync(
-          `curl -s -X POST -H "Authorization: token ${token}" -H "Content-Type: application/octet-stream" --data-binary @"${newPath}" "${uploadUrl}?name=${encodeURIComponent(fileName)}"`,
-          { encoding: 'utf8', maxBuffer: 200 * 1024 * 1024 }
-        );
-        
-        const uploadJson = JSON.parse(uploadResult);
-        if (uploadJson.id) {
-          console.log('Upload complete!', uploadJson.browser_download_url);
-        } else {
-          console.log('Upload response:', uploadResult);
-        }
-      } catch (uploadErr) {
-        console.warn('Failed to upload to GitHub:', uploadErr.message);
-      }
-    } else {
-      console.log('\nGH_TOKEN not set, skipping upload.');
-    }
   }
   
   // Cleanup
