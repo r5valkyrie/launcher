@@ -134,6 +134,86 @@ jobs:
           name: debian-build
           path: release/*.deb
 
+  build-rpm:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build:web
+      
+      - name: Download UMU
+        run: node scripts/downloadUmu.cjs
+      
+      - name: Bundle Electron
+        run: node scripts/bundleElectron.cjs
+      
+      - name: Build RPM
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
+        run: npx electron-builder --linux rpm --publish never
+      
+      - name: Rename artifacts
+        run: node scripts/renameArtifacts.cjs
+      
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpm-build
+          path: release/*.rpm
+
+  build-tarball:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Build web assets
+        run: npm run build:web
+      
+      - name: Download UMU
+        run: node scripts/downloadUmu.cjs
+      
+      - name: Bundle Electron
+        run: node scripts/bundleElectron.cjs
+      
+      - name: Build tar.gz
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
+        run: npx electron-builder --linux tar.gz --publish never
+      
+      - name: Rename artifacts
+        run: node scripts/renameArtifacts.cjs
+      
+      - name: Upload tar.gz artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tarball-build
+          path: release/*.tar.gz
+
   build-arch:
     runs-on: ubuntu-latest
     
@@ -182,7 +262,7 @@ jobs:
           path: release/*.pkg.tar.zst
 
   release:
-    needs: [build-windows, build-appimage, build-debian, build-arch]
+    needs: [build-windows, build-appimage, build-debian, build-rpm, build-tarball, build-arch]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     
@@ -203,6 +283,8 @@ jobs:
             artifacts/windows-build/*
             artifacts/appimage-build/*
             artifacts/debian-build/*
+            artifacts/rpm-build/*
+            artifacts/tarball-build/*
             artifacts/arch-build/*
             artifacts/manifest/manifest.json
           draft: false
@@ -217,27 +299,50 @@ jobs:
         run: |
           WINDOWS_FILE=$(find artifacts/windows-build -name "*.exe" -type f | head -n 1)
           DEBIAN_FILE=$(find artifacts/debian-build -name "*.deb" -type f | head -n 1)
+          RPM_FILE=$(find artifacts/rpm-build -name "*.rpm" -type f | head -n 1)
+          TARBALL_FILE=$(find artifacts/tarball-build -name "*.tar.gz" -type f | head -n 1)
           ARCH_FILE=$(find artifacts/arch-build -name "*.pkg.tar.zst" -type f | head -n 1)
           APPIMAGE_FILE=$(find artifacts/appimage-build -name "*.AppImage" -type f | head -n 1)
           
           WINDOWS_SIZE=$(du -h "$WINDOWS_FILE" | cut -f1)
           DEBIAN_SIZE=$(du -h "$DEBIAN_FILE" | cut -f1)
+          RPM_SIZE=$(du -h "$RPM_FILE" | cut -f1)
+          TARBALL_SIZE=$(du -h "$TARBALL_FILE" | cut -f1)
           ARCH_SIZE=$(du -h "$ARCH_FILE" | cut -f1)
           APPIMAGE_SIZE=$(du -h "$APPIMAGE_FILE" | cut -f1)
           
           WINDOWS_NAME=$(basename "$WINDOWS_FILE")
           DEBIAN_NAME=$(basename "$DEBIAN_FILE")
+          RPM_NAME=$(basename "$RPM_FILE")
+          TARBALL_NAME=$(basename "$TARBALL_FILE")
           ARCH_NAME=$(basename "$ARCH_FILE")
           APPIMAGE_NAME=$(basename "$APPIMAGE_FILE")
           
           echo "windows_size=$WINDOWS_SIZE" >> $GITHUB_OUTPUT
           echo "debian_size=$DEBIAN_SIZE" >> $GITHUB_OUTPUT
+          echo "rpm_size=$RPM_SIZE" >> $GITHUB_OUTPUT
+          echo "tarball_size=$TARBALL_SIZE" >> $GITHUB_OUTPUT
           echo "arch_size=$ARCH_SIZE" >> $GITHUB_OUTPUT
           echo "appimage_size=$APPIMAGE_SIZE" >> $GITHUB_OUTPUT
           echo "windows_name=$WINDOWS_NAME" >> $GITHUB_OUTPUT
           echo "debian_name=$DEBIAN_NAME" >> $GITHUB_OUTPUT
+          echo "rpm_name=$RPM_NAME" >> $GITHUB_OUTPUT
+          echo "tarball_name=$TARBALL_NAME" >> $GITHUB_OUTPUT
           echo "arch_name=$ARCH_NAME" >> $GITHUB_OUTPUT
           echo "appimage_name=$APPIMAGE_NAME" >> $GITHUB_OUTPUT
+      
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.pkg.tar.zst" -o -name "*.AppImage" \) -exec sha256sum {} \; | sed 's|^\./||' | sed 's|.*/||' > SHA256SUMS
+          cat SHA256SUMS
+      
+      - name: Upload checksums to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: artifacts/SHA256SUMS
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Send Discord Notification
         env:
@@ -256,6 +361,8 @@ jobs:
           # URL encode filenames (replace spaces with dots, then URL encode)
           WINDOWS_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.windows_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
           DEBIAN_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.debian_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
+          RPM_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.rpm_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
+          TARBALL_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.tarball_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
           ARCH_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.arch_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
           APPIMAGE_URL="$DOWNLOAD_URL/$(echo "${{ steps.file_sizes.outputs.appimage_name }}" | sed 's/ /./g' | sed 's/ /%20/g')"
           
@@ -278,6 +385,11 @@ jobs:
                   "inline": true
                 },
                 {
+                  "name": "Fedora/RHEL/openSUSE",
+                  "value": "[Download](${RPM_URL}) • ${{ steps.file_sizes.outputs.rpm_size }}",
+                  "inline": true
+                },
+                {
                   "name": "Arch Linux",
                   "value": "[Download](${ARCH_URL}) • ${{ steps.file_sizes.outputs.arch_size }}",
                   "inline": true
@@ -285,6 +397,11 @@ jobs:
                 {
                   "name": "Portable (AppImage)",
                   "value": "[Download](${APPIMAGE_URL}) • ${{ steps.file_sizes.outputs.appimage_size }}",
+                  "inline": true
+                },
+                {
+                  "name": "Archive (tar.gz)",
+                  "value": "[Download](${TARBALL_URL}) • ${{ steps.file_sizes.outputs.tarball_size }}",
                   "inline": true
                 }
               ],
@@ -304,3 +421,60 @@ jobs:
           curl -H "Content-Type: application/json" \
                -d @payload.json \
                "$DISCORD_WEBHOOK_URL"
+
+  update-aur:
+    needs: [release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Setup SSH for AUR
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.AUR_SSH_KEY }}" > ~/.ssh/aur
+          chmod 600 ~/.ssh/aur
+          ssh-keyscan aur.archlinux.org >> ~/.ssh/known_hosts
+          cat > ~/.ssh/config << EOF
+          Host aur.archlinux.org
+            IdentityFile ~/.ssh/aur
+            User aur
+          EOF
+          chmod 600 ~/.ssh/config
+      
+      - name: Clone AUR repository
+        run: |
+          git clone ssh://aur@aur.archlinux.org/r5valkyrie-launcher-bin.git aur
+          cd aur
+          git config user.name "zee_x64"
+          git config user.email "xnxmbx@gmail.com"
+      
+      - name: Update PKGBUILD
+        run: |
+          cd aur
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          
+          # Download package to get checksum
+          wget "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/R5Valkyrie.Launcher-${VERSION}-Arch.pkg.tar.zst"
+          SHA256=$(sha256sum *.pkg.tar.zst | cut -d' ' -f1)
+          
+          # Update PKGBUILD
+          sed -i "s/pkgver=.*/pkgver=${VERSION}/" PKGBUILD
+          sed -i "s/pkgrel=.*/pkgrel=1/" PKGBUILD
+          sed -i "s/sha256sums=.*/sha256sums=('${SHA256}')/" PKGBUILD
+          
+          cat PKGBUILD
+      
+      - name: Generate .SRCINFO and push
+        run: |
+          cd aur
+          
+          # Install makepkg dependencies
+          sudo apt-get update
+          sudo apt-get install -y pacman-package-manager
+          
+          makepkg --printsrcinfo > .SRCINFO
+          
+          git add PKGBUILD .SRCINFO
+          git diff --cached
+          git commit -m "Update to ${GITHUB_REF#refs/tags/v}"
+          git push
