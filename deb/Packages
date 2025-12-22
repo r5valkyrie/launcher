@@ -34,3 +34,21 @@ Homepage: https://github.com/r5valkyrie/launcher
 License: unknown
 Vendor: R5Valkyrie
 
+Package: r5vlauncher
+Version: 0.9.68
+Architecture: amd64
+Maintainer: R5Valkyrie
+Installed-Size: 258675
+Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0
+Recommends: libappindicator3-1
+Filename: ./R5Valkyrie.Launcher-0.9.68-Debian.deb
+Size: 77414976
+MD5sum: 8006353b93de06c0375f3e4e05eb3e99
+SHA1: 554ae96ffc7e626c4133e38de0e3257b87eae84a
+SHA256: bc94900e570995cff6292612cb7c0a0328d7e0677f22a1f531028194efc61777
+Section: default
+Priority: optional
+Homepage: https://github.com/r5valkyrie/launcher
+License: unknown
+Vendor: R5Valkyrie
+
