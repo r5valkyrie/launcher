@@ -542,3 +542,151 @@ jobs:
           git diff --cached
           git commit -m "Update to ${GITHUB_REF#refs/tags/v}"
           git push
+
+  update-package-repo:
+    needs: [release]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: Checkout main repo
+        uses: actions/checkout@v4
+      
+      - name: Checkout repo branch
+        uses: actions/checkout@v4
+        with:
+          ref: repo
+          path: repo-branch
+      
+      - name: Install repository tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev createrepo-c
+      
+      - name: Download release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p downloads
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          
+          # Download DEB
+          gh release download "${{ github.ref_name }}" \
+            --pattern "*.deb" \
+            --dir downloads \
+            --repo ${{ github.repository }} || echo "No DEB found"
+          
+          # Download RPM  
+          gh release download "${{ github.ref_name }}" \
+            --pattern "*.rpm" \
+            --dir downloads \
+            --repo ${{ github.repository }} || echo "No RPM found"
+      
+      - name: Build DEB repository
+        run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          
+          if ls downloads/*.deb 1> /dev/null 2>&1; then
+            echo "Processing DEB package..."
+            mkdir -p repo-branch/deb
+            cp downloads/*.deb repo-branch/deb/
+            
+            cd repo-branch/deb
+            
+            # Create Packages file
+            dpkg-scanpackages --multiversion . > Packages
+            gzip -k -f Packages
+            
+            # Create Release file
+            cat > Release << EOF
+          Origin: R5Valkyrie
+          Label: R5Valkyrie Launcher
+          Suite: stable
+          Codename: stable
+          Version: ${VERSION}
+          Architectures: amd64
+          Components: main
+          Description: R5Valkyrie Game Launcher Repository
+          Date: $(date -Ru)
+          EOF
+            
+            # Add checksums
+            echo "MD5Sum:" >> Release
+            md5sum Packages Packages.gz | sed 's/^/ /' >> Release
+            echo "SHA256:" >> Release
+            sha256sum Packages Packages.gz | sed 's/^/ /' >> Release
+            
+            cd ../..
+          fi
+      
+      - name: Build RPM repository
+        run: |
+          if ls downloads/*.rpm 1> /dev/null 2>&1; then
+            echo "Processing RPM package..."
+            mkdir -p repo-branch/rpm
+            cp downloads/*.rpm repo-branch/rpm/
+            
+            cd repo-branch/rpm
+            createrepo_c .
+            cd ../..
+          fi
+      
+      - name: Create/Update README
+        run: |
+          cat > repo-branch/README.md << 'EOF'
+          # R5Valkyrie Launcher - Package Repository
+
+          Official package repository for R5Valkyrie Launcher.
+
+          ## Debian/Ubuntu
+
+          Add the repository:
+          ```bash
+          echo 'deb [trusted=yes] https://r5valkyrie.github.io/launcher/deb/ ./' | sudo tee /etc/apt/sources.list.d/r5valkyrie.list
+          sudo apt update
+          ```
+
+          Install:
+          ```bash
+          sudo apt install r5vlauncher
+          ```
+
+          ## Fedora/RHEL/openSUSE
+
+          Add the repository:
+          ```bash
+          sudo tee /etc/yum.repos.d/r5valkyrie.repo << EOF
+          [r5valkyrie]
+          name=R5Valkyrie Repository
+          baseurl=https://r5valkyrie.github.io/launcher/rpm/
+          enabled=1
+          gpgcheck=0
+          EOF
+          ```
+
+          Install:
+          ```bash
+          sudo dnf install r5vlauncher  # Fedora/RHEL
+          # or
+          sudo zypper install r5vlauncher  # openSUSE
+          ```
+
+          ## Manual Downloads
+
+          - [DEB Packages](./deb/)
+          - [RPM Packages](./rpm/)
+
+          ---
+          Last updated: $(date)
+          EOF
+      
+      - name: Commit and push to repo branch
+        run: |
+          cd repo-branch
+          
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add .
+          git diff --cached --quiet || git commit -m "Update repository for ${{ github.ref_name }}"
+          git push origin repo
