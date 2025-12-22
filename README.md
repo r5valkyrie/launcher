@@ -73,24 +73,10 @@ sudo apt-get install -f
 #### Arch Linux (.pkg.tar.zst)
 ```bash
 # Download the package
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version].pkg.tar.zst
+wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie\ Launcher-[version]-Arch.pkg.tar.zst
 
 # Install with pacman
-sudo pacman -U R5Valkyrie.Launcher-[version].pkg.tar.zst
-```
-
-#### Manual Installation (.tar.gz)
-For other distributions or manual installation:
-```bash
-# Download and extract
-wget https://github.com/r5valkyrie/launcher/releases/latest/download/R5Valkyrie.Launcher-[version]-arch.tar.gz
-tar -xzf R5Valkyrie.Launcher-[version]-arch.tar.gz
-
-# Move to /opt or your preferred location
-sudo mv R5Valkyrie\ Launcher /opt/r5vlauncher
-
-# Run it
-/opt/r5vlauncher/r5vlauncher
+sudo pacman -U R5Valkyrie\ Launcher-[version]-Arch.pkg.tar.zst
 ```
 
 ### Development Setup
@@ -143,7 +129,8 @@ npm run build  # or npm run release
 
 **Linux**: Creates multiple package formats
 ```bash
-npm run build  # Creates AppImage, .deb, and .tar.gz
+npm run build          # Creates AppImage and .deb
+npm run build:pacman   # Creates Arch Linux .pkg.tar.zst
 ```
 
 Build output is placed in the `release/` directory.
