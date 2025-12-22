@@ -89,7 +89,7 @@
     "compression": "maximum",
     "afterPack": "scripts/afterPack.cjs",
     "win": {
-      "artifactName": "${productName} Setup ${version}.${ext}",
+      "artifactName": "R5Valkyrie-Launcher-Setup-${version}.${ext}",
       "target": [
         "nsis"
       ],
