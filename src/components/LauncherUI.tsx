@@ -142,7 +142,7 @@ export default function LauncherUI() {
   const [downloadSpeedLimit, setDownloadSpeedLimit] = useState<number>(0); // 0 = unlimited, in bytes per second
   const [bannerVideoEnabled, setBannerVideoEnabled] = useState<boolean>(true);
   const [snowEffectEnabled, setSnowEffectEnabled] = useState<boolean>(true);
-  const [newYearEffectEnabled, setNewYearEffectEnabled] = useState<boolean>(true);
+  const [newYearEffectEnabled, setNewYearEffectEnabled] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'general'|'launch'|'mods'|'servers'|'settings'>('general');
   type PartInfo = { received: number; total: number };
   type FileInfo = { status: string; received?: number; total?: number; totalParts?: number; parts?: Record<number, PartInfo> };
@@ -397,7 +397,17 @@ export default function LauncherUI() {
       }
       if (typeof s?.bannerVideoEnabled === 'boolean') setBannerVideoEnabled(Boolean(s.bannerVideoEnabled));
       if (typeof s?.snowEffectEnabled === 'boolean') setSnowEffectEnabled(Boolean(s.snowEffectEnabled));
-      if (typeof s?.newYearEffectEnabled === 'boolean') setNewYearEffectEnabled(Boolean(s.newYearEffectEnabled));
+      // Auto-enable New Year effect on first launch during New Year time (Jan 1-3)
+      if (typeof s?.newYearEffectEnabled === 'boolean') {
+        setNewYearEffectEnabled(Boolean(s.newYearEffectEnabled));
+      } else {
+        const now = new Date();
+        const isNewYearTime = now.getMonth() === 0 && now.getDate() <= 3;
+        if (isNewYearTime) {
+          setNewYearEffectEnabled(true);
+          await window.electronAPI?.setSetting?.('newYearEffectEnabled', true);
+        }
+      }
       if (typeof s?.modsShowDeprecated === 'boolean') setModsShowDeprecated(Boolean(s.modsShowDeprecated));
       if (typeof s?.modsShowNsfw === 'boolean') setModsShowNsfw(Boolean(s.modsShowNsfw));
       if (Array.isArray(s?.modProfiles)) setModProfiles(s.modProfiles);
