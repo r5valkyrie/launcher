@@ -9,6 +9,7 @@ node_modules/
 
 # release files
 release/
+r5valkyrie-launcher-bin/
 
 # logs
 npm-debug.log*
