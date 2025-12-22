@@ -372,38 +372,53 @@ jobs:
           {
             "embeds": [{
               "title": "R5Valkyrie Launcher v${VERSION} Released!",
-              "description": "A new version of R5Valkyrie Launcher is now available for download.",
+              "description": "A new version of R5Valkyrie Launcher is now available.\n\n**[View Release Notes](${RELEASE_URL})**",
               "color": 5814522,
               "fields": [
                 {
                   "name": "Windows",
-                  "value": "[Download](${WINDOWS_URL}) • ${{ steps.file_sizes.outputs.windows_size }}",
-                  "inline": true
+                  "value": "[Download](${WINDOWS_URL}) • \`${{ steps.file_sizes.outputs.windows_size }}\`",
+                  "inline": false
                 },
                 {
                   "name": "Debian/Ubuntu",
-                  "value": "[Download](${DEBIAN_URL}) • ${{ steps.file_sizes.outputs.debian_size }}",
-                  "inline": true
+                  "value": "[Download](${DEBIAN_URL}) • \`${{ steps.file_sizes.outputs.debian_size }}\`",
+                  "inline": false
                 },
                 {
                   "name": "Fedora/RHEL/openSUSE",
-                  "value": "[Download](${RPM_URL}) • ${{ steps.file_sizes.outputs.rpm_size }}",
-                  "inline": true
+                  "value": "[Download](${RPM_URL}) • \`${{ steps.file_sizes.outputs.rpm_size }}\`",
+                  "inline": false
                 },
                 {
-                  "name": "Arch Linux",
-                  "value": "[Download](${ARCH_URL}) • ${{ steps.file_sizes.outputs.arch_size }}",
-                  "inline": true
+                  "name": "Arch Linux (AUR)",
+                  "value": "\`yay -S r5valkyrie-launcher-bin\`",
+                  "inline": false
+                },
+                {
+                  "name": "Arch Linux (Package)",
+                  "value": "[Download](${ARCH_URL}) • \`${{ steps.file_sizes.outputs.arch_size }}\`",
+                  "inline": false
                 },
                 {
                   "name": "Portable (AppImage)",
-                  "value": "[Download](${APPIMAGE_URL}) • ${{ steps.file_sizes.outputs.appimage_size }}",
-                  "inline": true
+                  "value": "[Download](${APPIMAGE_URL}) • \`${{ steps.file_sizes.outputs.appimage_size }}\`",
+                  "inline": false
                 },
                 {
                   "name": "Archive (tar.gz)",
-                  "value": "[Download](${TARBALL_URL}) • ${{ steps.file_sizes.outputs.tarball_size }}",
-                  "inline": true
+                  "value": "[Download](${TARBALL_URL}) • \`${{ steps.file_sizes.outputs.tarball_size }}\`",
+                  "inline": false
+                },
+                {
+                  "name": "Verification",
+                  "value": "[SHA256SUMS](${DOWNLOAD_URL}/SHA256SUMS)",
+                  "inline": false
+                },
+                {
+                  "name": "Installation Guide",
+                  "value": "[View Instructions](${REPO_URL}#installation)",
+                  "inline": false
                 }
               ],
               "footer": {

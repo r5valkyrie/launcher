@@ -2386,71 +2386,77 @@ export default function LauncherUI() {
       // Parse playlist file for maps and playlists
       const playlistPath = `${installDirectory}/platform/playlists_r5_patch.txt`;
       const content = await window.electronAPI?.readFile?.(playlistPath);
-      if (content) {
-        const lines = content.split('\n');
+      
+      if (!content) {
+        // File doesn't exist or can't be read - use empty arrays (user will use text inputs)
+        setAvailableMaps([]);
+        setAvailablePlaylists([]);
+        return;
+      }
+      
+      const lines = content.split('\n');
+      
+      let inPlaylistsSection = false;
+      let currentPlaylistId = '';
+      let currentPlaylistName = '';
+      let inMapsSection = false;
+      let braceDepth = 0;
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
         
-        let inPlaylistsSection = false;
-        let currentPlaylistId = '';
-        let currentPlaylistName = '';
-        let inMapsSection = false;
-        let braceDepth = 0;
+        // Track brace depth
+        const openBraces = (line.match(/{/g) || []).length;
+        const closeBraces = (line.match(/}/g) || []).length;
         
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          
-          // Track brace depth
-          const openBraces = (line.match(/{/g) || []).length;
-          const closeBraces = (line.match(/}/g) || []).length;
-          
-          // Check if we're entering Playlists section
-          if (line.startsWith('Playlists') || line === 'Playlists') {
-            inPlaylistsSection = true;
-            braceDepth = 0;
-            continue;
+        // Check if we're entering Playlists section
+        if (line.startsWith('Playlists') || line === 'Playlists') {
+          inPlaylistsSection = true;
+          braceDepth = 0;
+          continue;
+        }
+        
+        if (!inPlaylistsSection) continue;
+        
+        braceDepth += openBraces - closeBraces;
+        
+        // Exit Playlists section when braces close
+        if (inPlaylistsSection && braceDepth < 0) {
+          break;
+        }
+        
+        // Detect playlist ID (e.g., "survival", "survival_duos")
+        if (braceDepth === 1 && !line.includes('//') && !line.includes('{') && !line.includes('}') && line.length > 0) {
+          currentPlaylistId = line;
+          currentPlaylistName = '';
+        }
+        
+        // Extract playlist name
+        if (currentPlaylistId && line.includes('name') && !line.startsWith('//')) {
+          const match = line.match(/name\s+"([^"]+)"/);
+          if (match) {
+            currentPlaylistName = match[1];
+            playlists.push({ id: currentPlaylistId, name: currentPlaylistName });
+            currentPlaylistId = '';
           }
-          
-          if (!inPlaylistsSection) continue;
-          
-          braceDepth += openBraces - closeBraces;
-          
-          // Exit Playlists section when braces close
-          if (inPlaylistsSection && braceDepth < 0) {
-            break;
+        }
+        
+        // Detect maps section
+        if (line.includes('maps') && line.includes('{')) {
+          inMapsSection = true;
+        }
+        
+        // Extract map names
+        if (inMapsSection && !line.startsWith('//') && line.includes('1') && !line.includes('{') && !line.includes('}')) {
+          const mapMatch = line.match(/^\s*([a-zA-Z0-9_]+)\s+1/);
+          if (mapMatch) {
+            mapsSet.add(mapMatch[1]);
           }
-          
-          // Detect playlist ID (e.g., "survival", "survival_duos")
-          if (braceDepth === 1 && !line.includes('//') && !line.includes('{') && !line.includes('}') && line.length > 0) {
-            currentPlaylistId = line;
-            currentPlaylistName = '';
-          }
-          
-          // Extract playlist name
-          if (currentPlaylistId && line.includes('name') && !line.startsWith('//')) {
-            const match = line.match(/name\s+"([^"]+)"/);
-            if (match) {
-              currentPlaylistName = match[1];
-              playlists.push({ id: currentPlaylistId, name: currentPlaylistName });
-              currentPlaylistId = '';
-            }
-          }
-          
-          // Detect maps section
-          if (line.includes('maps') && line.includes('{')) {
-            inMapsSection = true;
-          }
-          
-          // Extract map names
-          if (inMapsSection && !line.startsWith('//') && line.includes('1') && !line.includes('{') && !line.includes('}')) {
-            const mapMatch = line.match(/^\s*([a-zA-Z0-9_]+)\s+1/);
-            if (mapMatch) {
-              mapsSet.add(mapMatch[1]);
-            }
-          }
-          
-          // Exit maps section
-          if (inMapsSection && closeBraces > 0) {
-            inMapsSection = false;
-          }
+        }
+        
+        // Exit maps section
+        if (inMapsSection && closeBraces > 0) {
+          inMapsSection = false;
         }
       }
       

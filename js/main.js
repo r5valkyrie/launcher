@@ -1340,7 +1340,10 @@ ipcMain.handle('fs:read-file', async (_e, { filePath }) => {
     const content = await fs.promises.readFile(filePath, 'utf-8');
     return content;
   } catch (error) {
-    console.error(`Failed to read file ${filePath}:`, error);
+    // Only log errors that aren't simple "file not found" errors
+    if (error.code !== 'ENOENT') {
+      console.error(`Failed to read file ${filePath}:`, error);
+    }
     return null;
   }
 });
