@@ -20,7 +20,7 @@
         # Build the application
         r5vlauncher = pkgs.stdenv.mkDerivation rec {
           pname = "r5vlauncher";
-          version = "0.9.65";
+          version = "0.9.66";
 
           src = ./.;
 
