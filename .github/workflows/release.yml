@@ -645,6 +645,30 @@ jobs:
 
           Official package repository for R5Valkyrie Launcher.
 
+          ## NixOS / Nix
+
+          Run directly:
+          ```bash
+          nix run github:r5valkyrie/launcher
+          ```
+
+          Install to profile:
+          ```bash
+          nix profile install github:r5valkyrie/launcher
+          ```
+
+          Or add to your NixOS configuration:
+          ```nix
+          {
+            inputs.r5vlauncher.url = "github:r5valkyrie/launcher";
+            
+            # Then add to environment.systemPackages:
+            environment.systemPackages = [
+              inputs.r5vlauncher.packages.${pkgs.system}.default
+            ];
+          }
+          ```
+
           ## Debian/Ubuntu
 
           Add the repository:
