@@ -260,6 +260,11 @@ app.whenReady().then(() => {
   if (process.platform !== 'linux') {
     try {
       autoUpdater.autoDownload = false;
+      autoUpdater.allowPrerelease = false;
+      autoUpdater.allowDowngrade = false;
+      autoUpdater.fullChangelog = true;
+      // Force using GitHub releases API to always get the latest version
+      autoUpdater.forceDevUpdateConfig = false;
       try { autoUpdater.logger = log; log.transports.file.level = 'info'; } catch {}
       autoUpdater.on('error', (err) => {
         try { mainWindow?.webContents.send('update:error', { message: String(err?.stack || err?.message || err) }); } catch {}
