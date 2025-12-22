@@ -420,12 +420,12 @@ jobs:
           {
             "embeds": [{
               "title": "R5Valkyrie Launcher v${VERSION} Released!",
-              "description": "A new version of R5Valkyrie Launcher is now available.\\n\\n**What's Changed:**\\n${{ steps.changelog.outputs.changelog }}\\n\\n**[📦 Download All Packages](${RELEASE_URL})**",
+              "description": "A new version of R5Valkyrie Launcher is now available.\\n\\n**What's Changed:**\\n${{ steps.changelog.outputs.changelog }}",
               "color": 5814522,
               "fields": [
                 {
                   "name": "Windows",
-                  "value": "Download installer from [release page](${RELEASE_URL})",
+                  "value": "Download and run the installer from [release page](${RELEASE_URL})\\n\\nThe installer will automatically set up the launcher.",
                   "inline": false
                 },
                 {
