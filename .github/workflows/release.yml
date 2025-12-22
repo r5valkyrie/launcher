@@ -382,9 +382,13 @@ jobs:
             CHANGELOG_DISCORD=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD | head -n 10)
           fi
           
-          # Escape for JSON and limit length for Discord
-          CHANGELOG_DISCORD=$(echo "$CHANGELOG_DISCORD" | head -c 800 | jq -Rs .)
-          echo "changelog=$CHANGELOG_DISCORD" >> $GITHUB_OUTPUT
+          # Escape for JSON - keep newlines intact for Discord formatting
+          CHANGELOG_DISCORD=$(echo "$CHANGELOG_DISCORD" | head -c 800 | jq -R -s .)
+          # Remove the outer quotes added by jq
+          CHANGELOG_DISCORD="${CHANGELOG_DISCORD:1:-1}"
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG_DISCORD" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
           
           # Save full changelog to file for GitHub release
           echo "$CHANGELOG_FULL" > ../changelog.txt
@@ -416,7 +420,7 @@ jobs:
           {
             "embeds": [{
               "title": "R5Valkyrie Launcher v${VERSION} Released!",
-              "description": "A new version of R5Valkyrie Launcher is now available.\n\n**What's Changed:**\n${{ fromJSON(steps.changelog.outputs.changelog) }}\n\n**[View Full Release Notes](${RELEASE_URL})**",
+              "description": "A new version of R5Valkyrie Launcher is now available.\\n\\n**What's Changed:**\\n${{ steps.changelog.outputs.changelog }}\\n\\n**[View Full Release Notes](${RELEASE_URL})**",
               "color": 5814522,
               "fields": [
                 {
