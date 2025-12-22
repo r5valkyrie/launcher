@@ -633,6 +633,13 @@ jobs:
       
       - name: Create/Update README
         run: |
+          VERSION="${GITHUB_REF#refs/tags/v}"
+          CURRENT_DATE=$(date)
+          
+          # Get actual filenames
+          DEB_FILE=$(ls repo-branch/deb/*.deb 2>/dev/null | xargs -n 1 basename | head -n 1)
+          RPM_FILE=$(ls repo-branch/rpm/*.rpm 2>/dev/null | xargs -n 1 basename | head -n 1)
+          
           cat > repo-branch/README.md << 'EOFREADME'
           # R5Valkyrie Launcher - Package Repository
 
@@ -673,12 +680,24 @@ jobs:
 
           ## Manual Downloads
 
-          - [DEB Packages](./deb/)
-          - [RPM Packages](./rpm/)
+          MANUAL_DOWNLOADS_PLACEHOLDER
 
           ---
-          Last updated: $(date)
+          LAST_UPDATED_PLACEHOLDER
           EOFREADME
+          
+          # Build manual downloads section
+          MANUAL_DOWNLOADS=""
+          if [ -n "$DEB_FILE" ]; then
+            MANUAL_DOWNLOADS="${MANUAL_DOWNLOADS}- [DEB Package](deb/${DEB_FILE})"$'\n'
+          fi
+          if [ -n "$RPM_FILE" ]; then
+            MANUAL_DOWNLOADS="${MANUAL_DOWNLOADS}- [RPM Package](rpm/${RPM_FILE})"
+          fi
+          
+          # Replace placeholders
+          sed -i "s|MANUAL_DOWNLOADS_PLACEHOLDER|${MANUAL_DOWNLOADS}|" repo-branch/README.md
+          sed -i "s|LAST_UPDATED_PLACEHOLDER|Last updated: ${CURRENT_DATE}|" repo-branch/README.md
       
       - name: Commit and push to repo branch
         run: |
