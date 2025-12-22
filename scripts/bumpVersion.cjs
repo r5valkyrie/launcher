@@ -27,8 +27,20 @@ try {
   
   console.log(`\nBumped to version ${version}\n`);
   
+  // Update flake.nix version
+  const flakePath = path.join(__dirname, '..', 'flake.nix');
+  if (fs.existsSync(flakePath)) {
+    let flakeContent = fs.readFileSync(flakePath, 'utf8');
+    flakeContent = flakeContent.replace(
+      /version = "[^"]+";/,
+      `version = "${version}";`
+    );
+    fs.writeFileSync(flakePath, flakeContent, 'utf8');
+    console.log(`Updated flake.nix to version ${version}`);
+  }
+  
   // Git operations
-  run('git add package.json package-lock.json manifest.json');
+  run('git add package.json package-lock.json manifest.json flake.nix');
   run(`git commit -m "chore: bump version to ${version}"`);
   run(`git tag -a v${version} -m "Release v${version}"`);
   run('git push --follow-tags');
