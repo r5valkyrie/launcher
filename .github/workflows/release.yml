@@ -334,9 +334,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -type f \( -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.pkg.tar.zst" -o -name "*.AppImage" \) -print0 | while IFS= read -r -d '' file; do
-            sha256sum "$file" | sed "s|  \./|  |" | sed "s|.*/|  |"
-          done > SHA256SUMS
+          find . -type f \( -name "*.exe" -o -name "*.deb" -o -name "*.rpm" -o -name "*.tar.gz" -o -name "*.pkg.tar.zst" -o -name "*.AppImage" \) -exec sha256sum {} \; | sed 's|  \./[^/]*/|  |' > SHA256SUMS
           cat SHA256SUMS
       
       - name: Upload checksums to release
