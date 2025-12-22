@@ -584,6 +584,10 @@ jobs:
           if ls downloads/*.deb 1> /dev/null 2>&1; then
             echo "Processing DEB package..."
             mkdir -p repo-branch/deb
+            
+            # Remove old packages to avoid large repo size
+            rm -f repo-branch/deb/*.deb
+            
             cp downloads/*.deb repo-branch/deb/
             
             cd repo-branch/deb
@@ -619,6 +623,10 @@ jobs:
           if ls downloads/*.rpm 1> /dev/null 2>&1; then
             echo "Processing RPM package..."
             mkdir -p repo-branch/rpm
+            
+            # Remove old packages to avoid large repo size
+            rm -f repo-branch/rpm/*.rpm
+            
             cp downloads/*.rpm repo-branch/rpm/
             
             cd repo-branch/rpm
