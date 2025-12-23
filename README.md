@@ -86,22 +86,6 @@ See the [Contributing Guide](CONTRIBUTING.md) for detailed development instructi
 
 ---
 
-## 📦 Release a New Version
-
-```bash
-npm run version:patch   # Bug fixes (0.9.40 -> 0.9.41)
-npm run version:minor   # New features (0.9.40 -> 0.10.0)
-npm run version:major   # Breaking changes (0.9.40 -> 1.0.0)
-```
-
-This automatically:
-- Updates version in all files
-- Creates a git tag
-- Pushes to GitHub
-- Triggers CI/CD to build all platform packages
-
----
-
 ## 📄 License
 
 See [LICENSE](LICENSE) file for details.
