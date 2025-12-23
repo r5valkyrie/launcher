@@ -1,51 +1,15 @@
 Package: r5vlauncher
-Version: 0.9.65
+Version: 0.10.0
 Architecture: amd64
 Maintainer: R5Valkyrie
-Installed-Size: 258675
+Installed-Size: 258676
 Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0
 Recommends: libappindicator3-1
-Filename: ./R5Valkyrie.Launcher-0.9.65-Debian.deb
-Size: 77400218
-MD5sum: 8d81043acabd5654dfd3112f59faef89
-SHA1: 3c8fa9179c48116f07ab895577dd65a5c51e507d
-SHA256: 7dc8623781b577df5e727d8513b0420cd74cddea42cfa9c62c77e34384fe42f1
-Section: default
-Priority: optional
-Homepage: https://github.com/r5valkyrie/launcher
-License: unknown
-Vendor: R5Valkyrie
-
-Package: r5vlauncher
-Version: 0.9.67
-Architecture: amd64
-Maintainer: R5Valkyrie
-Installed-Size: 258675
-Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0
-Recommends: libappindicator3-1
-Filename: ./R5Valkyrie.Launcher-0.9.67-Debian.deb
-Size: 77401294
-MD5sum: 6e3374231cd062043c61cd6c87367fc6
-SHA1: 6ea779164ca9c8962eba1cd7fd4306833e9c5230
-SHA256: 5d6a2651b7820f2dc62269978618a342c1c898e08c932638669c1793a8f014e3
-Section: default
-Priority: optional
-Homepage: https://github.com/r5valkyrie/launcher
-License: unknown
-Vendor: R5Valkyrie
-
-Package: r5vlauncher
-Version: 0.9.68
-Architecture: amd64
-Maintainer: R5Valkyrie
-Installed-Size: 258675
-Depends: libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0
-Recommends: libappindicator3-1
-Filename: ./R5Valkyrie.Launcher-0.9.68-Debian.deb
-Size: 77414976
-MD5sum: 8006353b93de06c0375f3e4e05eb3e99
-SHA1: 554ae96ffc7e626c4133e38de0e3257b87eae84a
-SHA256: bc94900e570995cff6292612cb7c0a0328d7e0677f22a1f531028194efc61777
+Filename: ./R5Valkyrie.Launcher-0.10.0-Debian.deb
+Size: 77402840
+MD5sum: 17fc388114b931248c7db6477e468bcb
+SHA1: f04018426881d655c8bdbc39ac1ada724951c444
+SHA256: 2a69bfdd0389ef88b810de65adf4a467f6962ca25b0f9ceffaf377c735373c7c
 Section: default
 Priority: optional
 Homepage: https://github.com/r5valkyrie/launcher

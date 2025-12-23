@@ -2,14 +2,14 @@ Origin: R5Valkyrie
 Label: R5Valkyrie Launcher
 Suite: stable
 Codename: stable
-Version: 0.9.68
+Version: 0.10.0
 Architectures: amd64
 Components: main
 Description: R5Valkyrie Game Launcher Repository
-Date: Mon, 22 Dec 2025 23:18:44 +0000
+Date: Tue, 23 Dec 2025 16:09:21 +0000
 MD5Sum:
- 3b1d0034d1a087d8e51d18ac35cc6cb5  Packages
- 51e53f3457cd03cb4b21bac814b3fe16  Packages.gz
+ 3234e6bebc0dee15364ee250bcdd78ab  Packages
+ 9f09883cc33e88c38e0c37316a1de5a4  Packages.gz
 SHA256:
- 8de8f6cd293cae386564d913f0247a941cbef0947ef6da40c4a59a8a039e9811  Packages
- cdc97578e502d35a0629d074271cd2c1e8f1f63f6bf70ce10a064ef66aa008bb  Packages.gz
+ 6d81dd72a2c57a6d838b202d7ba9d8e507c5e9b7511491446286c1bb171ec84d  Packages
+ 34dd4b29c59ca6d29727584e829030803a9dac0e822d4d51b06883869d715795  Packages.gz
