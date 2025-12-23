@@ -782,6 +782,14 @@ export async function downloadAll(baseUrl, checksums, installDir, emit, includeO
         let result;
         try {
           result = await p;
+        } catch (err) {
+          // Log error but don't throw - allow other downloads to continue
+          const message = String(err?.message || err || 'error');
+          if (message.includes('cancelled')) throw err; // Only re-throw cancellation
+          console.error(`Failed to download ${f.path}:`, message);
+          // Error and done events were already emitted in the promise chain above
+          // Just continue to next file
+          continue;
         } finally {
           if (!awaitingExisting) activePromises.delete(key);
         }
