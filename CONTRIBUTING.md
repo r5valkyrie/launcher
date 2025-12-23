@@ -211,18 +211,6 @@ When you run a version command:
 4. ✅ **Pushes to GitHub** (commits and tags)
 5. ✅ **Triggers CI/CD** - Automated builds start immediately
 
-### Manual Release (Advanced)
-
-Only needed for special cases:
-
-```bash
-# Set GitHub token in .env
-echo "GH_TOKEN=your_github_token" > .env
-
-# Build and publish (Windows only)
-npm run release
-```
-
 **Note:** Linux packages must be built through CI/CD.
 
 ---
