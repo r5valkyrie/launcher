@@ -45,6 +45,10 @@ A modern game launcher for R5Valkyrie built with Electron, Astro, and React.
 **Quick Install Commands:**
 
 ```bash
+# Windows
+# Download and run the installer from:
+https://github.com/r5valkyrie/launcher/releases/latest
+
 # Debian/Ubuntu
 echo 'deb [trusted=yes] https://r5valkyrie.github.io/launcher/deb/ ./' | sudo tee /etc/apt/sources.list.d/r5valkyrie.list
 sudo apt update && sudo apt install r5vlauncher
@@ -65,8 +69,6 @@ yay -S r5valkyrie-launcher-bin
 # NixOS / Nix
 nix run github:r5valkyrie/launcher
 ```
-
-**Windows:** Download the [latest installer](https://github.com/r5valkyrie/launcher/releases/latest)
 
 ### For Developers
 
