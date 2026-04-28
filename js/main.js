@@ -588,6 +588,7 @@ ipcMain.handle('servers:fetch', async () => {
       port: url.port || 443,
       path: url.pathname,
       method: 'POST',
+      timeout: 10000,
       headers: {
         'Content-Type': 'application/json',
         'Content-Length': Buffer.byteLength(postData),
@@ -617,6 +618,11 @@ ipcMain.handle('servers:fetch', async () => {
 
     req.on('error', (e) => {
       resolve({ ok: false, error: String(e?.message || e) });
+    });
+
+    req.on('timeout', () => {
+      req.destroy();
+      resolve({ ok: false, error: 'Request timeout' });
     });
 
     req.write(postData);

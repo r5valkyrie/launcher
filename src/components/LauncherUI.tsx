@@ -336,11 +336,44 @@ export default function LauncherUI() {
   useEffect(() => {
     (async () => {
       try {
-        const json: LauncherConfig = await (window.electronAPI?.fetchLauncherConfig
-          ? window.electronAPI.fetchLauncherConfig(CONFIG_URL)
-          : fetch(`${CONFIG_URL}${CONFIG_URL.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
-              headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' }
-            }).then((r) => r.json()));
+        const json: LauncherConfig = await (async () => {
+          try {
+            // Try electronAPI first
+            if (window.electronAPI?.fetchLauncherConfig) {
+              return await window.electronAPI.fetchLauncherConfig(CONFIG_URL);
+            }
+            
+            // Try primary config URL with timeout
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            
+            const resp = await fetch(`${CONFIG_URL}${CONFIG_URL.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
+              headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
+              signal: controller.signal
+            });
+            clearTimeout(timeout);
+            
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            return await resp.json();
+          } catch (error) {
+            // Fallback to blaze server backup
+            try {
+              const controller = new AbortController();
+              const timeout = setTimeout(() => controller.abort(), 10000);
+              
+              const resp = await fetch('https://blaze.playvalkyrie.org/config.json', {
+                signal: controller.signal
+              });
+              clearTimeout(timeout);
+              
+              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+              return await resp.json();
+            } catch (fallbackError) {
+              console.error('Failed to fetch launcher config from both sources:', fallbackError);
+              throw fallbackError;
+            }
+          }
+        })();
         
         // Load settings to get custom install directories
         const settings = await window.electronAPI?.getSettings();
@@ -1425,23 +1458,44 @@ export default function LauncherUI() {
       const acceptedVersion = s?.eulaAcceptedVersion || null;
       setEulaLoading(true);
       let json: any = null;
+      let eulaText: string | null = null;
+      
+      // Try electronAPI first
       try {
         const r = await window.electronAPI?.fetchEula?.();
         json = r?.ok ? r?.json : null;
       } catch {}
+      
+      // Try main API endpoint
       if (!json) {
         try {
           const res = await fetch('https://playvalkyrie.org/api/eula');
           json = await res.json().catch(() => ({}));
         } catch {}
       }
+      
+      // Fallback to blaze server for plain text EULA
+      if (!json) {
+        try {
+          const res = await fetch('https://blaze.playvalkyrie.org/eula.txt');
+          if (res.ok) {
+            eulaText = await res.text();
+          }
+        } catch {}
+      }
+      
       setEulaLoading(false);
-      const ok = json && json.success && json.data && typeof json.data.contents === 'string';
+      
+      // Check if we have valid EULA content from either source
+      const ok = json && json.success && json.data && typeof json.data.contents === 'string' || eulaText;
       if (!ok) return true; // fail-open
-      const version = json.data.version || json.data.modified || 'latest';
+      
+      const contents = json?.data?.contents || eulaText || '';
+      const version = json?.data?.version || json?.data?.modified || 'latest';
+      
       eulaKeyRef.current = String(version);
       if (acceptedVersion && String(acceptedVersion) === String(version)) return true;
-      setEulaContent(String(json.data.contents || ''));
+      setEulaContent(String(contents));
       return await new Promise<boolean>((resolve) => {
         eulaResolveRef.current = resolve;
         setEulaOpen(true);
@@ -1976,11 +2030,24 @@ export default function LauncherUI() {
       if (newsPosts || newsLoading) return;
       setNewsLoading(true);
       try {
-        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,html,published_at,url,feature_image');
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,html,published_at,url,feature_image', {
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (!resp.ok) {
+          setNewsPosts([]);
+          return;
+        }
+        
         const json = await resp.json();
         const posts = Array.isArray(json?.posts) ? json.posts : [];
         setNewsPosts(posts);
-      } catch {
+      } catch (error) {
+        // Handle timeout, network errors, or JSON parse errors
         setNewsPosts([]);
       } finally {
         setNewsLoading(false);
@@ -2021,7 +2088,19 @@ export default function LauncherUI() {
         
         const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&${filterQuery}&limit=20&fields=title,excerpt,html,published_at,url,feature_image&order=published_at%20desc`;
         
-        const resp = await fetch(url);
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        const resp = await fetch(url, {
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        
+        if (!resp.ok) {
+          setPatchPosts([]);
+          return;
+        }
+        
         const json = await resp.json();
         let posts = Array.isArray(json?.posts) ? json.posts : [];
         
