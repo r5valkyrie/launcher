@@ -345,7 +345,7 @@ export default function LauncherUI() {
             
             // Try primary config URL with timeout
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+            const timeout = setTimeout(() => controller.abort(), 2500);
             
             const resp = await fetch(`${CONFIG_URL}${CONFIG_URL.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
               headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
@@ -359,7 +359,7 @@ export default function LauncherUI() {
             // Fallback to blaze server backup
             try {
               const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 10000);
+              const timeout = setTimeout(() => controller.abort(), 2500);
               
               const resp = await fetch('https://blaze.playvalkyrie.org/config.json', {
                 signal: controller.signal
@@ -2031,7 +2031,7 @@ export default function LauncherUI() {
       setNewsLoading(true);
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeout = setTimeout(() => controller.abort(), 5000); // 5 second timeout
         
         const resp = await fetch('https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&filter=tag:Community&limit=10&fields=title,excerpt,html,published_at,url,feature_image', {
           signal: controller.signal
@@ -2089,7 +2089,7 @@ export default function LauncherUI() {
         const url = `https://blog.playvalkyrie.org/ghost/api/content/posts/?key=4d046cff94d3fdfeaab2bf9ccf&include=tags,authors&${filterQuery}&limit=20&fields=title,excerpt,html,published_at,url,feature_image&order=published_at%20desc`;
         
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        const timeout = setTimeout(() => controller.abort(), 5000); // 10 second timeout
         
         const resp = await fetch(url, {
           signal: controller.signal
