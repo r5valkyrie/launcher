@@ -338,7 +338,12 @@ export default function LauncherUI() {
       try {
         const json: LauncherConfig = await (async () => {
           try {
-            // Try primary config URL with timeout
+            // Try electronAPI first (Electron environment)
+            if (window.electronAPI?.fetchLauncherConfig) {
+              return await window.electronAPI.fetchLauncherConfig(CONFIG_URL);
+            }
+            
+            // Fallback for web environment
             const controller = new AbortController();
             const timeout = setTimeout(() => controller.abort(), 3000);
             
