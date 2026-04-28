@@ -79,4 +79,4 @@ sudo pacman -U R5Valkyrie.Launcher-*.pkg.tar.zst
 [View all available packages on the latest release page](https://github.com/r5valkyrie/launcher/releases/latest)
 
 ---
-Last updated: Tue Apr 28 22:19:48 UTC 2026
+Last updated: Tue Apr 28 22:32:33 UTC 2026
