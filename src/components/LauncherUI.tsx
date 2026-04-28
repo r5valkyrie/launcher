@@ -109,7 +109,7 @@ declare global {
   }
 }
 
-const CONFIG_URL = 'https://playvalkyrie.org/api/client/launcherConfig';
+const CONFIG_URL = 'https://blaze.playvalkyrie.org/config.json';
 
 export default function LauncherUI() {
   const [config, setConfig] = useState<LauncherConfig | null>(null);
@@ -338,14 +338,9 @@ export default function LauncherUI() {
       try {
         const json: LauncherConfig = await (async () => {
           try {
-            // Try electronAPI first
-            if (window.electronAPI?.fetchLauncherConfig) {
-              return await window.electronAPI.fetchLauncherConfig(CONFIG_URL);
-            }
-            
             // Try primary config URL with timeout
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 2500);
+            const timeout = setTimeout(() => controller.abort(), 3000);
             
             const resp = await fetch(`${CONFIG_URL}${CONFIG_URL.includes('?') ? '&' : '?'}_t=${Date.now()}`, {
               headers: { 'Cache-Control': 'no-cache, no-store', 'Pragma': 'no-cache' },
@@ -356,22 +351,8 @@ export default function LauncherUI() {
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             return await resp.json();
           } catch (error) {
-            // Fallback to blaze server backup
-            try {
-              const controller = new AbortController();
-              const timeout = setTimeout(() => controller.abort(), 2500);
-              
-              const resp = await fetch('https://blaze.playvalkyrie.org/config.json', {
-                signal: controller.signal
-              });
-              clearTimeout(timeout);
-              
-              if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-              return await resp.json();
-            } catch (fallbackError) {
-              console.error('Failed to fetch launcher config from both sources:', fallbackError);
-              throw fallbackError;
-            }
+            console.error('Failed to fetch launcher config:', error);
+            throw error;
           }
         })();
         
@@ -1469,18 +1450,12 @@ export default function LauncherUI() {
       // Try main API endpoint
       if (!json) {
         try {
-          const res = await fetch('https://playvalkyrie.org/api/eula');
-          json = await res.json().catch(() => ({}));
-        } catch {}
-      }
-      
-      // Fallback to blaze server for plain text EULA
-      if (!json) {
-        try {
-          const res = await fetch('https://blaze.playvalkyrie.org/eula.txt');
-          if (res.ok) {
-            eulaText = await res.text();
-          }
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 3000);
+          const res = await fetch('https://blaze.playvalkyrie.org/eula.txt', { signal: controller.signal });
+          clearTimeout(timeout);
+          eulaText = await res.text().catch(() => null);
+          if (eulaText) json = { success: true, data: { contents: eulaText, version: 'backup' } };
         } catch {}
       }
       
